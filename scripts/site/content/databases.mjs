@@ -16,11 +16,11 @@ export const DB_INFO = {
     setup: `import pg from 'pg'
 import { kastor } from 'kastor'
 import { postgres } from 'kastor/postgres'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 
-export const db = kastor({ adapter: postgres(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: postgres(pool), schema, relations })`,
     env: 'DATABASE_URL=postgres://user:pass@localhost:5432/app',
   },
   cockroach: {
@@ -36,11 +36,11 @@ export const db = kastor({ adapter: postgres(pool), schema, relations: schema.re
     setup: `import pg from 'pg'
 import { kastor } from 'kastor'
 import { cockroach } from 'kastor/cockroach'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 
-export const db = kastor({ adapter: cockroach(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: cockroach(pool), schema, relations })`,
     env: 'DATABASE_URL=postgres://root@localhost:26257/defaultdb?sslmode=disable',
   },
   mysql: {
@@ -56,11 +56,11 @@ export const db = kastor({ adapter: cockroach(pool), schema, relations: schema.r
     setup: `import mysql2 from 'mysql2/promise'
 import { kastor } from 'kastor'
 import { mysql } from 'kastor/mysql'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = mysql2.createPool(process.env.DATABASE_URL!)
 
-export const db = kastor({ adapter: mysql(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: mysql(pool), schema, relations })`,
     env: 'DATABASE_URL=mysql://root:pass@localhost:3306/app',
   },
   mariadb: {
@@ -76,11 +76,11 @@ export const db = kastor({ adapter: mysql(pool), schema, relations: schema.relat
     setup: `import * as mariadbDriver from 'mariadb'
 import { kastor } from 'kastor'
 import { mariadb } from 'kastor/mariadb'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = mariadbDriver.createPool(process.env.DATABASE_URL!)
 
-export const db = kastor({ adapter: mariadb(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: mariadb(pool), schema, relations })`,
     env: 'DATABASE_URL=mariadb://root:pass@localhost:3306/app',
   },
   sqlite: {
@@ -96,9 +96,9 @@ export const db = kastor({ adapter: mariadb(pool), schema, relations: schema.rel
     setup: `import Database from 'better-sqlite3'
 import { kastor } from 'kastor'
 import { sqlite } from 'kastor/sqlite'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
-export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations })`,
     env: '# no server needed: the database is the file app.db',
   },
   libsql: {
@@ -114,11 +114,11 @@ export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, rela
     setup: `import { createClient } from '@libsql/client'
 import { kastor } from 'kastor'
 import { libsql } from 'kastor/libsql'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const client = createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
 
-export const db = kastor({ adapter: libsql(client), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: libsql(client), schema, relations })`,
     env: 'TURSO_DATABASE_URL=libsql://app-you.turso.io\nTURSO_AUTH_TOKEN=...',
   },
   d1: {
@@ -133,11 +133,11 @@ export const db = kastor({ adapter: libsql(client), schema, relations: schema.re
     note: 'Transactions use D1 batches: prefer the array form of $transaction.',
     setup: `import { kastor } from 'kastor'
 import { d1 } from 'kastor/d1'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 export default {
   async fetch(request: Request, env: { DB: D1Database }) {
-    const db = kastor({ adapter: d1(env.DB), schema, relations: schema.relations })
+    const db = kastor({ adapter: d1(env.DB), schema, relations })
     return Response.json(await db.users.findMany({ take: 10 }))
   },
 }`,
@@ -156,11 +156,11 @@ export default {
     setup: `import sql from 'mssql'
 import { kastor } from 'kastor'
 import { mssql } from 'kastor/mssql'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = await new sql.ConnectionPool(process.env.DATABASE_URL!).connect()
 
-export const db = kastor({ adapter: mssql(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: mssql(pool), schema, relations })`,
     env: 'DATABASE_URL=Server=localhost,1433;Database=app;User Id=sa;Password=...;TrustServerCertificate=true',
   },
   oracle: {
@@ -176,11 +176,11 @@ export const db = kastor({ adapter: mssql(pool), schema, relations: schema.relat
     setup: `import oracledb from 'oracledb'
 import { kastor } from 'kastor'
 import { oracle } from 'kastor/oracle'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = await oracledb.createPool({ user: 'app', password: process.env.ORACLE_PASSWORD, connectString: 'localhost:1521/FREEPDB1' })
 
-export const db = kastor({ adapter: oracle(pool), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: oracle(pool), schema, relations })`,
     env: 'ORACLE_PASSWORD=...',
   },
   mongodb: {
@@ -192,36 +192,15 @@ export const db = kastor({ adapter: oracle(pool), schema, relations: schema.rela
     upsert: 'updateOne upsert',
     insensitive: 'Regex with i flag',
     pagination: '$skip / $limit',
-    note: 'Transactions need a replica set (a single node one works locally).',
+    note: "Keys are ObjectIds exposed as strings by default; `mongodb(db, { ids: 'int' })` keeps numbers like SQL. Transactions need a replica set (a single node one works locally).",
     setup: `import { MongoClient } from 'mongodb'
 import { kastor } from 'kastor'
 import { mongodb } from 'kastor/mongodb'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const client = await new MongoClient(process.env.MONGO_URL!).connect()
 
-export const db = kastor({ adapter: mongodb(client.db('app')), schema, relations: schema.relations })`,
+export const db = kastor({ adapter: mongodb(client.db('app')), schema, relations })`,
     env: 'MONGO_URL=mongodb://localhost:27017/?replicaSet=rs0',
   },
 };
-
-export const SCHEMA_SAMPLE = `import { table, t, one, many, index } from 'kastor'
-
-export const users = table('users', {
-  id: t.id(),
-  email: t.string(255).unique(),
-  name: t.string().nullable(),
-  createdAt: t.datetime().defaultNow(),
-})
-
-export const posts = table('posts', {
-  id: t.id(),
-  title: t.string(200),
-  published: t.boolean().default(false),
-  authorId: t.int().references(() => users.id, { onDelete: 'cascade' }),
-}, { indexes: (p) => [index(p.authorId)] })
-
-export const relations = ({ users, posts }) => ({
-  users: { posts: many(posts) },
-  posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
-})`;

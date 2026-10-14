@@ -35,7 +35,7 @@ export const db = kastor({
       {
         id: 'adapters',
         name: 'Adapters',
-        text: 'Each adapter lives in its own entry point so your bundle only carries the dialect you use.',
+        text: 'Each adapter lives in its own entry point so your bundle only carries the dialect you use. On MongoDB, ' + c('t.id()') + ' keys are ObjectIds exposed as strings (and so are the columns that reference them); pass ' + c("mongodb(db, { ids: 'int' })") + ' for numeric keys like on SQL, or ' + c("ids: 'uuid'") + ' for UUID strings.',
         table: [['Database', 'Import', 'Pass', 'Driver']].concat(
           DATABASES.map((d) => [d.name, c(`import { ${DB_INFO[d.id].adapter} } from '${d.entry}'`), c(adapterArg(d.id)), c(DB_INFO[d.id].driver)]),
         ),
@@ -127,7 +127,8 @@ export const memberships = table('memberships', {
       { id: 'findMany', name: 'findMany', sig: 'findMany({ where?, select?, include?, orderBy?, take?, skip?, cursor?, distinct? })', text: 'All matching rows, as an array.', code: `await db.posts.findMany({ where: { published: true }, orderBy: { id: 'desc' }, take: 20, skip: 40 })` },
       { id: 'findFirst', name: 'findFirst and findFirstOrThrow', text: `The first matching row or ${c('null')}. The OrThrow version throws a ${c('KastorError')} with code ${c('NOT_FOUND')}.` },
       { id: 'findUnique', name: 'findUnique and findUniqueOrThrow', text: 'One row by a primary key or unique column.', code: `await db.users.findUnique({ where: { email: 'ada@example.com' } })` },
-      { id: 'findPage', name: 'findPage', text: 'Cursor pagination with opaque cursors: returns the rows and the cursor for the next page.' },
+      { id: 'findPage', name: 'findPage', sig: 'findPage({ first, after?, before?, where?, orderBy?, select?, include? })', text: `Cursor pagination with opaque cursors. Returns ${c('{ items, pageInfo }')}, where ${c('pageInfo')} holds ${c('startCursor')}, ${c('endCursor')} and ${c('hasNextPage')}. Pass ${c('after: pageInfo.endCursor')} for the next page, ${c('before')} for the previous one. ${c('first')} is the page size, 1 to 1000.`, code: `const page = await db.posts.findPage({ first: 20, orderBy: { id: 'desc' } })
+const next = await db.posts.findPage({ first: 20, orderBy: { id: 'desc' }, after: page.pageInfo.endCursor })` },
       { id: 'include', name: 'include', text: `Loads relations, nested as deep as you like, each level with its own ${c('where')}, ${c('orderBy')}, ${c('take')}, ${c('skip')}, ${c('select')} and ${c('include')}. ${c('_count')} counts related rows. One query per root call where the database has JSON aggregation, one query per level otherwise.`, code: `await db.users.findMany({
   include: {
     posts: { where: { published: true }, take: 3, include: { tags: true } },
@@ -222,23 +223,29 @@ export default defineConfig({
   migrations: './kastor/migrations',
   seed: './src/db/seed.ts',
 })` },
-      { id: 'seed', name: 'defineSeed and factory', text: `${c('defineSeed')} types your seed file. ${c('factory(table, build)')} builds valid rows for tests.` },
+      { id: 'seed', name: 'defineSeed and factory', sig: 'defineSeed<Db>(fn)  factory(db.model, ({ seq }) => data)', text: `${c('defineSeed')} types the default export of your seed file, which ${c('npx kastor db seed')} calls with the client. ${c('factory')} takes a model of the client and a defaults function that receives a sequence number, and returns ${c('build')}, ${c('buildMany')}, ${c('create')}, ${c('createMany')} and ${c('reset')}.`, file: 'test/factories.ts', code: `import { factory } from 'kastor'
+import { db } from '../src/db'
+
+export const users = factory(db.users, ({ seq }) => ({ email: \`user\${seq}@example.com\` }))
+
+const ada = await users.create({ name: 'Ada' })
+const ten = await users.createMany(10)` },
       {
         id: 'cli',
         name: 'npx kastor',
-        text: 'The command line.',
+        text: 'The command line. Every command takes ' + c('--config') + ' and ' + c('--help') + '.',
         table: [
           ['Command', 'What it does'],
-          [c('init'), 'Writes kastor.config.ts and a starter schema'],
-          [c('migrate dev --name &lt;name&gt;'), 'Diffs the schema against the database, writes kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql and applies it'],
+          [c('init --db postgres'), 'Writes kastor.config.ts, a starter schema and a seed file for the database you pick'],
+          [c('migrate dev --name &lt;name&gt;'), 'Diffs the schema against the database, writes kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql and applies it. ' + c('--create-only') + ' writes without applying, ' + c('--rename users.name:fullName') + ' answers a rename question up front, ' + c('--accept-data-loss') + ' allows destructive changes without asking'],
           [c('migrate deploy'), 'Applies pending migrations, for CI and production'],
           [c('migrate status'), 'Lists applied and pending migrations'],
-          [c('migrate reset'), 'Drops everything and applies all migrations again'],
+          [c('migrate reset'), 'Drops everything, applies every migration again and runs the seed'],
           [c('db push'), 'Syncs the schema without a migration file, for prototypes'],
-          [c('db pull'), 'Writes a TypeScript schema from an existing database'],
+          [c('db pull'), 'Writes a TypeScript schema from an existing database (' + c('--out') + ' for another file, ' + c('--print') + ' for stdout)'],
           [c('db seed'), 'Runs the seed file'],
-          [c('studio'), 'Opens the local studio'],
-          [c('doctor'), 'Checks the config, the driver and the connection'],
+          [c('studio'), 'Opens the local studio on port 5555 (' + c('--port') + ', ' + c('--read-only') + ', ' + c('--no-open') + ')'],
+          [c('doctor'), 'Checks the config, the connection, drift and pending migrations (' + c('--json') + ' for machine readable output)'],
         ],
       },
     ],

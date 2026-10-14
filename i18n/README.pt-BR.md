@@ -89,7 +89,9 @@ export const posts = table('posts', {
   authorId: t.int().references(() => users.id, { onDelete: 'cascade' }),
 }, { indexes: (p) => [index(p.authorId)] })
 
-export const relations = ({ users, posts }) => ({
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) => ({
   users: { posts: many(posts) },
   posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
 })
@@ -101,11 +103,11 @@ Crie o client em `src/db/index.ts`:
 import pg from 'pg'
 import { kastor } from 'kastor'
 import { postgres } from 'kastor/postgres'
-import { users, posts, relations } from './schema'
+import { schema, relations } from './schema'
 
 export const db = kastor({
   adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
-  schema: { users, posts },
+  schema,
   relations,
 })
 ```
@@ -129,14 +131,17 @@ Teste tudo isso sem instalar nada no [playground ao vivo](https://kwy404.github.
 
 ### CDN
 
-O build para tag script expõe o núcleo (os builders de schema, `toSchemaIR`, a tag `sql`) como a variável global `Kastor`, para ferramentas e playgrounds. As consultas precisam de um runtime de servidor (Node.js, Bun, Deno ou Workers) e de um driver.
+O build para tag script expõe o núcleo inteiro como a variável global `Kastor`, junto com o compilador SQL compartilhado, então uma página consegue montar consultas e compilar para SQL sem banco de dados, como faz o playground do site. As consultas precisam de um runtime de servidor (Node.js, Bun, Deno ou Workers) e de um driver.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/kastor@0.1.0/dist/kastor.js"></script>
 <script>
-  const { table, t, toSchemaIR } = Kastor
+  const { kastor, table, t, compileOnlyDialect, defineHooks, placeholderDollar, jsonPostgres } = Kastor
   const users = table('users', { id: t.id(), email: t.string(255).unique() })
-  console.log(toSchemaIR({ users }))
+  const dialect = compileOnlyDialect('postgres', defineHooks({ placeholder: placeholderDollar, json: jsonPostgres, returning: 'returning' }))
+  const db = kastor({ adapter: { dialect, executor: {} }, schema: { users } })
+  console.log(db.users.findMany({ where: { email: { endsWith: '@example.com' } } }).toSQL())
+  // [{ sql: 'SELECT "t0"."id" AS "id", ... WHERE "t0"."email" LIKE $1 ESCAPE \'!\'', params: ['%@example.com'] }]
 </script>
 ```
 
@@ -157,7 +162,7 @@ O kastor não vem com nenhum driver. Instale o que você usa e passe a instânci
 | Cloudflare D1 | `kastor/d1` | `d1(env.DB)` | `json_group_array` + `json_object` |
 | SQL Server e Azure SQL | `kastor/mssql` | `mssql(await new sql.ConnectionPool(...).connect())` | `FOR JSON PATH` |
 | Oracle | `kastor/oracle` | `oracle(await oracledb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
-| MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | pipelines com `$lookup` |
+| MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | pipelines com `$lookup` (chaves são strings de ObjectId por padrão, `{ ids: 'int' }` para números) |
 
 Todos os adaptadores rodam a mesma suíte de conformidade no CI. Veja a [matriz de suporte](https://kwy404.github.io/kastor/#databases) para a sintaxe de returning, upsert e paginação em cada banco de dados, e [Comece em 60 segundos](https://kwy404.github.io/kastor/#start) para cada um deles.
 
@@ -295,22 +300,27 @@ export default defineConfig({
 
 | Comando | O que faz |
 | --- | --- |
-| `npx kastor init` | Cria o `kastor.config.ts` e um schema inicial |
-| `npx kastor migrate dev --name <name>` | Compara o schema com o banco de dados, grava `kastor/migrations/<timestamp>_<name>/migration.sql` e aplica a migração. Uma possível renomeação vira uma pergunta, nunca um drop silencioso |
+| `npx kastor init --db postgres` | Cria o `kastor.config.ts`, um schema inicial e um arquivo de seed para o seu banco |
+| `npx kastor migrate dev --name <name>` | Compara o schema com o banco de dados, grava `kastor/migrations/<timestamp>_<name>/migration.sql` e aplica a migração. Uma possível renomeação vira uma pergunta, nunca um drop silencioso. `--create-only`, `--rename users.name:fullName`, `--accept-data-loss` |
 | `npx kastor migrate deploy` | Aplica as migrações pendentes (CI e produção) |
 | `npx kastor migrate status` | Lista as migrações aplicadas e pendentes |
-| `npx kastor migrate reset` | Apaga tudo e aplica todas as migrações de novo |
+| `npx kastor migrate reset` | Apaga tudo, aplica todas as migrações de novo e roda o seed |
 | `npx kastor db push` | Sincroniza o schema sem arquivo de migração, para protótipos |
-| `npx kastor db pull` | Gera um schema TypeScript a partir de um banco de dados existente |
+| `npx kastor db pull` | Gera um schema TypeScript a partir de um banco de dados existente (`--out`, `--print`) |
 | `npx kastor db seed` | Executa o arquivo de seed |
 | `npx kastor studio` | Abre o studio local |
-| `npx kastor doctor` | Verifica a configuração, o driver e a conexão |
+| `npx kastor doctor` | Verifica a configuração, a conexão, o drift e as migrações pendentes |
 
 Leia [migrações de banco de dados explicadas](https://kwy404.github.io/kastor/pt-br/migracoes-banco-de-dados.html) para ver o fluxo completo.
 
 ## Studio
 
-`npx kastor studio` abre uma interface web local: navegue por todas as tabelas, filtre e ordene, edite linhas direto na tela usando o mesmo client (assim restrições e erros aparecem do mesmo jeito) e veja o diagrama ER do banco de dados inteiro.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-dark.png">
+  <img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-light.png" alt="O studio do kastor navegando pela tabela posts: filtros, linhas, chaves estrangeiras e ações" width="100%">
+</picture>
+
+`npx kastor studio` abre uma interface web local: navegue por todas as tabelas, filtre e busque, crie, edite e apague linhas, siga as chaves estrangeiras e veja o diagrama do banco de dados inteiro. Ele roda em 127.0.0.1 protegido por um token de sessão privado, e `--read-only` protege dados que não podem ser alterados.
 
 ## Uso com frameworks
 
@@ -353,7 +363,7 @@ Configurações completas para Next.js, Nuxt, SvelteKit, Express, Fastify, NestJ
 | `KastorError`, `isKastorError(e)` | Erros com `code`, `message`, `hint` |
 | `toSchemaIR(schema)` | O schema como JSON simples |
 | `defineConfig(config)` | `kastor.config.ts` tipado |
-| `defineSeed(fn)`, `factory(table, build)` | Seeds e factories para testes |
+| `defineSeed<Db>(fn)`, `factory(db.users, ({ seq }) => data)` | Seeds e factories para testes |
 | `InferSelect`, `InferInsert`, `KastorClient` | Tipos |
 
 Client: `db.<model>.<method>(...)`, `db.$transaction`, `db.$sql`, `db.$execute`, `db.$schema`, `db.$dialect`, `db.$disconnect()`. A referência completa com todas as opções está em [kwy404.github.io/kastor/api.html](https://kwy404.github.io/kastor/api.html).

@@ -240,57 +240,31 @@ function tour(frame) {
 </section>`;
 }
 
-/** A faithful HTML drawing of the studio UI. */
-function studioMock() {
-  const rows = [
-    [1, 'ada@example.com', 'Ada Lovelace', 'admin', 3],
-    [2, 'grace@example.com', 'Grace Hopper', 'user', 5],
-    [3, 'linus@example.com', null, 'user', 0],
-    [4, 'margaret@example.com', 'Margaret Hamilton', 'user', 2],
-    [5, 'edsger@example.com', 'Edsger Dijkstra', 'user', 1],
-  ]
-    .map((r, i) => `<tr${i === 1 ? ' class="sel"' : ''}><td>${r[0]}</td><td>${r[1]}</td><td>${r[2] === null ? '<em>null</em>' : r[2]}</td><td><span class="pill pill-${r[3]}">${r[3]}</span></td><td>${r[4]}</td></tr>`)
-    .join('');
-  return `<div class="st">
-  <aside class="st-side"><p class="st-h">Tables</p><a class="on">users <b>5</b></a><a>posts <b>11</b></a><a>tags <b>4</b></a><a>post_tags <b>9</b></a><a>comments <b>23</b></a></aside>
-  <div class="st-main">
-    <div class="st-tools"><span class="st-filter">where role = user</span><span class="st-btn">+ Add row</span></div>
-    <table class="st-grid"><thead><tr><th>id</th><th>email</th><th>name</th><th>role</th><th>posts</th></tr></thead><tbody>${rows}</tbody></table>
-  </div>
-  <div class="st-er" aria-hidden="true">
-    <svg viewBox="0 0 220 210"><g class="er">
-      <rect x="8" y="10" width="92" height="74" rx="6"/><text x="16" y="28" class="er-t">users</text><text x="16" y="46">id</text><text x="16" y="60">email</text><text x="16" y="74">name</text>
-      <rect x="122" y="40" width="92" height="74" rx="6"/><text x="130" y="58" class="er-t">posts</text><text x="130" y="76">id</text><text x="130" y="90">title</text><text x="130" y="104">authorId</text>
-      <rect x="66" y="130" width="92" height="60" rx="6"/><text x="74" y="148" class="er-t">tags</text><text x="74" y="166">id</text><text x="74" y="180">name</text>
-      <path class="er-l" d="M100 46 C 112 46, 110 100, 122 100"/><path class="er-l" d="M168 114 C 168 140, 160 150, 158 160"/>
-    </g></svg>
-  </div>
-</div>`;
-}
-
-function studio(shot) {
-  const body = shot
-    ? `<img src="${shot.light}" class="brand-light" width="${shot.w}" height="${shot.h}" alt="The kastor studio showing the users table and its rows" loading="lazy"><img src="${shot.dark}" class="brand-dark" width="${shot.w}" height="${shot.h}" alt="The kastor studio showing the users table and its rows" loading="lazy">`
-    : studioMock();
+function studio() {
+  const shot = (view, alt) => `<img src="assets/studio-${view}-light.png" class="brand-light" width="1200" height="680" alt="${alt}" loading="lazy"><img src="assets/studio-${view}-dark.png" class="brand-dark" width="1200" height="680" alt="${alt}" loading="lazy">`;
   return `<section id="studio" class="sec sec-studio" aria-labelledby="studio-title">
   <div class="wrap studio-in">
     <div class="studio-copy">
       ${sheet(5, 'Studio')}
       <h2 id="studio-title">See your data. Edit it. Understand the shape.</h2>
       <div class="dim" aria-hidden="true"><i></i><span>studio</span><i></i></div>
-      <p class="lead">Run <code>npx kastor studio</code> and a local web UI opens on your machine: browse every table, filter and sort, edit rows inline with validation from your schema, and read the ER diagram of the whole database.</p>
+      <p class="lead">Run <code>npx kastor studio</code> and a local web UI opens on your machine: browse every table, filter and search, add, edit and delete rows, follow foreign keys and read the diagram of the whole database.</p>
       <ul class="checks">
-        <li>${ui('check')}Runs locally, talks to your database through your own config</li>
-        <li>${ui('check')}Edits go through the same client, so constraints and errors read the same</li>
-        <li>${ui('check')}ER diagram drawn from the schema, relations and foreign keys</li>
+        <li>${ui('check')}Runs on 127.0.0.1 behind a private session token, with your own config</li>
+        <li>${ui('check')}Filters, text search, paging and a read-only mode for data you must not touch</li>
+        <li>${ui('check')}A diagram drawn from the live schema, downloadable as SVG</li>
       </ul>
       ${copyBox('studio-cmd', 'npx kastor studio', 'Studio command')}
     </div>
-    <figure class="studio-shot">
-      <div class="browser"><div class="browser-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="browser-url">localhost:4983</span></div>
-        <div class="browser-body">${body}</div>
+    <figure class="studio-shot" v-data="{ view: 'data' }">
+      <div class="studio-tabs" role="tablist" aria-label="Studio views">
+        <button type="button" role="tab" class="chip-btn" :aria-selected="view === 'data' ? 'true' : 'false'" :aria-pressed="view === 'data' ? 'true' : 'false'" aria-pressed="true" @click="view = 'data'">Data</button>
+        <button type="button" role="tab" class="chip-btn" :aria-selected="view === 'diagram' ? 'true' : 'false'" :aria-pressed="view === 'diagram' ? 'true' : 'false'" aria-pressed="false" @click="view = 'diagram'">Diagram</button>
       </div>
-      <figcaption>The studio, browsing the <code>users</code> table with its relations.</figcaption>
+      <div class="browser"><div class="browser-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="browser-url">127.0.0.1:5555</span></div>
+        <div class="browser-body"><div v-show="view === 'data'">${shot('data', 'The kastor studio browsing the posts table: filters, rows, foreign keys and actions')}</div><div v-show="view === 'diagram'" style="display:none">${shot('diagram', 'The kastor studio diagram of users, posts, tags and post_tags with their foreign keys')}</div></div>
+      </div>
+      <figcaption>Real screenshots of <code>npx kastor studio</code> on the playground schema with SQLite.</figcaption>
     </figure>
   </div>
 </section>`;
@@ -306,7 +280,7 @@ function starts(frame) {
     return `<div role="tabpanel" class="start-panel" id="st-p-${d.id}" aria-labelledby="st-t-${d.id}" v-show="db === '${d.id}'"${i ? ' style="display:none"' : ''}>
   <ol class="k-steps">
     <li><span class="step-no">1</span><div><h3>Install kastor and the driver</h3>${frame(info.install, { kind: 'terminal', lang: 'bash', title: 'Terminal', compact: true })}</div></li>
-    <li><span class="step-no">2</span><div><h3>Create the client</h3><p>${esc(info.note)}</p>${frame(info.setup, { lang: 'ts', title: d.id === 'd1' ? 'src/worker.ts' : 'src/db/index.ts', compact: true })}</div></li>
+    <li><span class="step-no">2</span><div><h3>Create the client</h3><p>${esc(info.note).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>${frame(info.setup, { lang: 'ts', title: d.id === 'd1' ? 'src/worker.ts' : 'src/db/index.ts', compact: true })}</div></li>
     <li><span class="step-no">3</span><div><h3>Create the tables and query</h3>${frame(migrate, { kind: 'terminal', lang: 'bash', title: 'Terminal', compact: true })}${frame(`const users = await db.users.findMany({ include: { posts: true } })`, { lang: 'ts', title: 'src/app.ts', compact: true })}</div></li>
   </ol>
 </div>`;
@@ -399,5 +373,5 @@ function closing() {
 }
 
 export function homeBody(ctx) {
-  return [hero(), playground(), matrix(ctx.features || {}), tour(ctx.frame), studio(ctx.studioShot), starts(ctx.frame), frameworks(), compare(), guidesTeaser(ctx.guides), faq(), closing()].join('\n');
+  return [hero(), playground(), matrix(ctx.features || {}), tour(ctx.frame), studio(), starts(ctx.frame), frameworks(), compare(), guidesTeaser(ctx.guides), faq(), closing()].join('\n');
 }

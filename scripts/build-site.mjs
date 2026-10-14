@@ -212,7 +212,7 @@ for (const lang of ['en', 'pt-BR']) {
   });
 }
 
-out['404.html'] = page({ kind: 'nf', path: '404.html', root: '/kastor/', noindex: true, title: 'Page not found | kastor', description: 'This page is not in the kastor drawing set.' }, notFoundBody(), guides);
+out['404.html'] = page({ kind: 'nf', path: '404.html', root: '/kastor/', noindex: true, title: 'Page not found | kastor', description: 'This page is not in the kastor drawing set. Go back to the home page, the guides or the API reference of the TypeScript ORM.' }, notFoundBody(), guides);
 
 // ---------- Search index, sitemap, robots ----------
 

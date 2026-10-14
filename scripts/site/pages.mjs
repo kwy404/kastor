@@ -30,6 +30,11 @@ export function guideBody(guide, all, index) {
   const sections = [...guide.body.matchAll(/<section id="([^"]+)"><h2>([\s\S]*?)<\/h2>/g)].map((m) => [m[1], m[2]]);
   let body = guide.body.replace(/<section id="([^"]+)"><h2>([\s\S]*?)<\/h2>/g, (_, id, h) => `<section id="${id}" class="chapter"><h2><a href="#${id}" class="anchor" aria-hidden="true" tabindex="-1">#</a>${h}</h2>`);
   body = body.replace(/<div class="callout"><p>([\s\S]*?)<\/p><\/div>/g, `<div class="note-box"><p class="note-title">${ui('info')}${pt ? 'Nota do engenheiro' : 'Site engineer note'}</p><p>$1</p></div>`);
+  // Links to sections of the home page written as bare anchors (body, lead and FAQ).
+  const homeLinks = (html) => html.replace(/href="#(playground|databases|features|studio|start|compare)"/g, `href="${pt ? '../' : './'}#$1"`);
+  body = homeLinks(body);
+  meta.lead = homeLinks(meta.lead);
+  for (const f of meta.faq) f.a = homeLinks(f.a);
   body = body.replace(/<table class="spec">/g, '<div class="k-table" tabindex="0" role="region" aria-label="Table"><table class="spec">').replace(/<\/table>/g, '</table></div>');
   const toc = [...sections, ['faq', t.faq], ['related', t.related]].map(([id, h], i) => `<li><a href="#${id}"><span>${String(i + 1).padStart(2, '0')}</span>${h.replace(/<[^>]+>/g, '')}</a></li>`).join('');
   const faq = meta.faq
@@ -65,7 +70,7 @@ ${body}
       <section id="faq" class="chapter"><h2><a href="#faq" class="anchor" aria-hidden="true" tabindex="-1">#</a>${t.faq}</h2><div class="accordion collapse-plus">${faq}</div></section>
       <aside class="guide-cta drawing" aria-label="${t.cta}">
         <img src="${up}assets/mascot.svg" class="brand-light" width="110" height="110" alt="" loading="lazy"><img src="${up}assets/mascot-dark.svg" class="brand-dark" width="110" height="110" alt="" loading="lazy">
-        <div><h2>${t.cta}</h2><p>${t.ctaText}</p><a href="${up}#playground" class="btn btn-primary">${ui('play')}${t.open}</a></div>
+        <div><h2>${t.cta}</h2><p>${t.ctaText}</p><a href="${up || './'}#playground" class="btn btn-primary">${ui('play')}${t.open}</a></div>
       </aside>
       <section id="related" class="chapter"><h2><a href="#related" class="anchor" aria-hidden="true" tabindex="-1">#</a>${t.related}</h2><div class="g-grid g-grid-3">${related}</div></section>
     </article>

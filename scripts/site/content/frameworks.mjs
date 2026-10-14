@@ -4,11 +4,11 @@
 const PG_DB = `import pg from 'pg'
 import { kastor } from 'kastor'
 import { postgres } from 'kastor/postgres'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 
-export const db = kastor({ adapter: postgres(pool), schema, relations: schema.relations })`;
+export const db = kastor({ adapter: postgres(pool), schema, relations })`;
 
 export const FRAMEWORKS = [
   {
@@ -20,12 +20,12 @@ export const FRAMEWORKS = [
       ['src/db/index.ts', 'ts', `import pg from 'pg'
 import { kastor } from 'kastor'
 import { postgres } from 'kastor/postgres'
-import * as schema from './schema'
+import { schema, relations } from './schema'
 
 const create = () => kastor({
   adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
   schema,
-  relations: schema.relations,
+  relations,
 })
 
 const g = globalThis as unknown as { db?: ReturnType<typeof create> }
@@ -185,13 +185,13 @@ export class UsersController {
       ['src/index.ts', 'ts', `import { Hono } from 'hono'
 import { kastor } from 'kastor'
 import { d1 } from 'kastor/d1'
-import * as schema from './db/schema'
+import { schema, relations } from './db/schema'
 
 type Env = { Bindings: { DB: D1Database } }
 const app = new Hono<Env>()
 
 app.get('/users', async (c) => {
-  const db = kastor({ adapter: d1(c.env.DB), schema, relations: schema.relations })
+  const db = kastor({ adapter: d1(c.env.DB), schema, relations })
   return c.json(await db.users.findMany({ take: 20, include: { posts: true } }))
 })
 
@@ -207,9 +207,9 @@ export default app`],
       ['server.ts', 'ts', `import { Database } from 'bun:sqlite'
 import { kastor } from 'kastor'
 import { sqlite } from 'kastor/sqlite'
-import * as schema from './db/schema'
+import { schema, relations } from './db/schema'
 
-const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations: schema.relations })
+const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations })
 
 Bun.serve({
   port: 3000,
@@ -228,12 +228,12 @@ Bun.serve({
       ['main.ts', 'ts', `import pg from 'npm:pg'
 import { kastor } from 'npm:kastor'
 import { postgres } from 'npm:kastor/postgres'
-import * as schema from './db/schema.ts'
+import { schema, relations } from './db/schema.ts'
 
 const db = kastor({
   adapter: postgres(new pg.Pool({ connectionString: Deno.env.get('DATABASE_URL') })),
   schema,
-  relations: schema.relations,
+  relations,
 })
 
 Deno.serve(async () => Response.json(await db.users.count()))`],
@@ -256,11 +256,11 @@ database_name = "app"
 database_id = "<your database id>"`],
       ['src/worker.ts', 'ts', `import { kastor } from 'kastor'
 import { d1 } from 'kastor/d1'
-import * as schema from './db/schema'
+import { schema, relations } from './db/schema'
 
 export default {
   async fetch(request: Request, env: { DB: D1Database }) {
-    const db = kastor({ adapter: d1(env.DB), schema, relations: schema.relations })
+    const db = kastor({ adapter: d1(env.DB), schema, relations })
     const url = new URL(request.url)
     if (request.method === 'POST') {
       const body = await request.json<{ email: string }>()

@@ -177,23 +177,27 @@ npx kastor migrate deploy`,
 await db.notes.delete({ where: { id: 1 } })   // sets deletedAt
 await db.notes.restore({ where: { id: 1 } })  // brings it back
 
-const page = await db.notes.findPage({ take: 20, orderBy: { id: 'desc' } })`,
+const page = await db.notes.findPage({ first: 20, orderBy: { id: 'desc' } })
+const next = await db.notes.findPage({ first: 20, orderBy: { id: 'desc' }, after: page.pageInfo.endCursor })`,
   },
   {
     id: 'seed',
     icon: 'seed',
     title: 'Seeds and test factories',
-    text: 'A typed seed file for every environment and factories that build valid rows for tests, with relations, in one line each.',
-    file: 'src/db/seed.ts',
+    text: 'A typed seed file for every environment, and factories that build valid, unique rows for tests in one line each.',
+    file: 'src/db/seed.ts and factories',
     code: `import { defineSeed, factory } from 'kastor'
-import { users } from './schema'
+import { db as client, type Db } from './index'
 
-export const userFactory = factory(users, (i) => ({
-  email: \`user\${i}@example.com\`,
-  name: \`User \${i}\`,
+// tests: one line per row, unique by sequence
+export const userFactory = factory(client.users, ({ seq }) => ({
+  email: \`user\${seq}@example.com\`,
+  name: \`User \${seq}\`,
 }))
+const ada = await userFactory.create({ name: 'Ada' })
 
-export default defineSeed(async (db) => {
+// npx kastor db seed
+export default defineSeed<Db>(async (db) => {
   await db.users.upsert({
     where: { email: 'admin@example.com' },
     create: { email: 'admin@example.com', role: 'admin' },

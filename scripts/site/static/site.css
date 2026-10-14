@@ -534,3 +534,4 @@ p code, li code, td code, .lead code, summary code { font-size: .86em; padding: 
 [v-cloak] { display: none !important; }
 .v-copied { color: var(--ok) !important; border-color: var(--ok) !important; }
 .v-copied span::after { content: " \2713"; }
+.studio-tabs { display: flex; gap: .4rem; margin-bottom: .7rem; }

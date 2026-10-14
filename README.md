@@ -89,7 +89,9 @@ export const posts = table('posts', {
   authorId: t.int().references(() => users.id, { onDelete: 'cascade' }),
 }, { indexes: (p) => [index(p.authorId)] })
 
-export const relations = ({ users, posts }) => ({
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) => ({
   users: { posts: many(posts) },
   posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
 })
@@ -101,11 +103,11 @@ Create the client in `src/db/index.ts`:
 import pg from 'pg'
 import { kastor } from 'kastor'
 import { postgres } from 'kastor/postgres'
-import { users, posts, relations } from './schema'
+import { schema, relations } from './schema'
 
 export const db = kastor({
   adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
-  schema: { users, posts },
+  schema,
   relations,
 })
 ```
@@ -129,14 +131,17 @@ Try all of this without installing anything in the [live playground](https://kwy
 
 ### CDN
 
-The script tag build exposes the core (schema builders, `toSchemaIR`, the `sql` tag) as the global `Kastor`, for tools and playgrounds. Queries need a server runtime (Node.js, Bun, Deno or Workers) and a driver.
+The script tag build exposes the whole core as the global `Kastor`, plus the shared SQL compiler, so a page can build queries and compile them to SQL with no database, like the playground on the website does. Running queries needs a server runtime (Node.js, Bun, Deno or Workers) and a driver.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/kastor@0.1.0/dist/kastor.js"></script>
 <script>
-  const { table, t, toSchemaIR } = Kastor
+  const { kastor, table, t, compileOnlyDialect, defineHooks, placeholderDollar, jsonPostgres } = Kastor
   const users = table('users', { id: t.id(), email: t.string(255).unique() })
-  console.log(toSchemaIR({ users }))
+  const dialect = compileOnlyDialect('postgres', defineHooks({ placeholder: placeholderDollar, json: jsonPostgres, returning: 'returning' }))
+  const db = kastor({ adapter: { dialect, executor: {} }, schema: { users } })
+  console.log(db.users.findMany({ where: { email: { endsWith: '@example.com' } } }).toSQL())
+  // [{ sql: 'SELECT "t0"."id" AS "id", ... WHERE "t0"."email" LIKE $1 ESCAPE \'!\'', params: ['%@example.com'] }]
 </script>
 ```
 
@@ -157,7 +162,7 @@ kastor ships no drivers. Install the one you use and pass its instance to the ad
 | Cloudflare D1 | `kastor/d1` | `d1(env.DB)` | `json_group_array` + `json_object` |
 | SQL Server and Azure SQL | `kastor/mssql` | `mssql(await new sql.ConnectionPool(...).connect())` | `FOR JSON PATH` |
 | Oracle | `kastor/oracle` | `oracle(await oracledb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
-| MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | `$lookup` pipelines |
+| MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | `$lookup` pipelines (keys are ObjectId strings by default, `{ ids: 'int' }` for numbers) |
 
 Every adapter runs the same conformance suite in CI. See the [support matrix](https://kwy404.github.io/kastor/#databases) for returning, upsert and paging syntax per database, and [Get started in 60 seconds](https://kwy404.github.io/kastor/#start) for each one.
 
@@ -295,22 +300,27 @@ export default defineConfig({
 
 | Command | What it does |
 | --- | --- |
-| `npx kastor init` | Writes `kastor.config.ts` and a starter schema |
-| `npx kastor migrate dev --name <name>` | Diffs the schema against the database, writes `kastor/migrations/<timestamp>_<name>/migration.sql` and applies it. A possible rename is a question, never a silent drop |
+| `npx kastor init --db postgres` | Writes `kastor.config.ts`, a starter schema and a seed file for your database |
+| `npx kastor migrate dev --name <name>` | Diffs the schema against the database, writes `kastor/migrations/<timestamp>_<name>/migration.sql` and applies it. A possible rename is a question, never a silent drop. `--create-only`, `--rename users.name:fullName`, `--accept-data-loss` |
 | `npx kastor migrate deploy` | Applies pending migrations (CI and production) |
 | `npx kastor migrate status` | Lists applied and pending migrations |
-| `npx kastor migrate reset` | Drops everything and applies all migrations again |
+| `npx kastor migrate reset` | Drops everything, applies every migration again and runs the seed |
 | `npx kastor db push` | Syncs the schema without a migration file, for prototypes |
-| `npx kastor db pull` | Writes a TypeScript schema from an existing database |
+| `npx kastor db pull` | Writes a TypeScript schema from an existing database (`--out`, `--print`) |
 | `npx kastor db seed` | Runs the seed file |
 | `npx kastor studio` | Opens the local studio |
-| `npx kastor doctor` | Checks the config, the driver and the connection |
+| `npx kastor doctor` | Checks the config, the connection, drift and pending migrations |
 
 Read [database migrations explained](https://kwy404.github.io/kastor/database-migrations-explained.html) for the full workflow.
 
 ## Studio
 
-`npx kastor studio` opens a local web UI: browse every table, filter and sort, edit rows inline through the same client (so constraints and errors read the same), and read the ER diagram of the whole database.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-dark.png">
+  <img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-light.png" alt="The kastor studio browsing the posts table: filters, rows, foreign keys and actions" width="100%">
+</picture>
+
+`npx kastor studio` opens a local web UI: browse every table, filter and search, add, edit and delete rows, follow foreign keys and read the diagram of the whole database. It runs on 127.0.0.1 behind a private session token, and `--read-only` keeps data you must not touch safe.
 
 ## Framework usage
 
@@ -353,7 +363,7 @@ Complete setups for Next.js, Nuxt, SvelteKit, Express, Fastify, NestJS, Hono, Bu
 | `KastorError`, `isKastorError(e)` | Errors with `code`, `message`, `hint` |
 | `toSchemaIR(schema)` | The schema as plain JSON |
 | `defineConfig(config)` | Typed `kastor.config.ts` |
-| `defineSeed(fn)`, `factory(table, build)` | Seeds and test factories |
+| `defineSeed<Db>(fn)`, `factory(db.users, ({ seq }) => data)` | Seeds and test factories |
 | `InferSelect`, `InferInsert`, `KastorClient` | Types |
 
 Client: `db.<model>.<method>(...)`, `db.$transaction`, `db.$sql`, `db.$execute`, `db.$schema`, `db.$dialect`, `db.$disconnect()`. The full reference with every option is at [kwy404.github.io/kastor/api.html](https://kwy404.github.io/kastor/api.html).
