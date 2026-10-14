@@ -176,6 +176,10 @@ db.users.findMany({ include: { posts: true } }).toSQL(); // [{ sql, params }]
   inserts; `autoincrement` and `sql` defaults stay with the database.
 - Nested writes, emulated upserts and deletes with includes run in one
   transaction; a `$transaction` inside a transaction reuses it.
+- `$transaction([...])` uses `executor.batch` (Cloudflare D1) when the
+  executor has it and every query is a single statement
+  (`Dialect.prepareBatch`); otherwise it uses `executor.transaction`.
+  See NOTES-core.md for which methods are batchable.
 - Soft delete tables: reads, counts, aggregates, updates and relation filters
   skip deleted rows unless `withDeleted: true`; `delete` and `deleteMany` set
   the column, `restore`, `hardDelete` and `hardDeleteMany` are extra methods.

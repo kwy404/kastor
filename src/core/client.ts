@@ -7,9 +7,11 @@ import { errors, isKastorError, KastorError } from './errors';
 import type {
   Adapter,
   AggregateFn,
+  BatchExecutor,
   AggregateIR,
   CompiledQuery,
   Dialect,
+  ExecResult,
   Executor,
   IdType,
   OrderByIR,
@@ -56,6 +58,7 @@ import type {
 import { and, eq, fieldFilter, isPlainObject, normalizeWhere, requireUnique } from './where';
 import {
   allFields,
+  checkRequired,
   createRecord,
   createRow,
   findOne,
@@ -160,6 +163,13 @@ export type KastorClient<S extends SchemaShape, R> = { readonly [K in keyof S]: 
 /* Lazy queries                                                               */
 /* ------------------------------------------------------------------------ */
 
+/** A query that is exactly one IR step, and how to shape its result. */
+interface BatchPlan<T> {
+  query: QueryIR;
+  model: string;
+  finish(value: unknown): T;
+}
+
 /**
  * A query that runs when awaited (or `.then` is called). Pass several to
  * `$transaction([...])` to run them in one transaction.
@@ -172,7 +182,18 @@ export class KastorQuery<T> implements PromiseLike<T> {
     private readonly session: SessionImpl,
     private readonly body: (session: SessionImpl) => Promise<T>,
     private readonly describe: () => QueryIR[],
+    private readonly single?: () => BatchPlan<T> | null,
   ) {}
+
+  /** @internal the query as one IR step, when it is one (atomic batches). */
+  batchPlan(): BatchPlan<T> | null {
+    if (!this.single) return null;
+    try {
+      return this.single();
+    } catch {
+      return null;
+    }
+  }
 
   /** @internal runs on another session (transactions). */
   runOn(session: SessionImpl): Promise<T> {
@@ -592,7 +613,22 @@ function groupOrder(models: Models, m: ModelMeta, input: unknown, by: string[]):
 function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any> {
   const rt = session.rt;
   const models = rt.models;
-  const q = <T>(body: (s: SessionImpl) => Promise<T>, describe: () => QueryIR[]): KastorQuery<T> => new KastorQuery<T>(session, body, describe);
+  const q = <T>(body: (s: SessionImpl) => Promise<T>, describe: () => QueryIR[], single?: () => BatchPlan<T> | null): KastorQuery<T> =>
+    new KastorQuery<T>(session, body, describe, single);
+  const plan = <T>(query: QueryIR, finish: (value: unknown) => T = (v) => v as T): BatchPlan<T> => ({ query, model: m.key, finish });
+  const countOf = (v: unknown): { count: number } => (Array.isArray(v) ? { count: v.length } : (v as { count: number }));
+
+  const readPlan = (method: string, raw: unknown, single: boolean) => (): BatchPlan<unknown> | null => {
+    const { args, read, reversed, strip } = readArgs(method, raw);
+    if (args.cursor !== undefined) return null;
+    if (single) read.take = read.take ?? 1;
+    return plan({ kind: single ? 'findFirst' : 'findMany', table: m.table, read }, (v) => {
+      let list = (single ? (v ? [v] : []) : v) as Row[];
+      if (reversed) list = list.reverse();
+      if (strip) stripHidden(list);
+      return single ? (list[0] ?? null) : list;
+    });
+  };
 
   const readArgs = (method: string, raw: unknown): { args: Record<string, unknown>; read: ReadIR; reversed: boolean; strip: boolean } => {
     const args = argsObject(m, method, raw);
@@ -711,8 +747,8 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
   };
 
   const api: ModelClient<any, any, any> = {
-    findMany: (raw?: unknown) => q((s) => findMany(s, 'findMany', raw, false), describeRead('findMany', raw, 'findMany')) as never,
-    findFirst: (raw?: unknown) => q(async (s) => (await findMany(s, 'findFirst', raw, true))[0] ?? null, describeRead('findFirst', raw, 'findFirst')) as never,
+    findMany: (raw?: unknown) => q((s) => findMany(s, 'findMany', raw, false), describeRead('findMany', raw, 'findMany'), readPlan('findMany', raw, false)) as never,
+    findFirst: (raw?: unknown) => q(async (s) => (await findMany(s, 'findFirst', raw, true))[0] ?? null, describeRead('findFirst', raw, 'findFirst'), readPlan('findFirst', raw, true)) as never,
     findFirstOrThrow: (raw?: unknown) =>
       q(
         async (s) => {
@@ -722,7 +758,12 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
         },
         describeRead('findFirstOrThrow', raw, 'findFirst'),
       ) as never,
-    findUnique: (raw: unknown) => q((s) => findUnique(s, 'findUnique', raw), () => [{ kind: 'findUnique', table: m.table, read: findUniqueRead('findUnique', raw) }]) as never,
+    findUnique: (raw: unknown) =>
+      q(
+        (s) => findUnique(s, 'findUnique', raw),
+        () => [{ kind: 'findUnique', table: m.table, read: findUniqueRead('findUnique', raw) }],
+        () => plan({ kind: 'findUnique', table: m.table, read: findUniqueRead('findUnique', raw) }),
+      ) as never,
     findUniqueOrThrow: (raw: unknown) =>
       q(
         async (s) => {
@@ -791,7 +832,13 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           return createRecord(s, m, args.data).then((row) => projectRow(row, selection));
         }
         return s.transaction(async (tx) => readBack(tx, m, await createRecord(tx, m, args.data), args));
-      }, describe) as never;
+      }, describe, () => {
+        const selection = scalarSelection(m, args);
+        if (!selection || hasRelations(m, args.data) || !isPlainObject(args.data)) return null;
+        const row = createRow(m, args.data, 'create');
+        checkRequired(m, row, 'create');
+        return plan({ kind: 'create', table: m.table, data: row, returning: selection });
+      }) as never;
     },
 
     createMany: (raw: unknown) => {
@@ -806,7 +853,10 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
         if (query.data.length === 0) return { count: 0 };
         const res = await s.run(query, m.key);
         return Array.isArray(res) ? { count: res.length } : res;
-      }, () => [build()]) as never;
+      }, () => [build()], () => {
+        const query = build();
+        return query.data.length === 0 ? null : plan(query, countOf);
+      }) as never;
     },
 
     createManyAndReturn: (raw: unknown) => {
@@ -860,7 +910,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
       return q(async (s) => {
         const res = await s.run(build(s), m.key);
         return Array.isArray(res) ? { count: res.length } : res;
-      }, () => [build(session)]) as never;
+      }, () => [build(session)], () => plan(build(session), countOf)) as never;
     },
 
     upsert: (raw: unknown) => {
@@ -902,6 +952,12 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           const query = native();
           return query ? [query] : [{ kind: 'findUnique', table: m.table, read: { table: m.table, select: allFields(m), include: [], counts: [], orderBy: [], where: uniqueWhere(session, m, args.where, 'upsert'), take: 1 } }];
         },
+        () => {
+          const query = native();
+          if (!query) return null;
+          for (const [column, value] of Object.entries(query.conflict)) if (query.create[column] === undefined) query.create[column] = value;
+          return plan(query);
+        },
       ) as never;
     },
 
@@ -925,6 +981,12 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
             ? [{ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [softDelete.column]: { op: 'set', value: new Date() } } }]
             : [{ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }];
         },
+        () => {
+          const where = manyWhere(session, 'deleteMany', raw, false);
+          return softDelete
+            ? plan({ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [softDelete.column]: { op: 'set', value: new Date() } } }, countOf)
+            : plan({ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }, countOf);
+        },
       ) as never,
     hardDelete: (raw: unknown) => {
       requireSoft('hardDelete');
@@ -932,10 +994,11 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
     },
     hardDeleteMany: (raw?: unknown) => {
       requireSoft('hardDeleteMany');
-      return q((s) => deleteMany(s, raw, 'hardDeleteMany', true), () => {
+      const describe = (): QueryIR & { kind: 'deleteMany' } => {
         const where = manyWhere(session, 'hardDeleteMany', raw, true);
-        return [{ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }];
-      }) as never;
+        return { kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) };
+      };
+      return q((s) => deleteMany(s, raw, 'hardDeleteMany', true), () => [describe()], () => plan(describe(), countOf)) as never;
     },
     restore: (raw?: unknown) => {
       const sd = requireSoft('restore');
@@ -946,7 +1009,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
       return q(async (s) => {
         const res = await s.run(build(s), m.key);
         return { count: Array.isArray(res) ? res.length : res.count };
-      }, () => [build(session)]) as never;
+      }, () => [build(session)], () => plan(build(session), countOf)) as never;
     },
 
     count: (raw?: unknown) => {
@@ -990,6 +1053,11 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           return s.run(query, m.key);
         },
         () => [build().query],
+        () => {
+          const { query, select, args } = build();
+          if (args.cursor !== undefined) return null;
+          return plan(query, (v) => (select ? Object.fromEntries(select.map((k, i) => [k, Number((v as Row)[`a${i}`] ?? 0)])) : v));
+        },
       ) as never;
     },
 
@@ -1022,6 +1090,11 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           return plan.assemble(row);
         },
         () => [build().query],
+        () => {
+          const built = build();
+          if (built.cursor !== undefined) return null;
+          return plan(built.query, (v) => built.plan.assemble(v as Row));
+        },
       ) as never;
     },
 
@@ -1059,6 +1132,10 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           return rows.map((r) => ({ ...Object.fromEntries(query.by.map((b) => [b.as, r[b.as]])), ...plan.assemble(r) }));
         },
         () => [build().query],
+        () => {
+          const built = build();
+          return plan(built.query, (v) => (v as Row[]).map((r) => ({ ...Object.fromEntries(built.query.by.map((b) => [b.as, r[b.as]])), ...built.plan.assemble(r) })));
+        },
       ) as never;
     },
   };
@@ -1081,6 +1158,28 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
 /* ------------------------------------------------------------------------ */
 /* kastor()                                                                   */
 /* ------------------------------------------------------------------------ */
+
+/**
+ * Runs `$transaction([...])` as one atomic `executor.batch` call when the
+ * executor has one (Cloudflare D1) and every query is a single statement.
+ * Resolves to null when the batch path does not apply.
+ */
+async function runAsBatch(session: SessionImpl, queries: KastorQuery<unknown>[]): Promise<{ results: unknown[] } | null> {
+  const exec = session.exec as Partial<BatchExecutor>;
+  const { dialect, schemaIR } = session.rt;
+  if (typeof exec.batch !== 'function' || !dialect.prepareBatch || queries.length === 0) return null;
+  const plans = queries.map((query) => query.batchPlan());
+  if (plans.some((p) => p === null)) return null;
+  const prepared = plans.map((p) => dialect.prepareBatch!(p!.query, schemaIR));
+  if (prepared.some((p) => p === null)) return null;
+  let results: ExecResult[];
+  try {
+    results = await exec.batch(prepared.map((p) => ({ sql: p!.sql, params: p!.params })));
+  } catch (error) {
+    throw toKastorError(dialect, error, { operation: 'transaction' });
+  }
+  return { results: prepared.map((p, i) => plans[i]!.finish(p!.decode(results[i] ?? { rows: [] }))) };
+}
 
 function buildClient(session: SessionImpl): any {
   const { rt } = session;
@@ -1117,6 +1216,8 @@ function buildClient(session: SessionImpl): any {
             throw errors.invalidArgument('$transaction([...]) takes queries made by this client.', 'Pass the queries without awaiting them: $transaction([db.a.create(...), db.b.update(...)]).');
           }
         }
+        const batched = await runAsBatch(session, arg as KastorQuery<unknown>[]);
+        if (batched) return batched.results;
         return session.transaction(async (tx) => {
           const results: unknown[] = [];
           for (const item of arg as KastorQuery<unknown>[]) results.push(await item.runOn(tx));

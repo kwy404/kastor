@@ -515,6 +515,16 @@ export interface DialectFeatures {
 
 export type IdType = 'number' | 'string';
 
+/** One statement of a batch and how to read its result. */
+export interface PreparedStatement extends CompiledQuery {
+  decode(result: ExecResult): unknown;
+}
+
+/** Executors that run several statements atomically in one call (D1). */
+export interface BatchExecutor extends Executor {
+  batch(statements: CompiledQuery[]): Promise<ExecResult[]>;
+}
+
 /** A compiled statement, for logging and `toSQL()`. */
 export interface CompiledQuery {
   sql: string;
@@ -547,6 +557,12 @@ export interface Dialect<E = Executor> {
   placeholder?(index: number): string;
   /** Encodes a JS value for a raw query parameter (used by `$sql`). */
   encodeParam?(value: unknown): unknown;
+  /**
+   * The query as ONE statement plus a decoder for its result, or null when it
+   * needs several statements. Used to run `$transaction([...])` as one atomic
+   * batch on executors that have `batch` (Cloudflare D1).
+   */
+  prepareBatch?(query: QueryIR, schema: SchemaIR): PreparedStatement | null;
 }
 
 /** What an adapter factory returns: `postgres(pool)` gives `{ dialect, executor }`. */

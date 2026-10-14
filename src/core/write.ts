@@ -129,7 +129,7 @@ function toRow(m: ModelMeta, scalars: Map<FieldMeta, unknown>): RowDataIR {
   return row;
 }
 
-function checkRequired(m: ModelMeta, row: RowDataIR, method: string): void {
+export function checkRequired(m: ModelMeta, row: RowDataIR, method: string): void {
   for (const f of m.fields.values()) {
     if (f.config.nullable || f.config.default || f.config.defaultFn || row[f.column] !== undefined) continue;
     const via = [...m.relations.values()].find((r) => r.owner && r.fromFields.includes(f.key));

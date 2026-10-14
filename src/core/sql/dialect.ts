@@ -15,7 +15,7 @@ import type {
   SchemaIR,
 } from '../ir';
 import type { SqlHooks } from './hooks';
-import { compileSql, executeSql } from './execute';
+import { compileSql, executeSql, prepareSingle } from './execute';
 import { splitSqlScript } from './script';
 
 export const MIGRATIONS_TABLE = '_kastor_migrations';
@@ -133,6 +133,7 @@ export function createSqlDialect(options: SqlDialectOptions): Dialect {
     quoteIdent: hooks.quoteIdent,
     placeholder: hooks.placeholder,
     encodeParam: (value) => hooks.encode(value, undefined),
+    prepareBatch: (query, schema) => prepareSingle(hooks, query, schema),
   };
   if (options.mapError) dialect.mapError = options.mapError;
   return dialect;

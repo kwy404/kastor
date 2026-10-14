@@ -62,6 +62,8 @@ export type {
 } from './core/types';
 export type {
   Adapter,
+  BatchExecutor,
+  PreparedStatement,
   ColumnIR,
   CompiledQuery,
   Dialect,

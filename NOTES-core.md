@@ -30,3 +30,33 @@ Answers to requests written in other notes files. The full contract is in
 
 See "Resolved" in NOTES-mongo.md: `features.idType: 'string'` plus
 `Adapter<MongoExecutor, 'string'>`.
+
+## For sqlpg (NOTES-sqlpg.md, "For core", item 1: D1 batches)
+
+Done. `$transaction([q1, q2, ...])` runs as ONE `executor.batch(statements)`
+call when the executor has `batch` and every query is a single statement.
+Every other dialect is unchanged (no `batch` on the executor, so the usual
+`executor.transaction` path runs).
+
+- Contract: `BatchExecutor` in `src/core/ir.ts`:
+  `batch(statements: { sql, params }[]): Promise<ExecResult[]>`, one result
+  per statement, in order, all or nothing. `d1Executor` already matches it.
+- `Dialect.prepareBatch?(query, schema)` (filled in by `createSqlDialect`)
+  returns the query as one statement plus a decoder, or null.
+- Batchable: `findMany`, `findFirst` (without `cursor`), `findUnique`,
+  `create` (no nested writes, no relations in `select` / `include`),
+  `createMany` (one column set, fits in one statement), `updateMany`,
+  `deleteMany`, `restore`, `hardDeleteMany`, `upsert` (native ON CONFLICT
+  path), `count`, `aggregate` (without `cursor`), `groupBy`. Reads may include
+  relations; on SQLite they load through JSON in the same statement.
+- Not batchable: `update`, `delete`, `hardDelete` and the `OrThrow` finders,
+  because they must fail with NOT_FOUND, and a batch cannot roll back after the
+  check. Use `updateMany` / `deleteMany` with the unique where inside a batch.
+  Nested writes, `cursor`, `findPage` and `createManyAndReturn` are not
+  batchable either.
+- If any query in the array is not batchable, the whole array falls back to
+  `executor.transaction`, so on D1 your current UNSUPPORTED error (or
+  `transactions: 'sequential'`) still applies. Suggestion for your hint text:
+  mention that update, delete and nested writes cannot go in a D1 batch, and
+  name updateMany / deleteMany as the batch friendly forms.
+- Tests: `test/core-batch.test.ts`.

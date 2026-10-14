@@ -13,6 +13,7 @@ import type {
   DeleteQueryIR,
   ExecResult,
   Executor,
+  PreparedStatement,
   QueryIR,
   Row,
   SchemaIR,
@@ -581,6 +582,101 @@ export async function executeSql(hooks: SqlHooks, query: QueryIR, schema: Schema
     default:
       throw errors.invalidArgument(`Unknown query kind ${(query as { kind: string }).kind}.`, 'This is a bug in kastor, please report it.');
   }
+}
+
+/**
+ * The query as exactly one statement with a decoder for its result, or null
+ * when running it takes more than one statement (re-selects, IN-list
+ * includes, chunked inserts, emulated upserts, key pre-selects).
+ */
+export function prepareSingle(hooks: SqlHooks, query: QueryIR, schema: SchemaIR): PreparedStatement | null {
+  const c = compilerFor(hooks, schema);
+  const make = (sql: Sql, decode: (res: ExecResult) => unknown): PreparedStatement => ({ ...render(c, sql), decode });
+  const returns = hooks.returning === 'returning' || hooks.returning === 'output';
+  const direct = (where: WhereIR | undefined): boolean => hooks.mutationSelfReference || !hasSubquery(where);
+  switch (query.kind) {
+    case 'findMany':
+    case 'findFirst':
+    case 'findUnique': {
+      const read = query.kind === 'findMany' ? query.read : { ...query.read, take: query.read.take ?? 1 };
+      const { sql, plan } = c.compileRead(read);
+      if (hasFallback(plan)) return null;
+      return make(sql, (res) => {
+        const rows = res.rows.map((raw) => decodeRow(c, raw, plan, 'row'));
+        stripHidden(rows, plan);
+        return query.kind === 'findMany' ? rows : (rows[0] ?? null);
+      });
+    }
+    case 'create': {
+      if (!returns || query.returning.length === 0) return null;
+      const tbl = c.table(query.table);
+      return make(c.compileInsert(query.table, definedColumns(query.data), [query.data], { returning: query.returning }), (res) =>
+        res.rows[0] ? decodeColumns(c, res.rows[0], query.returning, tbl, 'row') : null,
+      );
+    }
+    case 'createMany': {
+      if (query.returning || query.data.length === 0 || !hooks.multiRowInsert) return null;
+      const cols = definedColumns(query.data[0]!);
+      const sig = cols.join('\u0001');
+      if (cols.length === 0 || query.data.some((row) => definedColumns(row).join('\u0001') !== sig)) return null;
+      if (cols.length * query.data.length > hooks.maxParams - 10 || query.data.length > 1000) return null;
+      const nativeSkip: 'onConflict' | 'ignore' | null = hooks.upsert === 'onConflict' ? 'onConflict' : hooks.upsert === 'onDuplicateKey' ? 'ignore' : null;
+      if (query.skipDuplicates && !nativeSkip) return null;
+      const opts = query.skipDuplicates && nativeSkip ? { ignoreDuplicates: nativeSkip } : {};
+      return make(c.compileInsert(query.table, cols, query.data, opts), (res) => ({ count: res.rowsAffected ?? query.data.length }));
+    }
+    case 'update': {
+      if (!returns || Object.keys(query.data).length === 0 || query.returning.length === 0 || !direct(query.where)) return null;
+      const tbl = c.table(query.table);
+      return make(c.compileUpdate(query.table, query.data, query.where, query.returning), (res) => (res.rows[0] ? decodeColumns(c, res.rows[0], query.returning, tbl, 'row') : null));
+    }
+    case 'updateMany':
+      if (query.returning || Object.keys(query.data).length === 0 || !direct(query.where)) return null;
+      return make(c.compileUpdate(query.table, query.data, query.where), (res) => ({ count: res.rowsAffected ?? 0 }));
+    case 'upsert': {
+      if (hooks.upsert !== 'onConflict' || !returns || query.returning.length === 0) return null;
+      const tbl = c.table(query.table);
+      const create = { ...query.create };
+      for (const [col, value] of Object.entries(query.conflict)) if (create[col] === undefined) create[col] = value;
+      const data = Object.fromEntries(Object.entries(create).filter(([, v]) => v !== undefined));
+      return make(c.compileUpsert(query.table, query.conflict, data, query.update, query.returning), (res) => (res.rows[0] ? decodeColumns(c, res.rows[0], query.returning, tbl, 'row') : null));
+    }
+    case 'delete': {
+      if (!returns || query.returning.length === 0 || !direct(query.where)) return null;
+      const tbl = c.table(query.table);
+      return make(c.compileDelete(query.table, query.where, query.returning), (res) => (res.rows[0] ? decodeColumns(c, res.rows[0], query.returning, tbl, 'row') : null));
+    }
+    case 'deleteMany':
+      if (!direct(query.where)) return null;
+      return make(c.compileDelete(query.table, query.where), (res) => ({ count: res.rowsAffected ?? 0 }));
+    case 'count':
+      return make(c.compileCount(query.table, query.where, query.orderBy, query.take, query.skip, query.distinct), (res) => {
+        const first = res.rows[0] ?? {};
+        return Number(first.count ?? first.COUNT ?? Object.values(first)[0] ?? 0);
+      });
+    case 'aggregate': {
+      const tbl = c.table(query.table);
+      return make(c.compileAggregate(query.table, query.aggregates, query.where, query.orderBy, query.take, query.skip), (res) => {
+        const raw = res.rows[0] ?? {};
+        return Object.fromEntries(query.aggregates.map((a) => [a.as, decodeAggregate(c, raw[a.as], a, tbl)]));
+      });
+    }
+    case 'groupBy': {
+      const tbl = c.table(query.table);
+      return make(c.compileGroupBy(query.table, query.by, query.aggregates, query.where, query.having, query.orderBy, query.take, query.skip), (res) =>
+        res.rows.map((raw) => ({
+          ...decodeColumns(c, raw, query.by, tbl, 'row'),
+          ...Object.fromEntries(query.aggregates.map((a) => [a.as, decodeAggregate(c, raw[a.as], a, tbl)])),
+        })),
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+function hasFallback(plan: LevelPlan): boolean {
+  return plan.fallback.length > 0 || plan.json.some((j) => hasFallback(j.plan));
 }
 
 /** The main statement of a query, without running it. */
