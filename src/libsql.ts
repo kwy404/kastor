@@ -19,4 +19,4 @@ export function libsql(client: LibsqlClientLike): Adapter {
 
 export { sqliteDialect as libsqlDialect } from './dialects/sqlite/dialect';
 export { libsqlExecutor } from './dialects/sqlite/executor-libsql';
-export type { LibsqlClientLike, LibsqlResultLike, LibsqlTransactionLike } from './dialects/sqlite/executor-libsql';
+export type { LibsqlClientLike, LibsqlResultLike, LibsqlStatementLike, LibsqlTransactionLike, LibsqlValue } from './dialects/sqlite/executor-libsql';

@@ -10,9 +10,12 @@ export interface LibsqlResultLike {
   lastInsertRowid?: bigint | number | undefined;
 }
 
+/** Values `@libsql/client` binds. */
+export type LibsqlValue = null | string | number | bigint | boolean | ArrayBuffer | Uint8Array | Date;
+
 export interface LibsqlStatementLike {
   sql: string;
-  args: unknown[];
+  args: LibsqlValue[];
 }
 
 export interface LibsqlTransactionLike {
@@ -52,7 +55,7 @@ async function run(
   sql: string,
   params: unknown[],
 ): Promise<ExecResult> {
-  const result = await conn.execute({ sql, args: toSqliteParams(params, false) });
+  const result = await conn.execute({ sql, args: toSqliteParams(params, false) as LibsqlValue[] });
   return {
     rows: toRows(result),
     rowsAffected: result.rowsAffected,

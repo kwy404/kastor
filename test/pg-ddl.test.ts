@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ColumnIR, SchemaIR } from '../src/core/ir';
+import type { ColumnIR, ForeignKeyIR, SchemaIR } from '../src/core/ir';
 import { columnType, pgDdl } from '../src/dialects/postgres/ddl';
 import { columnFromRow, parseDefault, readStringLiteral, stripCasts } from '../src/dialects/postgres/introspect';
 import { applyOp, type MigrationOp } from '../src/migrate/ops';
@@ -112,7 +112,7 @@ describe('postgres ddl', () => {
   });
 
   it('covers the remaining ops', () => {
-    const fk = { name: 'fk', columns: ['a'], refTable: 'rt_users', refColumns: ['id'], onDelete: 'set null', onUpdate: 'no action' } as const;
+    const fk: ForeignKeyIR = { name: 'fk', columns: ['a'], refTable: 'rt_users', refColumns: ['id'], onDelete: 'set null', onUpdate: 'no action' };
     const base: SchemaIR = { tables: [{ name: 't', columns: [{ name: 'a', type: 'int', nullable: true }], primaryKey: ['a'], indexes: [], foreignKeys: [] }, users] };
     expect(ddl({ kind: 'dropTable', table: 't' }, 'postgres', base)).toEqual(['DROP TABLE "t"']);
     expect(ddl({ kind: 'renameTable', from: 't', to: 'u' }, 'postgres', base)).toEqual([

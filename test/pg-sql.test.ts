@@ -19,9 +19,9 @@ const posts = table('posts', {
   authorId: t.int().references(() => users.id),
 });
 const schema = { users, posts };
-const relations = ({ users: u, posts: p }: typeof schema) => ({
-  users: { posts: many(p) },
-  posts: { author: one(u, { fields: ['authorId'], references: ['id'] }) },
+const relations = (s: typeof schema) => ({
+  users: { posts: many(s.posts) },
+  posts: { author: one(s.users, { fields: ['authorId'], references: ['id'] }) },
 });
 
 const noop: Executor = {
@@ -36,7 +36,7 @@ describe('postgres SQL', () => {
 
   it('loads includes with json_agg in one statement, paged includes through ROW_NUMBER', () => {
     const [stmt] = db.users
-      .findMany({ where: { email: { endsWith: '@acme.com', mode: 'insensitive' } }, include: { posts: { orderBy: { title: 'asc' }, take: 3 } } })
+      .findMany({ where: { email: { endsWith: '@acme.com', mode: 'insensitive' } }, include: { posts: { orderBy: { title: 'asc' }, take: 3 } as any } })
       .toSQL();
     expect(stmt!.sql).toContain('COALESCE(json_agg("s"."j" ORDER BY "s"."rn"), \'[]\'::json)');
     expect(stmt!.sql).toContain('ROW_NUMBER() OVER (ORDER BY "t1"."title" ASC)');

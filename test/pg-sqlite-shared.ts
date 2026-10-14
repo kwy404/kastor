@@ -4,7 +4,7 @@
  * through `dialect.ddl` and a normalizer for comparing SchemaIR values.
  */
 import type { Dialect, Executor, SchemaIR, TableIR } from '../src/core/ir';
-import { index, t, table, uniqueIndex } from '../src/core/schema';
+import { index, t, table, uniqueIndex, type AnyColumn } from '../src/core/schema';
 import { toSchemaIR } from '../src/core/schema-ir';
 import { applyOp, type MigrationOp } from '../src/migrate/ops';
 
@@ -64,7 +64,7 @@ export const rtPostTags = table(
 export const rtComments = table('rt_comments', {
   id: t.id(),
   body: t.text(),
-  parentId: t.int().nullable().references(() => rtComments.id, { onDelete: 'cascade' }),
+  parentId: t.int().nullable().references((): AnyColumn => rtComments.id, { onDelete: 'cascade' }),
 });
 
 export const roundTripSchema: SchemaIR = toSchemaIR({ rtUsers, rtPosts, rtTags, rtPostTags, rtComments });

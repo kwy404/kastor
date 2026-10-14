@@ -23,7 +23,8 @@ afterAll(() => {
 
 let nodeSqlite: { DatabaseSync: new (path: string) => unknown } | undefined;
 try {
-  nodeSqlite = (await import('node:sqlite')) as never;
+  const specifier = 'node:sqlite';
+  nodeSqlite = (await import(/* @vite-ignore */ specifier)) as never;
 } catch {
   nodeSqlite = undefined;
 }
