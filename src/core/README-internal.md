@@ -154,3 +154,28 @@ runConformance('postgres', async () => {
 `test/core-engine.test.ts` runs it on in-memory SQLite through the SQL base
 in three hook configurations (JSON includes with RETURNING, IN-list includes
 with re-select, emulated upsert), which is the reference behaviour.
+
+## Browser build
+
+`dist/kastor.browser.js` (ESM) and `dist/kastor.js` (global `Kastor`) are
+built from `src/core/browser.ts`: the public API plus the SQL base presets.
+A page compiles queries without a database:
+
+```ts
+const dialect = compileOnlyDialect('postgres', defineHooks({ placeholder: placeholderDollar, json: jsonPostgres, returning: 'returning' }));
+const db = kastor({ adapter: { dialect, executor: {} as never }, schema });
+db.users.findMany({ include: { posts: true } }).toSQL(); // [{ sql, params }]
+```
+
+## Behaviour notes
+
+- Every client method returns a lazy `KastorQuery`; argument errors reject
+  that query instead of throwing synchronously.
+- `not: x` and `notIn` keep rows where a nullable column is NULL.
+- JS side defaults (`now`, `random`, values, functions) are filled before
+  inserts; `autoincrement` and `sql` defaults stay with the database.
+- Nested writes, emulated upserts and deletes with includes run in one
+  transaction; a `$transaction` inside a transaction reuses it.
+- Soft delete tables: reads, counts, aggregates, updates and relation filters
+  skip deleted rows unless `withDeleted: true`; `delete` and `deleteMany` set
+  the column, `restore`, `hardDelete` and `hardDeleteMany` are extra methods.
