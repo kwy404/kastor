@@ -335,7 +335,7 @@ export function apiBody(api, frame) {
   <header class="page-head">
     <p class="sheet-label"><span class="sheet-no">SPEC</span><span>API reference</span></p>
     <h1>kastor API reference</h1>
-    <p class="lead">Every public export of <code>kastor</code> and its adapters, the client methods, filters, errors, the config file and the CLI. Types are inferred from your schema, so the examples are all the code you write.</p>
+    <p class="lead">Every public export of <code>kastor-orm</code> and its adapters, the client methods, filters, errors, the config file and the CLI. Types are inferred from your schema, so the examples are all the code you write.</p>
   </header>
   <div class="read">
     <aside class="read-toc" aria-label="Sections"><div class="toc-box"><p class="k-toc-title">Sections</p><ol>${nav}</ol></div></aside>

@@ -17,7 +17,7 @@
     "tools": ["Node.js 18 ou mais novo", "kastor", "o driver mysql2 ou pg", "o seu projeto Laravel"],
     "steps": [
       { "name": "Escolher o caminho", "text": "Decida se o serviço vai para TypeScript ou se uma API TypeScript vai rodar ao lado do Laravel no mesmo banco.", "anchor": "caminhos" },
-      { "name": "Puxar o schema do Laravel", "text": "Rode npx kastor init e npx kastor db pull no banco criado pelo php artisan migrate.", "anchor": "pull" },
+      { "name": "Puxar o schema do Laravel", "text": "Rode npx kastor-orm init e npx kastor db pull no banco criado pelo php artisan migrate.", "anchor": "pull" },
       { "name": "Definir o dono das migrações", "text": "Mantenha as migrações do Laravel e atualize com db pull, ou rode npx kastor migrate baseline --name init e passe a usar o kastor.", "anchor": "dono" },
       { "name": "Traduzir models, relações e scopes", "text": "Mapeie models para table(), hasMany e belongsTo para many() e one(), scopes para objetos where e with() para include.", "anchor": "mapa" },
       { "name": "Portar seeders e factories", "text": "Reescreva o DatabaseSeeder com defineSeed e as factories com factory().", "anchor": "seeders" }
@@ -44,8 +44,8 @@
 <section id="pull"><h2>Passo 1: puxar o schema que as migrações do Laravel criaram</h2>
 <p>Em um projeto TypeScript novo, instale o kastor e o driver do seu banco. A maioria das aplicações Laravel roda MySQL ou MariaDB; PostgreSQL funciona do mesmo jeito com <code>pg</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor mysql2
-npx kastor init --db mysql
+npm install kastor-orm mysql2
+npx kastor-orm init --db mysql
 npx kastor db pull --out src/db/schema.ts
 </pre>
 <p>Antes do pull, aponte o <code>DATABASE_URL</code> do <code>.env</code> criado pelo <code>init</code> para o banco do Laravel, por exemplo <code>mysql://forge:secret@127.0.0.1:3306/laravel</code>. O <code>db pull</code> lê tabelas, colunas, defaults, índices e chaves estrangeiras criadas pelo <code>php artisan migrate</code> e escreve definições <code>table()</code> com as relações deduzidas das chaves. O Laravel usa snake case nas colunas, então o schema mantém os nomes do banco com <code>.map()</code> e o TypeScript lê em camelCase:</p>
@@ -63,7 +63,7 @@ class Post extends Model
 }
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, one, many } from 'kastor'
+import { table, t, one, many } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.bigId(),
@@ -146,7 +146,7 @@ export const latest = () =&gt;
 <section id="seeders"><h2>Passo 4: seeders e factories</h2>
 <p>A chave <code>seed</code> do <code>kastor.config.ts</code> aponta para um arquivo que faz o papel do <code>DatabaseSeeder</code>, e <code>factory()</code> cobre as model factories, inclusive registros aninhados como o <code>has()</code>:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
-import { defineSeed, factory } from 'kastor'
+import { defineSeed, factory } from 'kastor-orm'
 import type { db as client } from './index'
 
 export default defineSeed&lt;typeof client&gt;(async (db) =&gt; {

@@ -1,10 +1,10 @@
 /**
- * kastor/sqlite: SQLite through better-sqlite3, node:sqlite (`DatabaseSync`)
+ * kastor-orm/sqlite: SQLite through better-sqlite3, node:sqlite (`DatabaseSync`)
  * or bun:sqlite. The driver is detected from the object you pass.
  *
  * ```ts
  * import Database from 'better-sqlite3'
- * import { sqlite } from 'kastor/sqlite'
+ * import { sqlite } from 'kastor-orm/sqlite'
  * const db = kastor({ adapter: sqlite(new Database('app.db')), schema })
  * ```
  */

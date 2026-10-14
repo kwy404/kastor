@@ -241,8 +241,8 @@ for (const target of targets) {
       // Only SQLite keeps a warning (how Prisma stores dates there).
       expect(r.out.includes('Not mapped exactly (')).toBe(target.provider === 'sqlite');
       const file = join(dir, 'src', 'db', 'schema.ts');
-      // The test project has no node_modules/kastor: point the import at the sources.
-      writeFileSync(file, readFileSync(file, 'utf8').replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
+      // The test project has no node_modules/kastor-orm: point the import at the sources.
+      writeFileSync(file, readFileSync(file, 'utf8').replace(/from 'kastor-orm'/g, `from '${posix(join(root, 'src/index'))}'`));
       schemaModule = await importModule(file);
       expect(Object.keys(schemaModule.schema as object)).toEqual(expect.arrayContaining(['user', 'post', 'orderItem', 'postToTag', 'categoryToPost', 'follows']));
     });
@@ -434,7 +434,7 @@ for (const target of targets) {
       expect(r.err).toBe('');
       expect(r.out).toContain('foreignKey([c.orderId, c.productId]');
       const file = join(dir, 'pulled.ts');
-      writeFileSync(file, r.out.replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
+      writeFileSync(file, r.out.replace(/from 'kastor-orm'/g, `from '${posix(join(root, 'src/index'))}'`));
       const pulled = await importModule(file);
       const { toSchemaIR } = await import('../src/core/schema-ir');
       const ir = toSchemaIR(pulled.schema as Record<string, unknown>);

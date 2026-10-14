@@ -10,7 +10,7 @@
   "readTime": "8 min read",
   "keywords": ["Turso ORM", "libSQL ORM", "Turso TypeScript ORM", "libsql client ORM", "Turso embedded replicas"],
   "faq": [
-    { "q": "How do I connect an ORM to Turso?", "a": "Create a client with <code>createClient</code> from <code>@libsql/client</code>, passing the database <code>url</code> and an <code>authToken</code> from the Turso CLI, then pass it to <code>libsql(client)</code> from <code>kastor/libsql</code>. kastor ships no driver, so the libSQL client is the only database dependency." },
+    { "q": "How do I connect an ORM to Turso?", "a": "Create a client with <code>createClient</code> from <code>@libsql/client</code>, passing the database <code>url</code> and an <code>authToken</code> from the Turso CLI, then pass it to <code>libsql(client)</code> from <code>kastor-orm/libsql</code>. kastor ships no driver, so the libSQL client is the only database dependency." },
     { "q": "Can I use Turso locally without an account?", "a": "Yes. Use a <code>file:</code> URL such as <code>file:local.db</code> for a plain local SQLite file, or run <code>turso dev</code> for a local libSQL server. The same kastor code works against both and against Turso in production." },
     { "q": "What is a Turso embedded replica?", "a": "A local SQLite file that the libSQL client keeps in sync with a remote Turso database. Reads are served from the local file, writes go to the remote primary. You enable it with <code>syncUrl</code> next to a <code>file:</code> URL." },
     { "q": "Does Turso work on edge runtimes like Cloudflare Workers?", "a": "Yes. Import <code>createClient</code> from <code>@libsql/client/web</code>, which talks to Turso over HTTP and needs no filesystem. File URLs and embedded replicas are not available there." },
@@ -26,7 +26,7 @@
 <section id="connect"><h2>createClient with url and authToken</h2>
 <p>Create a database with the Turso CLI, read its URL, and create a token. Keep both in environment variables, never in source control.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor @libsql/client
+npm install kastor-orm @libsql/client
 turso db create app
 turso db show app --url
 turso db tokens create app
@@ -34,8 +34,8 @@ turso db tokens create app
 <p>The URL starts with <code>libsql://</code>. The client picks the right transport for it, and the token authorizes every request. Then build the kastor client:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import { createClient } from '@libsql/client'
-import { kastor, one, many } from 'kastor'
-import { libsql } from 'kastor/libsql'
+import { kastor, one, many } from 'kastor-orm'
+import { libsql } from 'kastor-orm/libsql'
 import { users, posts } from './schema'
 
 const client = createClient({
@@ -63,8 +63,8 @@ export const db = kastor({
 <p>An embedded replica is a local SQLite file that the libSQL client keeps in sync with a remote Turso database. Reads are served from the local file, so they skip the network entirely. Writes go to the remote primary, and the client pulls changes back into the file.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/replica.ts">
 import { createClient } from '@libsql/client'
-import { kastor } from 'kastor'
-import { libsql } from 'kastor/libsql'
+import { kastor } from 'kastor-orm'
+import { libsql } from 'kastor-orm/libsql'
 import { users, posts } from './schema'
 
 const client = createClient({
@@ -87,8 +87,8 @@ export const db = kastor({ adapter: libsql(client), schema: { users, posts } })
 <p>The CLI reads <code>kastor.config.ts</code>. Using the same environment variables as the app lets one config serve both local files and Turso:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import { createClient } from '@libsql/client'
-import { defineConfig } from 'kastor'
-import { libsql } from 'kastor/libsql'
+import { defineConfig } from 'kastor-orm'
+import { libsql } from 'kastor-orm/libsql'
 
 export default defineConfig({
   schema: './src/db/schema.ts',

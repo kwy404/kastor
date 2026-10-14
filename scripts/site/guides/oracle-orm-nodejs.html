@@ -21,9 +21,9 @@
 -->
 <section id="thin-mode"><h2>oracledb thin mode: no Instant Client required</h2>
 <p>For years, connecting Node.js to Oracle meant installing Instant Client on every developer machine, CI runner and container image. Current releases of <code>oracledb</code> default to <em>thin mode</em>, a pure JavaScript implementation of the network protocol. A normal <code>npm install</code> is all you need, and the same image builds on Linux, macOS and Windows.</p>
-<p>kastor uses whatever driver instance you give it and ships no driver of its own. You create an <code>oracledb</code> pool and pass it to the <code>oracle</code> adapter from <code>kastor/oracle</code>. Thin mode covers ordinary application work: queries, writes, transactions, LOBs and JSON. Thick mode, enabled by calling <code>initOracleClient()</code>, is only needed for a short list of advanced features described in the node-oracledb documentation. kastor targets Oracle Database 19c and newer and is tested on 23ai. The adapter imports your <code>oracledb</code> package once to read wide NUMBER columns (bigint and decimal) as text, so no digits are lost.</p>
+<p>kastor uses whatever driver instance you give it and ships no driver of its own. You create an <code>oracledb</code> pool and pass it to the <code>oracle</code> adapter from <code>kastor-orm/oracle</code>. Thin mode covers ordinary application work: queries, writes, transactions, LOBs and JSON. Thick mode, enabled by calling <code>initOracleClient()</code>, is only needed for a short list of advanced features described in the node-oracledb documentation. kastor targets Oracle Database 19c and newer and is tested on 23ai. The adapter imports your <code>oracledb</code> package once to read wide NUMBER columns (bigint and decimal) as text, so no digits are lost.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor oracledb
+npm install kastor-orm oracledb
 docker run -d --name oracle -p 1521:1521 -e ORACLE_PASSWORD=$ORACLE_ADMIN_PASSWORD -e APP_USER=app -e APP_USER_PASSWORD=$ORACLE_PASSWORD gvenzl/oracle-free:23-slim
 docker logs -f oracle
 </pre>
@@ -37,8 +37,8 @@ docker logs -f oracle
 <p>Pool creation in <code>oracledb</code> is asynchronous, so create the pool once at startup and reuse it. The pool settings that matter most are <code>poolMin</code> and <code>poolMax</code>: keep the maximum in line with what your database user and server sessions allow.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import oracledb from 'oracledb'
-import { kastor, one, many } from 'kastor'
-import { oracle } from 'kastor/oracle'
+import { kastor, one, many } from 'kastor-orm'
+import { oracle } from 'kastor-orm/oracle'
 import { users, posts } from './schema'
 
 const pool = await oracledb.createPool({
@@ -72,7 +72,7 @@ export const db = kastor({
 <h3>Identifier case</h3>
 <p>Oracle folds unquoted names to upper case. kastor quotes identifiers, so a table declared as <code>users</code> is created as lower case <code>"users"</code>. Application code never notices, but ad hoc SQL in SQL Developer or SQL*Plus must quote the name. If your team prefers upper case names for ad hoc work, or you map an existing schema, declare them in upper case and keep readable field names with <code>.map()</code>.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/legacy.ts">
-import { table, t } from 'kastor'
+import { table, t } from 'kastor-orm'
 
 export const customers = table('CUSTOMERS', {
   id: t.id().map('CUSTOMER_ID'),

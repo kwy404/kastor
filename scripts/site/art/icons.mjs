@@ -36,16 +36,16 @@ export const FEATURE_ICONS = {
 
 /** Supported databases. Marks are original symbols, not product logos. */
 export const DATABASES = [
-  { id: 'postgres', name: 'PostgreSQL', short: 'PostgreSQL', entry: 'kastor/postgres' },
-  { id: 'cockroach', name: 'CockroachDB', short: 'CockroachDB', entry: 'kastor/cockroach' },
-  { id: 'mysql', name: 'MySQL', short: 'MySQL', entry: 'kastor/mysql' },
-  { id: 'mariadb', name: 'MariaDB', short: 'MariaDB', entry: 'kastor/mariadb' },
-  { id: 'sqlite', name: 'SQLite', short: 'SQLite', entry: 'kastor/sqlite' },
-  { id: 'libsql', name: 'libSQL / Turso', short: 'libSQL', entry: 'kastor/libsql' },
-  { id: 'd1', name: 'Cloudflare D1', short: 'D1', entry: 'kastor/d1' },
-  { id: 'mssql', name: 'SQL Server', short: 'SQL Server', entry: 'kastor/mssql' },
-  { id: 'oracle', name: 'Oracle', short: 'Oracle', entry: 'kastor/oracle' },
-  { id: 'mongodb', name: 'MongoDB', short: 'MongoDB', entry: 'kastor/mongodb' },
+  { id: 'postgres', name: 'PostgreSQL', short: 'PostgreSQL', entry: 'kastor-orm/postgres' },
+  { id: 'cockroach', name: 'CockroachDB', short: 'CockroachDB', entry: 'kastor-orm/cockroach' },
+  { id: 'mysql', name: 'MySQL', short: 'MySQL', entry: 'kastor-orm/mysql' },
+  { id: 'mariadb', name: 'MariaDB', short: 'MariaDB', entry: 'kastor-orm/mariadb' },
+  { id: 'sqlite', name: 'SQLite', short: 'SQLite', entry: 'kastor-orm/sqlite' },
+  { id: 'libsql', name: 'libSQL / Turso', short: 'libSQL', entry: 'kastor-orm/libsql' },
+  { id: 'd1', name: 'Cloudflare D1', short: 'D1', entry: 'kastor-orm/d1' },
+  { id: 'mssql', name: 'SQL Server', short: 'SQL Server', entry: 'kastor-orm/mssql' },
+  { id: 'oracle', name: 'Oracle', short: 'Oracle', entry: 'kastor-orm/oracle' },
+  { id: 'mongodb', name: 'MongoDB', short: 'MongoDB', entry: 'kastor-orm/mongodb' },
 ];
 
 /** One line mark per database, 24 by 24. */

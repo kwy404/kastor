@@ -2,8 +2,8 @@
 
 ```ts
 import { MongoClient } from 'mongodb'
-import { kastor } from 'kastor'
-import { mongodb } from 'kastor/mongodb'
+import { kastor } from 'kastor-orm'
+import { mongodb } from 'kastor-orm/mongodb'
 
 const client = new MongoClient(process.env.MONGO_URL!)
 export const db = kastor({ adapter: mongodb(client.db('app')), schema, relations })

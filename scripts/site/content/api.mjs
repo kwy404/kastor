@@ -18,8 +18,8 @@ export const API = [
         text: `Creates the client. ${c('schema')} is an object of tables, ${c('relations')} a function that receives the tables and returns the relations of each one, ${c('log')} prints every statement when set to ${c('true')} or calls your function with it.`,
         file: 'src/db/index.ts',
         code: `import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({
@@ -57,7 +57,7 @@ export const db = kastor({
         sig: "table('users', { ... }, { indexes?, primaryKey?, softDelete? })",
         text: `Declares a table. ${c('indexes: (cols) => [index(cols.a), uniqueIndex(cols.a, cols.b)]')} adds indexes, ${c('primaryKey: (cols) => [cols.a, cols.b]')} sets a composite key and ${c("softDelete: 'deletedAt'")} turns deletes into updates of that column. Columns are available as properties, ${c('users.email')}.`,
         file: 'src/db/schema.ts',
-        code: `import { table, t, index, uniqueIndex } from 'kastor'
+        code: `import { table, t, index, uniqueIndex } from 'kastor-orm'
 
 export const memberships = table('memberships', {
   userId: t.int().references(() => users.id, { onDelete: 'cascade' }),
@@ -213,8 +213,8 @@ await db.users.upsert({ where: { email }, create: { email }, update: { name } })
     title: 'Config, seeds and CLI',
     items: [
       { id: 'define-config', name: 'defineConfig', text: `${c('kastor.config.ts')} tells the CLI where the schema is, how to connect, where migrations live and which seed to run.`, file: 'kastor.config.ts', code: `import pg from 'pg'
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 
 export default defineConfig({
   schema: './src/db/schema.ts',
@@ -222,7 +222,7 @@ export default defineConfig({
   migrations: './kastor/migrations',
   seed: './src/db/seed.ts',
 })` },
-      { id: 'seed', name: 'defineSeed and factory', sig: 'defineSeed<Db>(fn)  factory(db.model, ({ seq }) => data)', text: `${c('defineSeed')} types the default export of your seed file, which ${c('npx kastor db seed')} calls with the client. ${c('factory')} takes a model of the client and a defaults function that receives a sequence number, and returns ${c('build')}, ${c('buildMany')}, ${c('create')}, ${c('createMany')} and ${c('reset')}.`, file: 'test/factories.ts', code: `import { factory } from 'kastor'
+      { id: 'seed', name: 'defineSeed and factory', sig: 'defineSeed<Db>(fn)  factory(db.model, ({ seq }) => data)', text: `${c('defineSeed')} types the default export of your seed file, which ${c('npx kastor db seed')} calls with the client. ${c('factory')} takes a model of the client and a defaults function that receives a sequence number, and returns ${c('build')}, ${c('buildMany')}, ${c('create')}, ${c('createMany')} and ${c('reset')}.`, file: 'test/factories.ts', code: `import { factory } from 'kastor-orm'
 import { db } from '../src/db'
 
 export const users = factory(db.users, ({ seq }) => ({ email: \`user\${seq}@example.com\` }))
@@ -232,7 +232,7 @@ const ten = await users.createMany(10)` },
       {
         id: 'cli',
         name: 'npx kastor',
-        text: 'The command line. Every command takes ' + c('--config') + ' and ' + c('--help') + '.',
+        text: 'The command line. Every command takes ' + c('--config') + ' and ' + c('--help') + '. The npm package is ' + c('kastor-orm') + ' and the command is ' + c('kastor') + ': run ' + c('npx kastor-orm init') + ' before the package is installed, and ' + c('npx kastor migrate dev') + ' and the other commands once it is.',
         table: [
           ['Command', 'What it does'],
           [c('init --db postgres'), 'Writes kastor.config.ts, a starter schema and a seed file for the database you pick'],

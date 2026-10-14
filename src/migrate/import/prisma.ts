@@ -48,7 +48,7 @@ export interface PrismaImportWarning {
 }
 
 export interface PrismaImportOptions {
-  /** Import path of kastor in the generated file. Default `kastor`. */
+  /** Import path of kastor in the generated file. Default `kastor-orm`. */
   importFrom?: string;
   /** Where the schema came from, for the header comment. */
   source?: string;
@@ -947,7 +947,7 @@ class Importer {
   /* ---------------------------------------------------------------------- */
 
   private render(order: TableSpec[]): string {
-    const from = this.options.importFrom ?? 'kastor';
+    const from = this.options.importFrom ?? 'kastor-orm';
     const imports = new Set<string>(['table', 't']);
     const position = new Map(order.map((s, i) => [s.name, i]));
     let anyColumn = false;

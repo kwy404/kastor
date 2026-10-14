@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["Hono 4", "kastor", "pg, better-sqlite3 or a D1 binding"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor hono plus a driver and npx kastor init.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm hono plus a driver and npx kastor-orm init.", "anchor": "structure" },
       { "name": "Type the context", "text": "Declare Variables with db typed from the client so c.var.db is typed in every route.", "anchor": "middleware" },
       { "name": "Set the client in middleware", "text": "Use one shared client on servers, or build one from c.env per request on Workers.", "anchor": "middleware" },
       { "name": "Write routes and handle errors", "text": "Query c.var.db in routes and map KastorError codes in app.onError.", "anchor": "routes" },
@@ -44,15 +44,15 @@ kastor.config.ts
 kastor/migrations/
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor hono @hono/node-server pg
-npx kastor init --db postgres
+npm install kastor-orm hono @hono/node-server pg
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 </section>
 <section id="middleware"><h2>A typed db variable set by middleware</h2>
 <p>The client factory takes an adapter, so each runtime can pass its own. The <code>Db</code> type comes from the factory, and the Hono generics put it on <code>c.var</code>.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
-import { kastor, type Adapter } from 'kastor'
+import { kastor, type Adapter } from 'kastor-orm'
 import { schema, relations } from './schema'
 
 export const createDb = (adapter: Adapter) =&gt; kastor({ adapter, schema, relations })
@@ -60,7 +60,7 @@ export type Db = ReturnType&lt;typeof createDb&gt;
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/app.ts">
 import { Hono } from 'hono'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import type { Db } from './db/client'
 
 export type Env = { Variables: { db: Db } }
@@ -107,7 +107,7 @@ export function buildApp(getDb: (c: unknown) =&gt; Db) {
 <pre data-kind="editor" data-lang="ts" data-title="src/node.ts">
 import { serve } from '@hono/node-server'
 import pg from 'pg'
-import { postgres } from 'kastor/postgres'
+import { postgres } from 'kastor-orm/postgres'
 import { buildApp } from './app'
 import { createDb } from './db/client'
 
@@ -119,7 +119,7 @@ process.on('SIGTERM', () =&gt; server.close(() =&gt; void db.$disconnect()))
 </pre>
 <p>On Workers there is no process to hold a pool, and the D1 binding comes with each request on <code>c.env</code>. The middleware builds a client per request from the binding:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/worker.ts">
-import { d1 } from 'kastor/d1'
+import { d1 } from 'kastor-orm/d1'
 import { buildApp } from './app'
 import { createDb } from './db/client'
 

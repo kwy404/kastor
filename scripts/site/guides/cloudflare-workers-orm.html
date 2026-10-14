@@ -59,7 +59,7 @@ binding = "HYPERDRIVE"
 id = "paste-the-id-from-wrangler-hyperdrive-create"
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
+npm install kastor-orm pg
 npm install -D wrangler better-sqlite3
 npx wrangler d1 create app-db
 npx wrangler hyperdrive create app-pg --connection-string="postgres://user:pass@host:5432/app"
@@ -70,8 +70,8 @@ npx wrangler types
 <section id="d1"><h2>D1: a client per request</h2>
 <p>The D1 binding is an object, not a connection. <code>d1(env.DB)</code> wraps it, and each call becomes one D1 query, or one batch for <code>$transaction([...])</code>. A small factory keeps the schema and relations in one place.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/index.ts">
-import { kastor, isKastorError } from 'kastor'
-import { d1 } from 'kastor/d1'
+import { kastor, isKastorError } from 'kastor-orm'
+import { d1 } from 'kastor-orm/d1'
 import { schema, relations } from './db/schema'
 
 export interface Env {
@@ -111,8 +111,8 @@ export default {
 <p>Hyperdrive keeps a pool of real connections to your Postgres database close to Cloudflare's network and hands each Worker invocation a fast local connection string. With <code>nodejs_compat</code>, the <code>pg</code> package runs in Workers. Connect a <code>Client</code> per request and close it after the response is sent:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/pg-worker.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './db/schema'
 
 interface Env {
@@ -142,8 +142,8 @@ export default {
 <p>The kastor CLI runs on Node, not inside a Worker. Point <code>kastor.config.ts</code> at a local database of the same kind: a SQLite file for D1, or your Postgres database for Hyperdrive.</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import Database from 'better-sqlite3'
-import { defineConfig } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
+import { defineConfig } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
 
 export default defineConfig({
   schema: './src/db/schema.ts',

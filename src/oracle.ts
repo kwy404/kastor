@@ -1,10 +1,10 @@
 /**
- * kastor/oracle: Oracle Database through node-oracledb in thin mode (no
+ * kastor-orm/oracle: Oracle Database through node-oracledb in thin mode (no
  * Instant Client needed).
  *
  * ```ts
  * import oracledb from 'oracledb'
- * import { oracle } from 'kastor/oracle'
+ * import { oracle } from 'kastor-orm/oracle'
  * const pool = await oracledb.createPool({ user, password, connectString: 'localhost:1521/FREEPDB1' })
  * const db = kastor({ adapter: oracle(pool), schema })
  * ```

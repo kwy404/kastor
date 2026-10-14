@@ -19,7 +19,7 @@ const OPTIONS = {
   noLib: true,
   allowJs: false,
   baseUrl: '/',
-  paths: { kastor: ['src/index.ts'] },
+  paths: { 'kastor-orm': ['src/index.ts'] },
   types: [],
 };
 
@@ -100,7 +100,7 @@ function printer(checker, at) {
 function check(msg) {
   const started = performance.now();
   const models = msg.models.map((m) => `${m}: s.${m}`).join(', ');
-  const prefix = `import { kastor } from 'kastor'\nimport * as s from './schema'\ndeclare const adapter: any\nconst db = kastor({ adapter, schema: { ${models} }${msg.relations ? ', relations: s.relations' : ''} })\nexport const __result = await (\n`;
+  const prefix = `import { kastor } from 'kastor-orm'\nimport * as s from './schema'\ndeclare const adapter: any\nconst db = kastor({ adapter, schema: { ${models} }${msg.relations ? ', relations: s.relations' : ''} })\nexport const __result = await (\n`;
   const body = msg.query.trim().replace(/^await\s+/, '').replace(/;\s*$/, '');
   files['/schema.ts'] = msg.schema;
   files['/query.ts'] = `${prefix}${body}\n)\n`;

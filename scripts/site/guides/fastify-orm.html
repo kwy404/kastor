@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["Fastify 4 or 5", "fastify-plugin", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor pg fastify fastify-plugin and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm pg fastify fastify-plugin and npx kastor-orm init --db postgres.", "anchor": "structure" },
       { "name": "Write the plugin", "text": "Create a fastify-plugin that builds the client, decorates the instance and closes the pool in onClose.", "anchor": "plugin" },
       { "name": "Type the decorator", "text": "Augment FastifyInstance with a db property typed from the client.", "anchor": "plugin" },
       { "name": "Write routes", "text": "Register routes that use app.db with JSON schema validation for inputs.", "anchor": "routes" },
@@ -44,8 +44,8 @@ kastor.config.ts
 kastor/migrations/
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg fastify fastify-plugin
-npx kastor init --db postgres
+npm install kastor-orm pg fastify fastify-plugin
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 </section>
@@ -55,8 +55,8 @@ npx kastor migrate dev --name init
 import fp from 'fastify-plugin'
 import type { FastifyInstance } from 'fastify'
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from '../db/schema'
 
 export const createDb = (url: string) =&gt;
@@ -119,7 +119,7 @@ export async function postRoutes(app: FastifyInstance) {
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/app.ts">
 import Fastify from 'fastify'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import db from './plugins/db'
 import { postRoutes } from './routes/posts'
 

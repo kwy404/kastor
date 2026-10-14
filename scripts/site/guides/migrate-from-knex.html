@@ -16,7 +16,7 @@
     "totalTime": "PT2H",
     "tools": ["Node.js 18 or newer", "kastor", "the driver Knex already uses"],
     "steps": [
-      { "name": "Install kastor and pull the schema", "text": "Install kastor, run npx kastor init and npx kastor db pull to turn the tables your knex migrations built into a TypeScript schema.", "anchor": "schema" },
+      { "name": "Install kastor and pull the schema", "text": "Install kastor, run npx kastor-orm init and npx kastor db pull to turn the tables your knex migrations built into a TypeScript schema.", "anchor": "schema" },
       { "name": "Baseline the database", "text": "Run npx kastor migrate baseline --name init so kastor starts from the current schema and leaves knex_migrations alone.", "anchor": "baseline" },
       { "name": "Share the driver pool", "text": "Create the kastor client from the same driver settings Knex uses and keep pool sizes in check.", "anchor": "client" },
       { "name": "Rewrite builder chains", "text": "Turn select, where, join and insert chains into findMany, include, create and updateMany, keeping $sql for reports.", "anchor": "queries" },
@@ -39,8 +39,8 @@
 </section>
 <section id="schema"><h2>Step 1: install kastor and pull the schema</h2>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor
-npx kastor init --db postgres
+npm install kastor-orm
+npx kastor-orm init --db postgres
 npx kastor db pull --out src/db/schema.ts
 </pre>
 <p>Compare a knex migration with the kastor table it turns into. The migration described changes; the kastor schema describes the result, which is what your code needs to know.</p>
@@ -64,7 +64,7 @@ export async function up(knex: Knex) {
 }
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index, one, many } from 'kastor'
+import { table, t, index, one, many } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -103,8 +103,8 @@ npx kastor migrate status
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
 import knexFactory from 'knex'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 // Old code keeps using this until it moves.

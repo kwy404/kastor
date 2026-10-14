@@ -23,7 +23,7 @@ let counter = 0;
 /** Writes the generated code, imports it and checks it declares exactly `schemaIR`, and that a client builds on it. */
 async function evaluate(r: PrismaImportResult): Promise<Record<string, unknown>> {
   const file = join(tmp, `schema${counter++}.ts`);
-  writeFileSync(file, r.code.replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
+  writeFileSync(file, r.code.replace(/from 'kastor-orm'/g, `from '${posix(join(root, 'src/index'))}'`));
   const mod = await importModule(file);
   // Loaded through jiti, like the CLI loads schemas: another module copy than this test's kastor.
   const schema = mod.schema as Record<string, unknown>;
@@ -309,7 +309,7 @@ model Ids {
     expect(r.warnings.find((w) => w.message.startsWith('Ids from'))!.where).toBe('Ids.a, Ids.b, Ids.c, Ids.d, Ids.e, Ids.f');
     // The helpers run and make ids of the documented shapes.
     const file = join(tmp, 'ids.ts');
-    writeFileSync(file, `${r.code.replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`)}\nexport const make = { cuid, nanoid, ulid, uuidv7 };\n`);
+    writeFileSync(file, `${r.code.replace(/from 'kastor-orm'/g, `from '${posix(join(root, 'src/index'))}'`)}\nexport const make = { cuid, nanoid, ulid, uuidv7 };\n`);
     const mod = (await importModule(file)) as { make: Record<string, (n?: number) => string> };
     expect(mod.make.cuid!()).toMatch(/^c[0-9a-z]{24}$/);
     expect(mod.make.cuid!(24)).toHaveLength(24);

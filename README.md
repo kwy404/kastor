@@ -1,25 +1,25 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/banner-dark.svg">
-  <img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/banner.svg" alt="kastor banner: Kas the beaver engineer next to the wordmark, the TypeScript ORM for almost every database" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/banner-dark.svg">
+  <img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/banner.svg" alt="kastor banner: Kas the beaver engineer next to the wordmark, the TypeScript ORM for almost every database" width="100%">
 </picture>
 
 # kastor: the TypeScript ORM for almost every database
 
 **Schema in plain TypeScript. Types inferred as you type. No generate step, no binary engine.**
 
-[![npm version](https://img.shields.io/npm/v/kastor.svg)](https://www.npmjs.com/package/kastor)
-[![npm downloads per month](https://img.shields.io/npm/dm/kastor.svg)](https://www.npmjs.com/package/kastor)
-[![npm downloads total](https://img.shields.io/npm/dt/kastor.svg)](https://www.npmjs.com/package/kastor)
+[![npm version](https://img.shields.io/npm/v/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
+[![npm downloads per month](https://img.shields.io/npm/dm/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
+[![npm downloads total](https://img.shields.io/npm/dt/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
 [![CI](https://github.com/kwy404/kastor/actions/workflows/ci.yml/badge.svg)](https://github.com/kwy404/kastor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kwy404/kastor/blob/main/LICENSE)
 [![Install size](https://packagephobia.com/badge?p=kastor)](https://packagephobia.com/result?p=kastor)
-[![Bundle size](https://img.shields.io/bundlephobia/minzip/kastor)](https://bundlephobia.com/package/kastor)
+[![Bundle size](https://img.shields.io/bundlephobia/minzip/kastor-orm)](https://bundlephobia.com/package/kastor-orm)
 
 English | [Português (Brasil)](https://github.com/kwy404/kastor/blob/main/i18n/README.pt-BR.md)
 
-[Website and live playground](https://kwy404.github.io/kastor/) · [API reference](https://kwy404.github.io/kastor/api.html) · [Guides](https://kwy404.github.io/kastor/guides.html) · [Migrate to kastor](https://kwy404.github.io/kastor/migrate-to-kastor.html) · [Frameworks](https://kwy404.github.io/kastor/frameworks.html) · [npm](https://www.npmjs.com/package/kastor)
+[Website and live playground](https://kwy404.github.io/kastor/) · [API reference](https://kwy404.github.io/kastor/api.html) · [Guides](https://kwy404.github.io/kastor/guides.html) · [Migrate to kastor](https://kwy404.github.io/kastor/migrate-to-kastor.html) · [Frameworks](https://kwy404.github.io/kastor/frameworks.html) · [npm](https://www.npmjs.com/package/kastor-orm)
 
 </div>
 
@@ -29,8 +29,8 @@ The name comes from *castor*, Latin for beaver. Beavers build strong structures 
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/mascot-dark.svg">
-  <img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/mascot.svg" alt="Kas, the kastor beaver engineer, in a yellow hard hat with a blueprint roll under one arm and a pencil behind the ear" width="200">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/mascot-dark.svg">
+  <img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/mascot.svg" alt="Kas, the kastor beaver engineer, in a yellow hard hat with a blueprint roll under one arm and a pencil behind the ear" width="200">
 </picture>
 </div>
 
@@ -59,21 +59,23 @@ The name comes from *castor*, Latin for beaver. Beavers build strong structures 
 
 | | | |
 | --- | --- | --- |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/schema.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/schema.svg" width="40" alt="Schema icon"></picture><br>**Schema in TypeScript**<br>Tables, columns, indexes and relations are plain values. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/no-codegen.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/no-codegen.svg" width="40" alt="No codegen icon"></picture><br>**No generate step**<br>Types are inferred on the next keystroke. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/one-query.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/one-query.svg" width="40" alt="One query icon"></picture><br>**Includes in one query**<br>JSON aggregation, never N+1. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/migrations.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/migrations.svg" width="40" alt="Migrations icon"></picture><br>**Automatic migrations**<br>Readable SQL files, rename detection asks first. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/studio.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/studio.svg" width="40" alt="Studio icon"></picture><br>**Studio**<br>Browse and edit data, read the ER diagram. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/errors.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/errors.svg" width="40" alt="Errors icon"></picture><br>**Errors with a hint**<br>A stable code, a plain message and the fix. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/raw-sql.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/raw-sql.svg" width="40" alt="Raw SQL icon"></picture><br>**Typed raw SQL**<br>Tagged templates, values become parameters. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/adapters.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/adapters.svg" width="40" alt="Adapters icon"></picture><br>**Bring your own driver**<br>Zero bundled drivers, zero runtime bloat. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/dark/edge.svg"><img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/assets/icons/light/edge.svg" width="40" alt="Edge icon"></picture><br>**Serverless and edge**<br>Workers with D1, Turso, Neon, Bun and Deno. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/schema.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/schema.svg" width="40" alt="Schema icon"></picture><br>**Schema in TypeScript**<br>Tables, columns, indexes and relations are plain values. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/no-codegen.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/no-codegen.svg" width="40" alt="No codegen icon"></picture><br>**No generate step**<br>Types are inferred on the next keystroke. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/one-query.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/one-query.svg" width="40" alt="One query icon"></picture><br>**Includes in one query**<br>JSON aggregation, never N+1. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/migrations.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/migrations.svg" width="40" alt="Migrations icon"></picture><br>**Automatic migrations**<br>Readable SQL files, rename detection asks first. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/studio.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/studio.svg" width="40" alt="Studio icon"></picture><br>**Studio**<br>Browse and edit data, read the ER diagram. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/errors.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/errors.svg" width="40" alt="Errors icon"></picture><br>**Errors with a hint**<br>A stable code, a plain message and the fix. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/raw-sql.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/raw-sql.svg" width="40" alt="Raw SQL icon"></picture><br>**Typed raw SQL**<br>Tagged templates, values become parameters. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/adapters.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/adapters.svg" width="40" alt="Adapters icon"></picture><br>**Bring your own driver**<br>Zero bundled drivers, zero runtime bloat. | <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/dark/edge.svg"><img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/assets/icons/light/edge.svg" width="40" alt="Edge icon"></picture><br>**Serverless and edge**<br>Workers with D1, Turso, Neon, Bun and Deno. |
 
 ## Quick start
 
 ```bash
-npm i kastor pg          # or mysql2, mariadb, better-sqlite3, @libsql/client, mssql, oracledb, mongodb
-npx kastor init --db postgres   # writes kastor.config.ts, a starter schema, a seed and .env
+npm i kastor-orm pg          # or mysql2, mariadb, better-sqlite3, @libsql/client, mssql, oracledb, mongodb
+npx kastor-orm init --db postgres   # writes kastor.config.ts, a starter schema, a seed and .env
 ```
+
+The npm package is `kastor-orm`; the project and the CLI are called kastor. Run `npx kastor-orm init` before the package is installed; once it is, the same CLI also answers to the short name, as in `npx kastor migrate dev`.
 
 Declare the schema in `src/db/schema.ts`:
 
 ```ts
-import { table, t, one, many, index } from 'kastor'
+import { table, t, one, many, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -102,8 +104,8 @@ Create the client in `src/db/index.ts`:
 
 ```ts
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 export const db = kastor({
@@ -135,7 +137,7 @@ Try all of this without installing anything in the [live playground](https://kwy
 The script tag build exposes the whole core as the global `Kastor`, plus the shared SQL compiler, so a page can build queries and compile them to SQL with no database, like the playground on the website does. Running queries needs a server runtime (Node.js, Bun, Deno or Workers) and a driver.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/kastor@0.1.0/dist/kastor.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.js"></script>
 <script>
   const { kastor, table, t, compileOnlyDialect, defineHooks, placeholderDollar, jsonPostgres } = Kastor
   const users = table('users', { id: t.id(), email: t.string(255).unique() })
@@ -146,7 +148,7 @@ The script tag build exposes the whole core as the global `Kastor`, plus the sha
 </script>
 ```
 
-ES module build: `https://cdn.jsdelivr.net/npm/kastor@0.1.0/dist/kastor.browser.js`.
+ES module build: `https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.browser.js`.
 
 ## Supported databases
 
@@ -154,24 +156,24 @@ kastor ships no drivers. Install the one you use and pass its instance to the ad
 
 | Database | Import | Pass | Includes compile to |
 | --- | --- | --- | --- |
-| PostgreSQL (also Neon, Supabase, Vercel Postgres) | `kastor/postgres` | `postgres(new pg.Pool(...))` | `json_agg` + `json_build_object` |
-| CockroachDB | `kastor/cockroach` | `cockroach(new pg.Pool(...))` | `json_agg` + `json_build_object` |
-| MySQL (also PlanetScale) | `kastor/mysql` | `mysql(mysql2.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
-| MariaDB | `kastor/mariadb` | `mariadb(mariadb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
-| SQLite (better-sqlite3, node:sqlite, bun:sqlite) | `kastor/sqlite` | `sqlite(new Database('app.db'))` | `json_group_array` + `json_object` |
-| libSQL and Turso | `kastor/libsql` | `libsql(createClient({ url, authToken }))` | `json_group_array` + `json_object` |
-| Cloudflare D1 | `kastor/d1` | `d1(env.DB)` | `json_group_array` + `json_object` |
-| SQL Server and Azure SQL | `kastor/mssql` | `mssql(await new sql.ConnectionPool(...).connect())` | `FOR JSON PATH` |
-| Oracle | `kastor/oracle` | `oracle(await oracledb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
-| MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | `$lookup` pipelines (keys are ObjectId strings by default, `{ ids: 'int' }` for numbers) |
+| PostgreSQL (also Neon, Supabase, Vercel Postgres) | `kastor-orm/postgres` | `postgres(new pg.Pool(...))` | `json_agg` + `json_build_object` |
+| CockroachDB | `kastor-orm/cockroach` | `cockroach(new pg.Pool(...))` | `json_agg` + `json_build_object` |
+| MySQL (also PlanetScale) | `kastor-orm/mysql` | `mysql(mysql2.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
+| MariaDB | `kastor-orm/mariadb` | `mariadb(mariadb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
+| SQLite (better-sqlite3, node:sqlite, bun:sqlite) | `kastor-orm/sqlite` | `sqlite(new Database('app.db'))` | `json_group_array` + `json_object` |
+| libSQL and Turso | `kastor-orm/libsql` | `libsql(createClient({ url, authToken }))` | `json_group_array` + `json_object` |
+| Cloudflare D1 | `kastor-orm/d1` | `d1(env.DB)` | `json_group_array` + `json_object` |
+| SQL Server and Azure SQL | `kastor-orm/mssql` | `mssql(await new sql.ConnectionPool(...).connect())` | `FOR JSON PATH` |
+| Oracle | `kastor-orm/oracle` | `oracle(await oracledb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
+| MongoDB | `kastor-orm/mongodb` | `mongodb(client.db('app'))` | `$lookup` pipelines (keys are ObjectId strings by default, `{ ids: 'int' }` for numbers) |
 
 The adapters share one conformance suite, run against real databases in CI. See the [support matrix](https://kwy404.github.io/kastor/#databases) for returning, upsert and paging syntax per database, and [Get started in 60 seconds](https://kwy404.github.io/kastor/#start) for each one.
 
 ## Schema
 
 ```ts
-import { table, t, index, uniqueIndex } from 'kastor'
-import type { InferSelect, InferInsert } from 'kastor'
+import { table, t, index, uniqueIndex } from 'kastor-orm'
+import type { InferSelect, InferInsert } from 'kastor-orm'
 
 export const posts = table('posts', {
   id: t.uuid().primaryKey().defaultRandom(),
@@ -254,7 +256,7 @@ Also `createMany`, `createManyAndReturn`, `updateMany`, `delete`, and on soft de
 ## Raw SQL
 
 ```ts
-import { sql } from 'kastor'
+import { sql } from 'kastor-orm'
 
 const rows = await db.$sql<{ day: string; signups: number }>`
   select date(created_at) as day, count(*) as signups
@@ -271,7 +273,7 @@ Template values always become parameters. `sql.raw`, `sql.join` and `sql.ident` 
 Every failure is a `KastorError` with a stable `code`, a plain English `message`, a `hint` with the fix, `meta` and the driver error as `cause`.
 
 ```ts
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 
 try {
   await db.users.create({ data: { email } })
@@ -288,8 +290,8 @@ Codes: `UNIQUE_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `NOT_NULL_VIOLATION`, `CHECK
 
 ```ts
 import pg from 'pg'
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 
 export default defineConfig({
   schema: './src/db/schema.ts',
@@ -301,7 +303,7 @@ export default defineConfig({
 
 | Command | What it does |
 | --- | --- |
-| `npx kastor init --db postgres` | Writes `kastor.config.ts`, a starter schema and a seed file for your database |
+| `npx kastor-orm init --db postgres` | Writes `kastor.config.ts`, a starter schema and a seed file for your database |
 | `npx kastor migrate dev --name <name>` | Diffs the schema against the database, writes `kastor/migrations/<timestamp>_<name>/migration.sql` and applies it. A possible rename is a question, never a silent drop. `--create-only`, `--rename users.name:fullName`, `--accept-data-loss` |
 | `npx kastor migrate baseline` | Adopts an existing database: records its schema as the first migration without running it (`--name init`, `--from-prisma prisma/migrations`) |
 | `npx kastor migrate deploy` | Applies pending migrations (CI and production) |
@@ -319,8 +321,8 @@ Read [database migrations explained](https://kwy404.github.io/kastor/database-mi
 ## Studio
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-dark.png">
-  <img src="https://cdn.jsdelivr.net/gh/kwy404/kastor@main/docs/assets/studio-data-light.png" alt="The kastor studio browsing the posts table: filters, rows, foreign keys and actions" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/docs/assets/studio-data-dark.png">
+  <img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/docs/assets/studio-data-light.png" alt="The kastor studio browsing the posts table: filters, rows, foreign keys and actions" width="100%">
 </picture>
 
 `npx kastor studio` opens a local web UI: browse every table, filter and search, add, edit and delete rows, follow foreign keys and read the diagram of the whole database. It runs on 127.0.0.1 behind a private session token, and `--read-only` keeps data you must not touch safe.
@@ -330,7 +332,7 @@ Read [database migrations explained](https://kwy404.github.io/kastor/database-mi
 Your database and your data stay where they are. kastor reads the schema you already have, records the database as its first migration without running anything, and takes over from there.
 
 ```bash
-npm i kastor pg
+npm i kastor-orm pg
 npx kastor import prisma --config                               # schema.prisma to src/db/schema.ts, plus a report
 npx kastor migrate baseline --from-prisma prisma/migrations     # adopt the database, keep Prisma's history
 npx kastor migrate dev                                          # should say: Already in sync

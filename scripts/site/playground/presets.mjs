@@ -1,6 +1,6 @@
 // Examples for the live playground. Every preset shares the default schema
 // unless it brings its own.
-export const SCHEMA = `import { table, t, one, many, index } from 'kastor'
+export const SCHEMA = `import { table, t, one, many, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),

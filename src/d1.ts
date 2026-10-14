@@ -1,8 +1,8 @@
 /**
- * kastor/d1: Cloudflare D1 from a Worker binding.
+ * kastor-orm/d1: Cloudflare D1 from a Worker binding.
  *
  * ```ts
- * import { d1 } from 'kastor/d1'
+ * import { d1 } from 'kastor-orm/d1'
  * export default {
  *   async fetch(request, env) {
  *     const db = kastor({ adapter: d1(env.DB), schema })

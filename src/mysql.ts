@@ -1,10 +1,10 @@
 /**
- * kastor/mysql: MySQL 8 through mysql2 (also PlanetScale and other MySQL
+ * kastor-orm/mysql: MySQL 8 through mysql2 (also PlanetScale and other MySQL
  * compatible servers). The mariadb package works too.
  *
  * ```ts
  * import mysql2 from 'mysql2/promise'
- * import { mysql } from 'kastor/mysql'
+ * import { mysql } from 'kastor-orm/mysql'
  * const db = kastor({ adapter: mysql(mysql2.createPool(process.env.DATABASE_URL)), schema })
  * ```
  */

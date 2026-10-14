@@ -4,7 +4,7 @@ This file is for the people working on kastor itself. It fixes the public
 names, the internal types and what each piece must do. The source of truth for
 types is `src/core/ir.ts`; this file explains it.
 
-## Public API (`import ... from 'kastor'`)
+## Public API (`import ... from 'kastor-orm'`)
 
 | Name | What it is |
 | --- | --- |
@@ -19,7 +19,7 @@ types is `src/core/ir.ts`; this file explains it.
 | `sql` | Tagged template for raw SQL fragments (`sql.raw`, `sql.join`, `sql.ident`) usable in `where: { AND: [sql\`...\`] }` and `$sql` |
 | `KastorError`, `isKastorError(e)` | Error class with `code`, `message`, `hint`, `meta`, `cause` |
 | `toSchemaIR(schema)` | Converts the TypeScript schema object (`{ users, posts }`) to SchemaIR |
-| `defineConfig(config)` | Typed identity for `kastor.config.ts` (type `KastorConfigFile`, the same as `KastorConfig` of `kastor/migrate`) |
+| `defineConfig(config)` | Typed identity for `kastor.config.ts` (type `KastorConfigFile`, the same as `KastorConfig` of `kastor-orm/migrate`) |
 | `defineSeed(fn)` / `factory(model, build)` | Seed and test factory helpers |
 | Types | `InferSelect<typeof users>`, `InferInsert<typeof users>`, `KastorClient<typeof schema, ReturnType<typeof relations>>`, `Payload`, `WhereInput`, `CreateData`, `UpdateData`, `WithIdType` |
 

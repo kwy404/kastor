@@ -16,8 +16,8 @@
     "totalTime": "PT2H",
     "tools": ["Node.js 18 or newer", "kastor", "the database driver you already use"],
     "steps": [
-      { "name": "Install kastor next to Drizzle", "text": "Run npm install kastor and keep the driver you already have, such as pg or better-sqlite3.", "anchor": "install" },
-      { "name": "Pull a kastor schema from the database", "text": "Run npx kastor init, then npx kastor db pull to write src/db/schema.ts from the tables drizzle-kit created.", "anchor": "schema" },
+      { "name": "Install kastor next to Drizzle", "text": "Run npm install kastor-orm and keep the driver you already have, such as pg or better-sqlite3.", "anchor": "install" },
+      { "name": "Pull a kastor schema from the database", "text": "Run npx kastor-orm init, then npx kastor db pull to write src/db/schema.ts from the tables drizzle-kit created.", "anchor": "schema" },
       { "name": "Adopt the database with a baseline", "text": "Run npx kastor migrate baseline --name init so kastor records the current schema as applied without running it.", "anchor": "baseline" },
       { "name": "Rewrite queries module by module", "text": "Replace select builders and relational queries with findMany, include and the write methods, one module at a time.", "anchor": "queries" },
       { "name": "Remove drizzle-kit from CI", "text": "Swap drizzle-kit migrate for npx kastor migrate deploy and delete the Drizzle packages when nothing imports them.", "anchor": "ci" }
@@ -40,8 +40,8 @@
 <section id="install"><h2>Step 1: install kastor next to Drizzle</h2>
 <p>kastor ships no driver, so you keep the one Drizzle already uses. A Postgres project keeps <code>pg</code> (or <code>postgres</code>), a SQLite project keeps <code>better-sqlite3</code>, a Turso project keeps <code>@libsql/client</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor
-npx kastor init --db postgres
+npm install kastor-orm
+npx kastor-orm init --db postgres
 </pre>
 <p><code>init</code> writes <code>kastor.config.ts</code>, a starter schema at <code>src/db/schema.ts</code>, a seed file and a <code>.env</code> with <code>DATABASE_URL</code>. Point that variable at the same database <code>drizzle.config.ts</code> uses. If your Drizzle schema already lives in <code>src/db/schema.ts</code>, pick another path for kastor, for example <code>src/db/kastor-schema.ts</code>, in the config's <code>schema</code> field until the move is done.</p>
 </section>
@@ -78,7 +78,7 @@ export const postsRelations = relations(posts, ({ one }) =&gt; ({
 }))
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/kastor-schema.ts">
-import { table, t, index, one, many } from 'kastor'
+import { table, t, index, one, many } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -136,8 +136,8 @@ npx kastor migrate dev --create-only --name check
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './kastor-schema'
 
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10 })
@@ -219,7 +219,7 @@ export const register = (email: string) =&gt;
     include: { posts: true },
   })
 </pre>
-<p>Raw SQL keeps working. The <code>sql</code> tag from <code>kastor</code> builds fragments for <code>where</code>, and <code>db.$sql&lt;Row&gt;</code> runs a full statement with every interpolated value sent as a parameter.</p>
+<p>Raw SQL keeps working. The <code>sql</code> tag from <code>kastor-orm</code> builds fragments for <code>where</code>, and <code>db.$sql&lt;Row&gt;</code> runs a full statement with every interpolated value sent as a parameter.</p>
 </section>
 <section id="ci"><h2>Step 6: switch CI and remove Drizzle</h2>
 <p>Once a module has no Drizzle import left, delete its old file. When the last one goes, remove <code>drizzle-orm</code>, <code>drizzle-kit</code> and <code>drizzle.config.ts</code>, and replace the migrate step in your pipeline:</p>

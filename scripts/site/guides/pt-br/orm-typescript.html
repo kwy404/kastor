@@ -41,14 +41,14 @@
 <section id="schema"><h2>Instalação e schema</h2>
 <p>O kastor não traz drivers embutidos. Você instala o pacote e o driver do seu banco, e o adaptador recebe a instância pronta. Isso deixa pool, TLS e versão do driver sob seu controle.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
+npm install kastor-orm pg
 npm install -D @types/pg
-npx kastor init
+npx kastor-orm init
 </pre>
 <p>O <code>init</code> pergunta qual banco você usa (ou recebe <code>--db postgres</code>) e cria o <code>kastor.config.ts</code>, que aponta para o arquivo de schema, para a pasta de migrações e para o seed. Ele também escreve um <code>src/db/schema.ts</code> inicial, um <code>src/db/seed.ts</code> e um <code>.env</code> com <code>DATABASE_URL</code>, que a CLI lê da pasta do config. O schema é um módulo TypeScript comum, com uma chamada <code>table()</code> por tabela:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index } from 'kastor'
-import type { InferSelect, InferInsert } from 'kastor'
+import { table, t, index } from 'kastor-orm'
+import type { InferSelect, InferInsert } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -77,8 +77,8 @@ export type NewPost = InferInsert&lt;typeof posts&gt;
 <p>O cliente junta adaptador, schema e relações. As relações não criam colunas: elas só dizem ao kastor como ligar tabelas que já têm chave estrangeira.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({
@@ -138,7 +138,7 @@ npx kastor migrate deploy
 <section id="sql-puro"><h2>SQL puro e tratamento de erros</h2>
 <p>Nem tudo cabe na API de modelos, e não precisa caber. O <code>db.$sql</code> aceita uma template tag com tipo de retorno declarado; cada valor interpolado vira parâmetro, então não há concatenação de strings. O tipo declarado é uma promessa, não uma conferência: os valores chegam como o driver devolve, e o <code>pg</code> devolve <code>count</code> como string, por isso o <code>::int</code> no exemplo.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/reports.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from './db/client'
 
 const minPosts = 5

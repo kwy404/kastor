@@ -2,8 +2,8 @@
  * kastor: a TypeScript ORM for almost every database.
  *
  * ```ts
- * import { kastor, table, t, one, many } from 'kastor'
- * import { postgres } from 'kastor/postgres'
+ * import { kastor, table, t, one, many } from 'kastor-orm'
+ * import { postgres } from 'kastor-orm/postgres'
  * ```
  */
 export { kastor, KastorQuery } from './core/client';

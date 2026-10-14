@@ -26,7 +26,7 @@
 <section id="shared-schema"><h2>Sharing schema code</h2>
 <p>A kastor schema does not import anything dialect specific, so the same module can serve every SQL client you create. Keep the main tables in one file and the event collection in another, since they belong to different databases and have different lifecycles.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts and src/db/events.ts">
-import { table, t, index } from 'kastor'
+import { table, t, index } from 'kastor-orm'
 
 // src/db/schema.ts: the relational model, used by Postgres and SQLite
 export const users = table('users', {
@@ -60,10 +60,10 @@ export const events = table('events', {
 import pg from 'pg'
 import Database from 'better-sqlite3'
 import { MongoClient } from 'mongodb'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
-import { sqlite } from 'kastor/sqlite'
-import { mongodb } from 'kastor/mongodb'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
+import { sqlite } from 'kastor-orm/sqlite'
+import { mongodb } from 'kastor-orm/mongodb'
 import { users, orders } from './schema'
 import { events } from './events'
 
@@ -116,9 +116,9 @@ export async function placeOrder(userId: number, total: string) {
 <section id="testing"><h2>Testing the same code against several databases</h2>
 <p>Run the suite once per target. A config file that reads an environment variable lets the CLI prepare each database, with a separate migrations folder per dialect since migration SQL is dialect specific.</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
-import { sqlite } from 'kastor/sqlite'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
+import { sqlite } from 'kastor-orm/sqlite'
 import pg from 'pg'
 import Database from 'better-sqlite3'
 
@@ -137,8 +137,8 @@ export default defineConfig({
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import pg from 'pg'
 import Database from 'better-sqlite3'
-import { postgres } from 'kastor/postgres'
-import { sqlite } from 'kastor/sqlite'
+import { postgres } from 'kastor-orm/postgres'
+import { sqlite } from 'kastor-orm/sqlite'
 import { createAppDb } from '../src/db/clients'
 
 const targets = [
@@ -182,8 +182,8 @@ describe.each(targets)('users on $name', ({ makeDb }) =&gt; {
 <pre data-kind="editor" data-lang="ts" data-title="scripts/copy-users.ts">
 import pg from 'pg'
 import Database from 'better-sqlite3'
-import { postgres } from 'kastor/postgres'
-import { sqlite } from 'kastor/sqlite'
+import { postgres } from 'kastor-orm/postgres'
+import { sqlite } from 'kastor-orm/sqlite'
 import { createAppDb } from '../src/db/clients'
 
 const from = createAppDb(sqlite(new Database('./dev.db')))

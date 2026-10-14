@@ -17,14 +17,14 @@
     "steps": [
       { "name": "Install and rebuild the native driver", "text": "Install kastor and better-sqlite3, then rebuild better-sqlite3 for your Electron version.", "anchor": "structure" },
       { "name": "Open the database in userData", "text": "Create the client in the main process with a file under app.getPath('userData').", "anchor": "main" },
-      { "name": "Apply shipped migrations on startup", "text": "Call deploy from kastor/migrate with the bundled migrations folder before creating windows.", "anchor": "main" },
+      { "name": "Apply shipped migrations on startup", "text": "Call deploy from kastor-orm/migrate with the bundled migrations folder before creating windows.", "anchor": "main" },
       { "name": "Expose typed IPC", "text": "Register ipcMain.handle channels and expose them through contextBridge in a preload script.", "anchor": "ipc" },
       { "name": "Package the app", "text": "Unpack the native module from asar and ship kastor/migrations as an extra resource.", "anchor": "packaging" }
     ]
   },
   "faq": [
     { "q": "Should Electron renderers access SQLite directly?", "a": "No. Keep the database in the main process and expose narrow IPC channels through a preload script with <code>contextBridge</code>. The renderer stays sandboxed and never holds a file handle." },
-    { "q": "How do I run migrations in a desktop app?", "a": "Ship the <code>kastor/migrations</code> folder with the app and call <code>deploy(adapter, dir)</code> from <code>kastor/migrate</code> at startup. It applies only the migrations that the user's database has not seen, so updates upgrade the schema in place." },
+    { "q": "How do I run migrations in a desktop app?", "a": "Ship the <code>kastor/migrations</code> folder with the app and call <code>deploy(adapter, dir)</code> from <code>kastor-orm/migrate</code> at startup. It applies only the migrations that the user's database has not seen, so updates upgrade the schema in place." },
     { "q": "Why does better-sqlite3 fail to load in Electron?", "a": "It is a native module compiled for a specific Node ABI. Rebuild it for your Electron version with <code>@electron/rebuild</code>, or let electron-builder or Electron Forge do it during packaging." },
     { "q": "Where should the database file live?", "a": "Under <code>app.getPath(&#39;userData&#39;)</code>, which is per user and survives app updates. Never inside the app bundle, which is read only and replaced on update." }
   ],
@@ -45,22 +45,22 @@ kastor.config.ts          for migrate dev during development
 kastor/migrations/        shipped with the app
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor better-sqlite3
+npm install kastor-orm better-sqlite3
 npm install -D electron @electron/rebuild
 npx electron-rebuild -f -w better-sqlite3
-npx kastor init --db sqlite
+npx kastor-orm init --db sqlite
 </pre>
 <p><code>better-sqlite3</code> is a native module. The rebuild step compiles it for Electron's Node version; Electron Forge and electron-builder can run it for you during packaging. Recent Electron versions also ship <code>node:sqlite</code>, which the kastor <code>sqlite</code> adapter accepts and which needs no rebuild; check that your Electron version includes it before relying on it.</p>
 </section>
 <section id="main"><h2>Open, migrate, then create the client</h2>
-<p>The database file goes in the user data folder, which belongs to the user and survives updates. At startup the main process opens it, applies any migrations shipped with this version, and only then creates the client and the windows. <code>deploy</code> from <code>kastor/migrate</code> is the same engine as <code>kastor migrate deploy</code>: it records applied migrations in the database and skips them next time.</p>
+<p>The database file goes in the user data folder, which belongs to the user and survives updates. At startup the main process opens it, applies any migrations shipped with this version, and only then creates the client and the windows. <code>deploy</code> from <code>kastor-orm/migrate</code> is the same engine as <code>kastor migrate deploy</code>: it records applied migrations in the database and skips them next time.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/main/db/index.ts">
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { app } from 'electron'
-import { kastor } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
-import { deploy } from 'kastor/migrate'
+import { kastor } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
+import { deploy } from 'kastor-orm/migrate'
 import { schema, relations } from './schema'
 
 const create = (file: string) =&gt; {

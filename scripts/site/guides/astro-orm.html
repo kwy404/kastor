@@ -35,8 +35,8 @@
 <p><strong>Astro</strong> needs a server adapter before any page can query a database per request. With <code>@astrojs/node</code> in standalone mode, the build is a Node server with one long lived process; other adapters turn on-demand routes into functions.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npx astro add node
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 <pre data-kind="output" data-lang="text" data-title="Project">
@@ -63,8 +63,8 @@ export default defineConfig({
 <p>Astro's dev server reloads modules on change, so keep the client on <code>globalThis</code> during development. Server code can read <code>process.env</code> on Node based adapters; <code>import.meta.env</code> also works and is how Astro exposes <code>.env</code> values to server code.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/lib/db.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from '../db/schema'
 
 const create = () =&gt;
@@ -106,7 +106,7 @@ const posts = await db.posts.findMany({
 <p>Files in <code>src/pages/api</code> that export HTTP method handlers become endpoints. They suit JSON clients:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/pages/api/posts.ts">
 import type { APIRoute } from 'astro'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../../lib/db'
 
 export const prerender = false

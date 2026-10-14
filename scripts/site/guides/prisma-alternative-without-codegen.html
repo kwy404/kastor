@@ -53,8 +53,8 @@
 </table>
 <p>Here is a typical pair of models written as kastor tables, with the Prisma attribute noted on each line:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t } from 'kastor'
-import type { InferSelect, InferInsert } from 'kastor'
+import { table, t } from 'kastor-orm'
+import type { InferSelect, InferInsert } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),                              // Int @id @default(autoincrement())
@@ -78,8 +78,8 @@ export type NewUser = InferInsert&lt;typeof users&gt;
 <p>Relations live on the client, where <code>posts Post[]</code> becomes <code>many(posts)</code> and the <code>@relation</code> attribute becomes <code>one(...)</code>:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({
@@ -95,7 +95,7 @@ export const db = kastor({
 <section id="queries"><h2>Queries look the same on purpose</h2>
 <p>If your team knows Prisma, most query code reads the same. Filters, nested includes, nested writes and atomic updates use the same vocabulary.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../db/client'
 
 // Before: prisma.user.findMany({ where: { email: { contains: 'acme' } }, include: { posts: true } })
@@ -124,14 +124,14 @@ export async function register(email: string) {
 <section id="migration-path"><h2>Moving an existing Prisma project</h2>
 <p>You do not need a big rewrite. The safest path keeps both ORMs running against the same database until the last query moves.</p>
 <ol>
-<li><strong>Install kastor and the driver</strong> next to Prisma, for example <code>npm install kastor pg</code>.</li>
+<li><strong>Install kastor and the driver</strong> next to Prisma, for example <code>npm install kastor-orm pg</code>.</li>
 <li><strong>Run <code>npx kastor import prisma --config</code></strong>. It reads schema.prisma and writes <code>src/db/schema.ts</code> with the same table, column and constraint names Prisma Migrate created, plus <code>kastor.config.ts</code> for your datasource. Read the report it prints: it lists every field whose behavior differs, such as <code>@updatedAt</code>. (<code>npx kastor db pull</code> is the alternative that reads the live database instead.)</li>
 <li><strong>Run <code>npx kastor migrate baseline --from-prisma prisma/migrations</code></strong>. It records the database as it is and keeps the Prisma migration history, without changing a table. Then <code>npx kastor migrate dev</code> should report that everything is already in sync. From here on, kastor owns migrations: stop running <code>prisma migrate</code>.</li>
 <li><strong>Move queries module by module.</strong> Start with read paths, then writes. Tests that already cover a module tell you when it is done.</li>
 <li><strong>Remove Prisma</strong> once nothing imports it, along with <code>prisma generate</code> in CI and postinstall.</li>
 </ol>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
+npm install kastor-orm pg
 npx kastor import prisma --config
 npx kastor migrate baseline --from-prisma prisma/migrations
 npx kastor migrate dev

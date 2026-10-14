@@ -1,5 +1,5 @@
 /**
- * `kastor/migrate`: the migration engine as a library, for scripts and tests
+ * `kastor-orm/migrate`: the migration engine as a library, for scripts and tests
  * that want what the CLI does without spawning it.
  */
 export * from './ops';

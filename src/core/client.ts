@@ -1275,7 +1275,7 @@ export function kastor<S extends Record<string, unknown>, R extends object = {},
   if (!adapter || typeof adapter !== 'object' || !adapter.dialect || !adapter.executor) {
     throw errors.invalidArgument(
       'kastor() needs an adapter.',
-      "Create one from a dialect entry point, for example: import { postgres } from 'kastor/postgres'; kastor({ adapter: postgres(pool), schema }).",
+      "Create one from a dialect entry point, for example: import { postgres } from 'kastor-orm/postgres'; kastor({ adapter: postgres(pool), schema }).",
     );
   }
   if (!config.schema || typeof config.schema !== 'object') {

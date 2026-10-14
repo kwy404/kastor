@@ -28,7 +28,7 @@
 <section id="fluxo-dev"><h2>O fluxo no dia a dia: migrate dev</h2>
 <p>O ciclo é sempre o mesmo. Você altera o arquivo de schema, roda um comando, revisa o SQL gerado e faz commit.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index } from 'kastor'
+import { table, t, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),

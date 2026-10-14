@@ -1,10 +1,10 @@
 /**
- * kastor/postgres: PostgreSQL through the `pg` package (also Neon, Supabase,
+ * kastor-orm/postgres: PostgreSQL through the `pg` package (also Neon, Supabase,
  * Vercel Postgres and any other pg compatible pool) or through postgres.js.
  *
  * ```ts
  * import pg from 'pg'
- * import { postgres } from 'kastor/postgres'
+ * import { postgres } from 'kastor-orm/postgres'
  * const db = kastor({ adapter: postgres(new pg.Pool({ connectionString })), schema })
  * ```
  */

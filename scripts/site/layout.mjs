@@ -9,7 +9,7 @@ export const VERSION = '0.1.0';
 export const MONSOON_CSS = 'https://cdn.jsdelivr.net/npm/monsooncss@0.2.0/dist/monsoon.min.css';
 export const VOODOO_JS = 'https://cdn.jsdelivr.net/npm/voodoojs@1.0.0/dist/voodoo.full.min.js';
 export const GITHUB = 'https://github.com/kwy404/kastor';
-export const NPM = 'https://www.npmjs.com/package/kastor';
+export const NPM = 'https://www.npmjs.com/package/kastor-orm';
 export const AUTHOR_GH = 'https://github.com/kwy404';
 export const AUTHOR_IN = 'https://www.linkedin.com/in/alexandre-silva-173687256/';
 export const UPDATED = '2026-10-13';
@@ -205,7 +205,7 @@ export function footer(guides, depth = 0, root = null) {
       <div class="foot-about">
         ${brand(home, false)}
         <p>The TypeScript ORM for almost every database. One schema, inferred types and the same queries on ten databases.</p>
-        <div class="foot-install"><code><span aria-hidden="true">$</span> npm i kastor</code><button type="button" class="k-copy k-copy-sm" v-copy="npm i kastor" aria-label="Copy: npm i kastor">${ui('copy')}</button></div>
+        <div class="foot-install"><code><span aria-hidden="true">$</span> npm i kastor-orm</code><button type="button" class="k-copy k-copy-sm" v-copy="npm i kastor-orm" aria-label="Copy: npm i kastor-orm">${ui('copy')}</button></div>
         <p class="foot-links"><a href="${GITHUB}" class="icon-btn" aria-label="kastor on GitHub">${ui('github')}</a><a href="${NPM}" class="icon-btn" aria-label="kastor on npm">${ui('npm')}</a><a href="${GITHUB}/blob/main/CHANGELOG.md" class="foot-chip">${ui('book')}Changelog</a></p>
       </div>
       <div class="foot-grid">

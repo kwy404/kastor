@@ -27,7 +27,7 @@ Open:
 
 What the adapters really do, so guides and the README can quote them.
 
-### MySQL 8.0.14+ and PlanetScale (`kastor/mysql`, mysql2)
+### MySQL 8.0.14+ and PlanetScale (`kastor-orm/mysql`, mysql2)
 - `mysql(pool)` takes a mysql2 pool or connection, promise or callback API
   (callback objects are switched to `.promise()`). The mariadb package works
   too. Transactions take one pooled connection (`START TRANSACTION`, optional
@@ -54,14 +54,14 @@ What the adapters really do, so guides and the README can quote them.
 - DDL is not transactional: a failed migration can leave earlier statements
   applied.
 
-### MariaDB 10.6+ (`kastor/mariadb`, mariadb package or mysql2)
+### MariaDB 10.6+ (`kastor-orm/mariadb`, mariadb package or mysql2)
 - Everything above, plus: JSON columns are `LONGTEXT` with a `json_valid`
   check (MariaDB does this itself) and introspect back as `json`.
 - MariaDB cannot reference the outer row inside a derived table, so ordered
   and paged includes use `JSON_ARRAYAGG(... ORDER BY ... LIMIT ...)` (10.5+)
   instead, still one statement per root call.
 
-### SQL Server 2017+ and Azure SQL (`kastor/mssql`, mssql/tedious)
+### SQL Server 2017+ and Azure SQL (`kastor-orm/mssql`, mssql/tedious)
 - `mssql(pool)` takes an `mssql` ConnectionPool and connects it on first use
   if needed. Transactions use the driver's Transaction object (one
   connection, statements queued one at a time), with isolation levels.
@@ -87,7 +87,7 @@ What the adapters really do, so guides and the README can quote them.
 - Default collations ignore case; `contains`, `startsWith`, `endsWith` are
   exact (`COLLATE Latin1_General_100_BIN2`), `[` is escaped in LIKE.
 
-### Oracle 19c+ (23ai tested) (`kastor/oracle`, oracledb thin mode)
+### Oracle 19c+ (23ai tested) (`kastor-orm/oracle`, oracledb thin mode)
 - `oracle(pool)` takes an oracledb pool (or one connection). Thin mode, no
   Instant Client. Outside a transaction each statement autocommits; inside,
   one connection with `commit`/`rollback`. Isolation levels: read committed

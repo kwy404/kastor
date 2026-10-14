@@ -42,8 +42,8 @@ for (const post of posts) {
 <p>A forma mais direta de achar <strong>consultas N+1</strong> é olhar o que realmente chega ao banco. No kastor, ative o log no cliente durante o desenvolvimento:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({

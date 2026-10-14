@@ -22,17 +22,17 @@
 -->
 <section id="setup"><h2>The same schema and queries, on MongoDB</h2>
 <p>Most ORMs are either SQL tools or MongoDB tools. kastor treats MongoDB as one more adapter: you declare tables with <code>table()</code>, describe relations with <code>one()</code> and <code>many()</code>, and query with <code>findMany</code>, <code>include</code>, <code>where</code> and <code>$transaction</code>. Types are inferred from the schema as you type, with no generate step.</p>
-<p>kastor ships no driver. Install the official <code>mongodb</code> package (5.x or newer, against MongoDB server 5.0 or newer), connect a <code>MongoClient</code>, and pass a <code>Db</code> to the <code>mongodb</code> adapter from <code>kastor/mongodb</code>.</p>
+<p>kastor ships no driver. Install the official <code>mongodb</code> package (5.x or newer, against MongoDB server 5.0 or newer), connect a <code>MongoClient</code>, and pass a <code>Db</code> to the <code>mongodb</code> adapter from <code>kastor-orm/mongodb</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor mongodb
+npm install kastor-orm mongodb
 docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0
 docker exec mongo mongosh --quiet --eval "rs.initiate()"
 </pre>
 <p>The last two commands start a single node replica set, which you want even in development because transactions depend on it. More on that below.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import { MongoClient } from 'mongodb'
-import { kastor, one, many } from 'kastor'
-import { mongodb } from 'kastor/mongodb'
+import { kastor, one, many } from 'kastor-orm'
+import { mongodb } from 'kastor-orm/mongodb'
 import { users, posts } from './schema'
 
 const client = new MongoClient(
@@ -95,7 +95,7 @@ const authors = await db.users.findMany({
 <p>Raw SQL is not available on MongoDB. The <code>sql</code> tag inside <code>where</code>, <code>$sql</code> and <code>$execute</code> fail with <code>UNSUPPORTED</code>, because there is no SQL to run. The adapter's executor instead accepts database commands written as Extended JSON, with numbered parameter placeholders, which is also what migrations use. For anything larger, such as geospatial or text search stages, you already hold the <code>Db</code> instance and can call the driver directly.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/raw.ts">
 import { MongoClient } from 'mongodb'
-import { mongodb } from 'kastor/mongodb'
+import { mongodb } from 'kastor-orm/mongodb'
 
 const client = new MongoClient(process.env.MONGODB_URL!)
 const adapter = mongodb(client.db('app'))
@@ -128,7 +128,7 @@ export async function archiveDrafts(userId: string) {
 <section id="indexes"><h2>Migrations as JSON commands, validators and indexes</h2>
 <p>MongoDB has no SQL DDL, but kastor still runs migrations on it. <code>kastor migrate dev</code> diffs the schema against the database and writes a <code>migration.sql</code> file whose statements are JSON database commands, one per statement, kept in <code>_kastor_migrations</code> like on SQL. Creating a table creates the collection with a <code>$jsonSchema</code> validator: one property per column with its BSON type, <code>maxLength</code> for <code>t.string(n)</code>, the allowed values for enums, and every non nullable column marked required. Indexes from <code>index()</code> and <code>uniqueIndex()</code> in the table options, plus <code>.unique()</code> on single columns, become <code>createIndexes</code> commands.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index } from 'kastor'
+import { table, t, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),

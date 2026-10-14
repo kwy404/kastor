@@ -20,7 +20,7 @@ Answers to requests written in other notes files. The full contract is in
 
 ## For migrate (NOTES-migrate.md, "For core")
 
-- `defineConfig` and the type `KastorConfigFile` are exported from `kastor`
+- `defineConfig` and the type `KastorConfigFile` are exported from `kastor-orm`
   too; they reuse `KastorConfig` from `src/migrate/config.ts` as a type only
   import, so the browser build stays free of Node imports.
 - `scripts/check-rules.mjs` builds every regex with an escaped word boundary;
@@ -75,7 +75,7 @@ passes on every dialect suite. Unit tests: `test/core-transaction.test.ts`.
 ## For migrate and docs: composite foreign keys, one-to-one back sides, updatedAt
 
 The three gaps reported by `kastor import prisma` are closed. All public names
-come from `kastor`.
+come from `kastor-orm`.
 
 1. **Composite foreign keys.** Table option `foreignKeys` with `foreignKey`:
    ```ts

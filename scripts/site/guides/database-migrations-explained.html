@@ -32,8 +32,8 @@
 <section id="workflow"><h2>The migration workflow, step by step</h2>
 <p>The kastor workflow has four commands. First point <code>kastor.config.ts</code> at your schema and a migrations folder:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import pg from 'pg'
 
 export default defineConfig({

@@ -2,8 +2,8 @@
 // Every entry: the db module, then one idiomatic read and write.
 
 const PG_DB = `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
@@ -18,8 +18,8 @@ export const FRAMEWORKS = [
     intro: 'Create the client once and reuse it across hot reloads in development, then query it from server components, server actions and route handlers. Never import the db module from a client component: the driver and your credentials must stay on the server.',
     files: [
       ['src/db/index.ts', 'ts', `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const create = () => kastor({
@@ -151,7 +151,7 @@ export const GET: APIRoute = async ({ url }) => {
     intro: 'Create the client at startup and share it. Map KastorError codes to HTTP status codes in one error middleware.',
     files: [
       ['src/server.ts', 'ts', `import express from 'express'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from './db'
 
 const app = express()
@@ -205,8 +205,8 @@ await app.listen({ port: 3000 })`],
     files: [
       ['src/db/db.module.ts', 'ts', `import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common'
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 export const KASTOR = Symbol('KASTOR')
@@ -246,8 +246,8 @@ export class UsersService {
     intro: 'Hono runs everywhere, and so does kastor. On Node use the Postgres module above; on Cloudflare Workers build the client from the D1 binding inside the request.',
     files: [
       ['src/index.ts', 'ts', `import { Hono } from 'hono'
-import { kastor } from 'kastor'
-import { d1 } from 'kastor/d1'
+import { kastor } from 'kastor-orm'
+import { d1 } from 'kastor-orm/d1'
 import { schema, relations } from './db/schema'
 
 type Env = { Bindings: { DB: D1Database } }
@@ -269,8 +269,8 @@ export default app`],
     intro: 'Validate DATABASE_URL in start/env.ts, export the client from app/services/db.ts and import it through the #services alias in controllers. A provider closes the pool on shutdown.',
     files: [
       ['app/services/db.ts', 'ts', `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import env from '#start/env'
 import { schema, relations } from '../../database/schema'
 
@@ -298,8 +298,8 @@ export default class PostsController {
     intro: 'Bun ships SQLite in the runtime. Pass a bun:sqlite Database to the sqlite adapter and you have a typed database with zero extra dependencies.',
     files: [
       ['server.ts', 'ts', `import { Database } from 'bun:sqlite'
-import { kastor } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
+import { kastor } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
 import { schema, relations } from './db/schema'
 
 const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations })
@@ -320,8 +320,8 @@ Bun.serve({
     intro: 'Deno imports kastor and the driver with npm: specifiers. Grant network and env access when you run it.',
     files: [
       ['main.ts', 'ts', `import pg from 'npm:pg'
-import { kastor } from 'npm:kastor'
-import { postgres } from 'npm:kastor/postgres'
+import { kastor } from 'npm:kastor-orm'
+import { postgres } from 'npm:kastor-orm/postgres'
 import { schema, relations } from './db/schema.ts'
 
 const db = kastor({
@@ -349,8 +349,8 @@ compatibility_date = "2026-10-01"
 binding = "DB"
 database_name = "app"
 database_id = "<your database id>"`],
-      ['src/worker.ts', 'ts', `import { kastor } from 'kastor'
-import { d1 } from 'kastor/d1'
+      ['src/worker.ts', 'ts', `import { kastor } from 'kastor-orm'
+import { d1 } from 'kastor-orm/d1'
 import { schema, relations } from './db/schema'
 
 export default {
@@ -376,9 +376,9 @@ export default {
       ['src/main/db.ts', 'ts', `import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { app, ipcMain } from 'electron'
-import { kastor } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
-import { deploy } from 'kastor/migrate'
+import { kastor } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
+import { deploy } from 'kastor-orm/migrate'
 import { schema, relations } from './db/schema'
 
 export async function startDatabase() {
@@ -398,8 +398,8 @@ export async function startDatabase() {
     intro: 'Create the client at module scope so warm invocations reuse its connection, keep the pool at one connection per environment, and put RDS Proxy or another pooler in front of the database.',
     files: [
       ['src/handler.ts', 'ts', `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './db/schema'
 
 // Module scope: created at cold start, reused by warm invocations.

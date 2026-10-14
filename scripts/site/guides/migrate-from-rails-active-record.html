@@ -17,7 +17,7 @@
     "tools": ["Node.js 18 or newer", "kastor", "the pg or mysql2 driver", "your Rails project"],
     "steps": [
       { "name": "Choose the path", "text": "Decide whether a service moves to TypeScript or a TypeScript API runs next to Rails on the same database.", "anchor": "paths" },
-      { "name": "Pull the schema Rails built", "text": "Run npx kastor init and npx kastor db pull against the database that rails db:migrate created.", "anchor": "pull" },
+      { "name": "Pull the schema Rails built", "text": "Run npx kastor-orm init and npx kastor db pull against the database that rails db:migrate created.", "anchor": "pull" },
       { "name": "Pick the migration owner", "text": "Keep Rails migrations and refresh with db pull, or run npx kastor migrate baseline --name init and let kastor own changes.", "anchor": "owner" },
       { "name": "Translate associations, scopes and queries", "text": "Map has_many, belongs_to, scopes, includes and where chains to the kastor client.", "anchor": "queries" },
       { "name": "Port seeds and keep callbacks explicit", "text": "Rewrite db/seeds.rb with defineSeed and move callbacks into the functions that write.", "anchor": "seeds" }
@@ -43,8 +43,8 @@
 </section>
 <section id="pull"><h2>Step 1: pull the schema Rails built</h2>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 npx kastor db pull --out src/db/schema.ts
 </pre>
 <p><code>db pull</code> plays the role of <code>db/schema.rb</code> in reverse: it reads the live database and writes TypeScript. Rails tables are plural and snake case, so the exports come out as <code>users</code>, <code>posts</code> and <code>postsTags</code> style names, and columns keep their database names through <code>.map()</code>.</p>
@@ -63,7 +63,7 @@ class Post &lt; ApplicationRecord
 end
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, one, many } from 'kastor'
+import { table, t, one, many } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.bigId(),
@@ -181,7 +181,7 @@ export const archive = (id: bigint) =&gt;
 </section>
 <section id="seeds"><h2>Step 4: seeds, factories and callbacks</h2>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
-import { defineSeed, factory } from 'kastor'
+import { defineSeed, factory } from 'kastor-orm'
 import type { db as client } from './index'
 
 export default defineSeed&lt;typeof client&gt;(async (db) =&gt; {

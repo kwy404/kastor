@@ -10,7 +10,7 @@
   "readTime": "8 min read",
   "keywords": ["SQL Server ORM for Node.js", "mssql ORM TypeScript", "Azure SQL Node.js ORM", "SQL Server TypeScript ORM", "node mssql migrations"],
   "faq": [
-    { "q": "Which Node.js driver does kastor use for SQL Server?", "a": "kastor uses the <code>mssql</code> package, which runs on tedious and needs no native build. You create a <code>ConnectionPool</code>, call <code>connect()</code>, and pass the pool to <code>mssql(pool)</code> from <code>kastor/mssql</code>." },
+    { "q": "Which Node.js driver does kastor use for SQL Server?", "a": "kastor uses the <code>mssql</code> package, which runs on tedious and needs no native build. You create a <code>ConnectionPool</code>, call <code>connect()</code>, and pass the pool to <code>mssql(pool)</code> from <code>kastor-orm/mssql</code>." },
     { "q": "How do I fix the self signed certificate error with mssql?", "a": "A local SQL Server container presents a self signed certificate. Set <code>trustServerCertificate: true</code> for local development only, and keep it false in production, where the server should present a certificate from a trusted authority." },
     { "q": "Does kastor work with Azure SQL Database?", "a": "Yes. Point the pool at <code>yourserver.database.windows.net</code>, keep <code>encrypt: true</code>, and allow your client IP in the server firewall. Authentication options such as Microsoft Entra ID come from the mssql driver configuration." },
     { "q": "Can I use kastor with an existing SQL Server database?", "a": "Yes. Run <code>npx kastor db pull</code> to introspect the live database into a TypeScript schema file, review it, and use <code>migrate dev</code> for changes from then on. See <a href=\"database-migrations-explained.html\">database migrations explained</a> for the full workflow." },
@@ -20,18 +20,18 @@
 }
 -->
 <section id="setup"><h2>Install the mssql driver and open a pool</h2>
-<p>kastor ships no database drivers. For SQL Server 2017 or newer and Azure SQL you install the <code>mssql</code> package, which is the common Node.js client built on tedious and needs no native compilation. You create a <code>ConnectionPool</code>, connect it (the adapter also connects it on first use if you have not), and pass it to the <code>mssql</code> adapter from <code>kastor/mssql</code>. Types, queries and migrations then come from your TypeScript schema. There is no generate step and no engine binary to deploy.</p>
+<p>kastor ships no database drivers. For SQL Server 2017 or newer and Azure SQL you install the <code>mssql</code> package, which is the common Node.js client built on tedious and needs no native compilation. You create a <code>ConnectionPool</code>, connect it (the adapter also connects it on first use if you have not), and pass it to the <code>mssql</code> adapter from <code>kastor-orm/mssql</code>. Types, queries and migrations then come from your TypeScript schema. There is no generate step and no engine binary to deploy.</p>
 <p>For local work, the official SQL Server container image is the fastest way to get a server. It listens on port 1433 and refuses to start with a weak <code>sa</code> password, because SQL Server enforces a password complexity policy.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor mssql
+npm install kastor-orm mssql
 npm install -D @types/mssql
 docker run -d --name mssql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=$MSSQL_PASSWORD" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 </pre>
 <p>The client module creates one pool, connects it, and builds the kastor client on top of it. Connecting first means a wrong password or an unreachable host fails at startup, with a clear error, instead of on the first request a user makes.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import sql from 'mssql'
-import { kastor, one, many } from 'kastor'
-import { mssql } from 'kastor/mssql'
+import { kastor, one, many } from 'kastor-orm'
+import { mssql } from 'kastor-orm/mssql'
 import { users, posts } from './schema'
 
 const pool = new sql.ConnectionPool({
@@ -94,8 +94,8 @@ export const db = kastor({
 <p>The config file tells the CLI where your schema lives and how to reach the database. The adapter is a function, so the CLI creates and connects the pool only when it needs it.</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import sql from 'mssql'
-import { defineConfig } from 'kastor'
-import { mssql } from 'kastor/mssql'
+import { defineConfig } from 'kastor-orm'
+import { mssql } from 'kastor-orm/mssql'
 
 export default defineConfig({
   schema: './src/db/schema.ts',
@@ -133,7 +133,7 @@ await db.$transaction([
 <li><strong>Errors 2627 and 2601</strong> (duplicate key) arrive as <code>UNIQUE_VIOLATION</code>, error 547 as <code>FOREIGN_KEY_VIOLATION</code> (or <code>CHECK_VIOLATION</code> when a check constraint failed), and error 515 as <code>NOT_NULL_VIOLATION</code>.</li>
 </ul>
 <pre data-kind="editor" data-lang="ts" data-title="src/signup.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from './db/client'
 
 export async function signUp(email: string) {

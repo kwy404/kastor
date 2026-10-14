@@ -15,7 +15,7 @@
     "totalTime": "PT15M",
     "tools": ["Deno 2", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Map imports in deno.json", "text": "Add kastor, kastor/postgres and pg as npm: imports and set nodeModulesDir to auto.", "anchor": "structure" },
+      { "name": "Map imports in deno.json", "text": "Add kastor-orm, kastor-orm/postgres and pg as npm: imports and set nodeModulesDir to auto.", "anchor": "structure" },
       { "name": "Create the client", "text": "Build the client in db/client.ts with the pg Pool and Deno.env.", "anchor": "client" },
       { "name": "Serve routes", "text": "Use Deno.serve and URLPattern to route requests to kastor queries.", "anchor": "server" },
       { "name": "Grant permissions", "text": "Run with --allow-net, --allow-env and --env-file.", "anchor": "server" },
@@ -23,7 +23,7 @@
     ]
   },
   "faq": [
-    { "q": "Does kastor work in Deno?", "a": "Yes. Import it with <code>npm:kastor</code> or map it in deno.json. The core has no Node only imports, and drivers such as <code>pg</code> and <code>mysql2</code> run through Deno's Node compatibility." },
+    { "q": "Does kastor work in Deno?", "a": "Yes. Import it with <code>npm:kastor-orm</code> or map it in deno.json. The core has no Node only imports, and drivers such as <code>pg</code> and <code>mysql2</code> run through Deno's Node compatibility." },
     { "q": "Which permissions does a kastor app need on Deno?", "a": "<code>--allow-net</code> to reach the database, <code>--allow-env</code> to read <code>DATABASE_URL</code>, and <code>--allow-read</code> for SQLite files or an env file." },
     { "q": "How do I run kastor migrations in a Deno project?", "a": "The CLI is a Node.js program. With <code>nodeModulesDir: &#39;auto&#39;</code>, Deno writes a node_modules folder, and <code>npx kastor migrate deploy</code> runs against it in CI or locally." },
     { "q": "Can I use SQLite with kastor on Deno?", "a": "Recent Deno versions implement <code>node:sqlite</code>, which the <code>sqlite</code> adapter accepts. For a hosted option, Turso through <code>npm:@libsql/client</code> works too." }
@@ -32,13 +32,13 @@
 }
 -->
 <section id="structure"><h2>Project structure and imports</h2>
-<p>A <strong>Deno</strong> project describes its dependencies in <code>deno.json</code>. Map bare names to <code>npm:</code> specifiers once, and the code imports <code>kastor</code> exactly as it would on Node. Setting <code>nodeModulesDir</code> to <code>auto</code> makes Deno write a <code>node_modules</code> folder, which the kastor CLI needs later.</p>
+<p>A <strong>Deno</strong> project describes its dependencies in <code>deno.json</code>. Map bare names to <code>npm:</code> specifiers once, and the code imports <code>kastor-orm</code> exactly as it would on Node. Setting <code>nodeModulesDir</code> to <code>auto</code> makes Deno write a <code>node_modules</code> folder, which the kastor CLI needs later.</p>
 <pre data-kind="editor" data-lang="json" data-title="deno.json">
 {
   "nodeModulesDir": "auto",
   "imports": {
-    "kastor": "npm:kastor@^0.1.0",
-    "kastor/postgres": "npm:kastor@^0.1.0/postgres",
+    "kastor-orm": "npm:kastor-orm@^0.1.0",
+    "kastor-orm/postgres": "npm:kastor-orm@^0.1.0/postgres",
     "pg": "npm:pg@^8"
   },
   "tasks": {
@@ -61,8 +61,8 @@ kastor/migrations/
 <p>A Deno process loads each module once, so a client created at module scope is shared by every request. <code>deno run --watch</code> restarts the whole process on change, which closes the old pool with it.</p>
 <pre data-kind="editor" data-lang="ts" data-title="db/client.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema.ts'
 
 export const db = kastor({
@@ -76,7 +76,7 @@ export const db = kastor({
 <section id="server"><h2>Serving routes with Deno.serve</h2>
 <p><code>Deno.serve</code> takes a handler from <code>Request</code> to <code>Response</code>. <code>URLPattern</code> matches paths without a framework; for larger apps, Hono or Oak work the same way with kastor.</p>
 <pre data-kind="editor" data-lang="ts" data-title="main.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from './db/client.ts'
 
 const postById = new URLPattern({ pathname: '/posts/:id' })
@@ -113,8 +113,8 @@ deno run --allow-net --allow-env --allow-read --env-file=.env main.ts
 <p>The kastor CLI runs on Node.js and loads <code>kastor.config.ts</code> with its own TypeScript loader. After <code>deno install</code> (or any <code>deno run</code>) has populated <code>node_modules</code>, Node can resolve <code>kastor</code> and <code>pg</code> from it:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import pg from 'pg'
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 
 export default defineConfig({
   schema: './db/schema.ts',
@@ -145,7 +145,7 @@ export default defineConfig({
 <section id="checklist"><h2>Production checklist</h2>
 <p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
 <ul>
-<li>deno.json maps <code>kastor</code>, each adapter subpath and the driver.</li>
+<li>deno.json maps <code>kastor-orm</code>, each adapter subpath and the driver.</li>
 <li>Permissions are as narrow as the app needs, ideally with hosts on <code>--allow-net</code>.</li>
 <li><code>nodeModulesDir</code> is set so the CLI can run with Node.</li>
 <li>CI runs <code>deno check</code> before <code>npx kastor migrate deploy</code>.</li>
@@ -155,7 +155,7 @@ export default defineConfig({
 <section id="pitfalls"><h2>Pitfalls</h2>
 <ul>
 <li><strong>Missing permissions.</strong> A failed connection with a permission error is Deno's sandbox, not the driver. Add the flag the message names.</li>
-<li><strong>Subpath imports.</strong> Map <code>kastor/postgres</code> (and any other adapter) in deno.json, or import <code>npm:kastor@^0.1.0/postgres</code> directly.</li>
+<li><strong>Subpath imports.</strong> Map <code>kastor-orm/postgres</code> (and any other adapter) in deno.json, or import <code>npm:kastor-orm@^0.1.0/postgres</code> directly.</li>
 <li><strong>Two env readers.</strong> <code>Deno.env</code> in the app and <code>process.env</code> in the config are the same environment, but <code>--env-file</code> only applies to <code>deno run</code>; the CLI reads <code>.env</code> next to the config on its own.</li>
 <li><strong>Type checking.</strong> <code>deno check</code> type checks your queries against the schema like <code>tsc</code> does; run it in CI.</li>
 </ul>

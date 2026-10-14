@@ -542,16 +542,23 @@ p code, li code, td code, dd code, .lead code, summary code, h3 code, figcaption
 @media (min-width: 960px) { .faq-in { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 4rem; } }
 .accordion { display: grid; border-top: 1px solid var(--line); }
 .collapse.q { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
-.collapse.q > summary { position: relative; display: flex; align-items: center; gap: .75rem; padding: 1.15rem 2.5rem 1.15rem 0; font-weight: 550; font-size: 1rem; letter-spacing: -.015em; color: var(--fg); cursor: pointer; list-style: none; }
+.accordion > .collapse.q + .collapse.q { border-top: 0; }
+.accordion > .collapse.q:last-child { border-bottom: 0; }
+.collapse.q > summary { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: .75rem; padding: 1.25rem 3.75rem 1.25rem 1.5rem; font-weight: 550; font-size: 1rem; letter-spacing: -.015em; color: var(--fg); cursor: pointer; list-style: none; }
 .collapse.q > summary::-webkit-details-marker { display: none; }
-.collapse.q > summary::before, .collapse.q > summary::after { content: ""; position: absolute; right: .35rem; top: 50%; width: .8rem; height: 1.5px; border-radius: 2px; background: var(--fg-3); transition: transform .25s; }
+.collapse.q > summary::before, .collapse.q > summary::after { content: ""; position: absolute; right: 1.5rem; top: 50%; width: .8rem; height: 1.5px; border-radius: 2px; background: var(--fg-3); transition: transform .25s; }
 .collapse.q > summary::after { transform: rotate(90deg); }
 .collapse.q[open] > summary::after { transform: rotate(0deg); }
 .collapse.q > summary:hover::before, .collapse.q > summary:hover::after { background: var(--fg); }
-.collapse.q .collapse-content { padding: 0 2.5rem 1.2rem 0; color: var(--fg-2); }
+.collapse.q .collapse-content { padding: .1rem 3.75rem 1.4rem 1.5rem; color: var(--fg-2); }
+@media (max-width: 600px) {
+  .collapse.q > summary { padding: 1.05rem 3rem 1.05rem 1.15rem; }
+  .collapse.q > summary::before, .collapse.q > summary::after { right: 1.15rem; }
+  .collapse.q .collapse-content { padding: .1rem 1.15rem 1.2rem; }
+}
 .collapse.q .collapse-content p { margin: 0; }
 .collapse.q a { color: var(--fg); }
-.q-no { font: 500 .72rem/1 var(--font-mono); color: var(--fg-3); }
+.q-no { flex-shrink: 0; font: 500 .72rem/1 var(--font-mono); color: var(--fg-3); }
 
 /* ---------- Closing ---------- */
 .closing { padding: clamp(3rem, 8vw, 6rem) 0 clamp(5rem, 9vw, 7rem); border-top: 1px solid var(--line); }

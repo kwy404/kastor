@@ -1,10 +1,10 @@
 /**
- * kastor/libsql: libSQL and Turso through `@libsql/client` (local files,
+ * kastor-orm/libsql: libSQL and Turso through `@libsql/client` (local files,
  * embedded replicas and remote databases).
  *
  * ```ts
  * import { createClient } from '@libsql/client'
- * import { libsql } from 'kastor/libsql'
+ * import { libsql } from 'kastor-orm/libsql'
  * const db = kastor({ adapter: libsql(createClient({ url: process.env.TURSO_URL, authToken })), schema })
  * ```
  */

@@ -138,7 +138,7 @@ function hero() {
       <div class="hero-cta">
         <a href="#start" class="btn btn-lg btn-solid">Get started${ui('arrow')}</a>
         <a href="#playground" class="btn btn-lg btn-line">${ui('play')}Open the playground</a>
-        ${copyBox('install-cmd', 'npm i kastor', 'Install', ' install-pill')}
+        ${copyBox('install-cmd', 'npm i kastor-orm', 'Install', ' install-pill')}
       </div>
     </div>
     <ul class="hero-entries" aria-label="Where to go next">${entries}</ul>
@@ -164,7 +164,7 @@ function logoStrip() {
 
 // ---------- Story ----------
 
-const TYPES_SCHEMA = `import { table, t } from 'kastor'
+const TYPES_SCHEMA = `import { table, t } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -365,7 +365,7 @@ const IMPORT_OUT = `<span class="t-p">$</span> npx kastor import prisma
 <span class="t-b t-c">kastor</span> <span class="t-d">/</span> <span class="t-b">import prisma</span>
 
   <span class="t-d">Prisma schema</span>  prisma/schema.prisma
-  <span class="t-d">Provider     </span>  postgresql (kastor/postgres)
+  <span class="t-d">Provider     </span>  postgresql (kastor-orm/postgres)
 
 <span class="t-ok">ok</span>    Wrote <span class="t-b">src/db/schema.ts</span>: 3 models, 1 join table, 1 enum, 4 relation fields.
 <span class="t-ok">ok</span>    Every model, field and relation mapped exactly.
@@ -662,7 +662,7 @@ function closing() {
       <p>One install, one schema file, and your database is typed end to end.</p>
       <div class="closing-cta">
         <a href="#start" class="btn btn-lg btn-solid">Get started${ui('arrow')}</a>
-        ${copyBox('closing-cmd', 'npm i kastor', 'Install', ' install-pill')}
+        ${copyBox('closing-cmd', 'npm i kastor-orm', 'Install', ' install-pill')}
       </div>
     </div>
   </div>

@@ -39,14 +39,14 @@
 </section>
 <section id="install"><h2>Step 1: install kastor and connect the driver</h2>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor mongodb
-npx kastor init --db mongodb
+npm install kastor-orm mongodb
+npx kastor-orm init --db mongodb
 </pre>
 <p>Mongoose bundles the <code>mongodb</code> driver; kastor uses the one you install. Connect a <code>MongoClient</code> to the same URL and pass its <code>Db</code> to the adapter. You can also reuse Mongoose's own connection during the move: <code>mongoose.connection.getClient()</code> returns the driver client.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import { MongoClient } from 'mongodb'
-import { kastor } from 'kastor'
-import { mongodb } from 'kastor/mongodb'
+import { kastor } from 'kastor-orm'
+import { mongodb } from 'kastor-orm/mongodb'
 import { schema, relations } from './schema'
 
 const client = new MongoClient(process.env.MONGODB_URL ?? 'mongodb://localhost:27017/app?replicaSet=rs0')
@@ -78,7 +78,7 @@ export const Post = model('Post', postSchema)
 export { mongoose }
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index, one, many } from 'kastor'
+import { table, t, index, one, many } from 'kastor-orm'
 
 type Address = { street?: string; city?: string }
 
@@ -200,7 +200,7 @@ export const perAuthor = () =&gt;
 <section id="middleware"><h2>Step 5: middleware, virtuals and methods</h2>
 <p>Mongoose middleware (<code>pre(&#39;save&#39;)</code>, <code>post(&#39;findOneAndUpdate&#39;)</code>) runs hidden code around operations. kastor has no hooks: put the logic in the function that writes, where it is visible and typed. Virtuals become plain functions over the row type, and instance methods become functions in a module:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/users/model.ts">
-import type { InferSelect } from 'kastor'
+import type { InferSelect } from 'kastor-orm'
 import { users } from '../db/schema'
 import { db } from '../db'
 

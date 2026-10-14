@@ -1,9 +1,9 @@
 /**
- * kastor/mssql: SQL Server and Azure SQL through the mssql package (tedious).
+ * kastor-orm/mssql: SQL Server and Azure SQL through the mssql package (tedious).
  *
  * ```ts
  * import sql from 'mssql'
- * import { mssql } from 'kastor/mssql'
+ * import { mssql } from 'kastor-orm/mssql'
  * const db = kastor({ adapter: mssql(new sql.ConnectionPool(process.env.DATABASE_URL)), schema })
  * ```
  */

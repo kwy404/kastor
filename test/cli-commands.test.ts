@@ -154,7 +154,7 @@ describe('kastor CLI end to end on SQLite', () => {
     const out = join(dir, 'pulled.ts');
     const wrote = await run(dir, ['db', 'pull', '--out', 'pulled.ts']);
     expect(wrote.code).toBe(0);
-    expect(readFileSync(out, 'utf8')).toContain("import { table, t, index, one, many } from 'kastor';");
+    expect(readFileSync(out, 'utf8')).toContain("import { table, t, index, one, many } from 'kastor-orm';");
     const again = await run(dir, ['db', 'pull', '--out', 'pulled.ts']);
     expect(again.code).toBe(1);
     expect(again.err).toContain('--force');
@@ -229,11 +229,11 @@ describe('kastor init', () => {
       writeFileSync(join(dir, '.gitignore'), 'node_modules');
       const r = await run(dir, ['init', '--db', 'postgres']);
       expect(r.code).toBe(0);
-      expect(readFileSync(join(dir, 'kastor.config.ts'), 'utf8')).toContain("import { postgres } from 'kastor/postgres';");
+      expect(readFileSync(join(dir, 'kastor.config.ts'), 'utf8')).toContain("import { postgres } from 'kastor-orm/postgres';");
       expect(readFileSync(join(dir, 'src/db/schema.ts'), 'utf8')).toContain("export const users = table('users'");
       expect(readFileSync(join(dir, '.env'), 'utf8')).toContain('DATABASE_URL=postgres://');
       expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('node_modules\n.env\n');
-      expect(r.out).toContain('npm install kastor pg');
+      expect(r.out).toContain('npm install kastor-orm pg');
       const again = await run(dir, ['init', '--db', 'sqlite']);
       expect(again.code).toBe(1);
       expect(again.err).toContain('already exists');
@@ -255,7 +255,7 @@ describe('kastor init', () => {
   it('has a config template for every database', () => {
     for (const db of DATABASES) {
       const text = configTemplate(db);
-      expect(text).toContain(`from 'kastor/${db.id}'`);
+      expect(text).toContain(`from 'kastor-orm/${db.id}'`);
       expect(text).toContain('export default defineConfig({');
     }
   });

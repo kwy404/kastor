@@ -19,7 +19,7 @@
       { "name": "Read secrets at cold start", "text": "Read DATABASE_URL from the environment or fetch it from Secrets Manager once per container.", "anchor": "secrets" },
       { "name": "Write the handler", "text": "Query kastor in the handler and map KastorError codes to HTTP responses.", "anchor": "handler" },
       { "name": "Bundle with esbuild", "text": "Bundle the function and the driver; there is no engine binary to ship.", "anchor": "bundle" },
-      { "name": "Run migrations before the new version", "text": "Run npx kastor migrate deploy in CI, or from a dedicated migration function using deploy from kastor/migrate.", "anchor": "migrations" }
+      { "name": "Run migrations before the new version", "text": "Run npx kastor migrate deploy in CI, or from a dedicated migration function using deploy from kastor-orm/migrate.", "anchor": "migrations" }
     ]
   },
   "faq": [
@@ -44,17 +44,17 @@ kastor/migrations/
 template.yaml             SAM template (or CDK, Serverless Framework, SST)
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
+npm install kastor-orm pg
 npm install -D esbuild @types/aws-lambda
-npx kastor init --db postgres
+npx kastor-orm init --db postgres
 </pre>
 </section>
 <section id="client"><h2>A client that survives warm invocations</h2>
 <p>Code at module scope runs once per execution environment, at cold start. Everything created there, including the pool and its open connection, is reused by later invocations on the same environment. The pool should be tiny: each concurrent environment holds its own, and a burst of traffic multiplies them.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const pool = new pg.Pool({
@@ -73,8 +73,8 @@ export const db = kastor({ adapter: postgres(pool), schema, relations })
 <pre data-kind="editor" data-lang="ts" data-title="src/db/secret.ts">
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager'
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const sm = new SecretsManagerClient({})
@@ -91,7 +91,7 @@ export const db = kastor({
 <section id="handler"><h2>The handler</h2>
 <pre data-kind="editor" data-lang="ts" data-title="src/handlers/posts.ts">
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../db'
 
 const json = (statusCode: number, body: unknown): APIGatewayProxyResultV2 =&gt; ({
@@ -158,11 +158,11 @@ Resources:
 npx kastor migrate deploy
 sam build &amp;&amp; sam deploy
 </pre>
-<p>If CI cannot reach the database, ship a small migration function in the same VPC and invoke it as a deploy step. <code>deploy</code> from <code>kastor/migrate</code> is the engine behind the CLI command. Copy <code>kastor/migrations</code> next to the bundle so the function can read it:</p>
+<p>If CI cannot reach the database, ship a small migration function in the same VPC and invoke it as a deploy step. <code>deploy</code> from <code>kastor-orm/migrate</code> is the engine behind the CLI command. Copy <code>kastor/migrations</code> next to the bundle so the function can read it:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/handlers/migrate.ts">
 import pg from 'pg'
-import { postgres } from 'kastor/postgres'
-import { deploy } from 'kastor/migrate'
+import { postgres } from 'kastor-orm/postgres'
+import { deploy } from 'kastor-orm/migrate'
 
 export async function handler() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_DIRECT_URL, max: 1 })

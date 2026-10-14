@@ -87,7 +87,7 @@ export function createMongoDialect(options: MongoOptions = {}): Dialect<MongoExe
       case 'deleteMany':
         return deleteMany(model, query, exec);
       default:
-        throw mongoError('UNSUPPORTED', `Unknown query kind "${(query as { kind: string }).kind}".`, 'Update kastor/mongodb to the same version as kastor.');
+        throw mongoError('UNSUPPORTED', `Unknown query kind "${(query as { kind: string }).kind}".`, 'Update kastor-orm/mongodb to the same version as kastor.');
     }
   }
 

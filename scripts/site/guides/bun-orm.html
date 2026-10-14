@@ -15,7 +15,7 @@
     "totalTime": "PT15M",
     "tools": ["Bun 1.2 or newer", "kastor", "Node.js for the CLI"],
     "steps": [
-      { "name": "Install kastor", "text": "Run bun add kastor, and bun add -d better-sqlite3 for the CLI if you use SQLite.", "anchor": "structure" },
+      { "name": "Install kastor", "text": "Run bun add kastor-orm, and bun add -d better-sqlite3 for the CLI if you use SQLite.", "anchor": "structure" },
       { "name": "Create the client from bun:sqlite", "text": "Pass a bun:sqlite Database to the sqlite adapter and keep it on globalThis for bun --hot.", "anchor": "client" },
       { "name": "Serve routes", "text": "Use Bun.serve with routes that call kastor.", "anchor": "server" },
       { "name": "Configure the CLI", "text": "Point kastor.config.ts at the same database file through a driver Node can load.", "anchor": "migrations" },
@@ -23,7 +23,7 @@
     ]
   },
   "faq": [
-    { "q": "Does kastor support bun:sqlite?", "a": "Yes. The <code>sqlite</code> adapter from <code>kastor/sqlite</code> detects a <code>bun:sqlite</code> Database, as well as better-sqlite3 and node:sqlite, and uses the same SQLite dialect for all three." },
+    { "q": "Does kastor support bun:sqlite?", "a": "Yes. The <code>sqlite</code> adapter from <code>kastor-orm/sqlite</code> detects a <code>bun:sqlite</code> Database, as well as better-sqlite3 and node:sqlite, and uses the same SQLite dialect for all three." },
     { "q": "Can I use Postgres with kastor on Bun?", "a": "Yes. Bun runs the <code>pg</code> and <code>mysql2</code> packages, so the <code>postgres</code> and <code>mysql</code> adapters work the same way they do on Node." },
     { "q": "Why does the kastor CLI need a different SQLite driver?", "a": "The CLI is a Node.js program, and Node cannot load <code>bun:sqlite</code>. Point <code>kastor.config.ts</code> at the same database file through better-sqlite3 (or node:sqlite), and the app keeps using bun:sqlite at runtime." },
     { "q": "How do I avoid reopening the database with bun --hot?", "a": "<code>bun --hot</code> reloads modules in the same process. Keep the client on <code>globalThis</code> so reloads reuse it instead of opening another handle." }
@@ -44,17 +44,17 @@ data/app.db               the SQLite file
 .env                      loaded by Bun automatically
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-bun add kastor
+bun add kastor-orm
 bun add -d better-sqlite3
-bunx kastor init --db sqlite
+bunx kastor-orm init --db sqlite
 </pre>
 </section>
 <section id="client"><h2>The client from bun:sqlite</h2>
 <p>Pass a <code>bun:sqlite</code> Database to the <code>sqlite</code> adapter. kastor turns on foreign key enforcement, which SQLite leaves off by default, and WAL mode is worth enabling for concurrent readers. <code>bun --hot</code> keeps the process alive and reloads modules, so store the client on <code>globalThis</code> to reuse one handle.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import { Database } from 'bun:sqlite'
-import { kastor } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
+import { kastor } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
 import { schema, relations } from './schema'
 
 const create = () =&gt; {
@@ -72,7 +72,7 @@ g.db = db
 <section id="server"><h2>Serving routes with Bun.serve</h2>
 <p>Bun's built in router matches paths and passes parameters on <code>req.params</code>. Each handler queries kastor and returns a <code>Response</code>.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/server.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from './db'
 
 const server = Bun.serve({
@@ -105,8 +105,8 @@ console.log(`listening on ${server.url}`)
 <p>The kastor CLI runs on Node.js, which cannot import <code>bun:sqlite</code>. Give the CLI its own adapter for the same file through better-sqlite3, installed as a dev dependency above. <code>bunx</code> runs the CLI with Node when Node is installed, as it is on most CI images.</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import Database from 'better-sqlite3'
-import { defineConfig } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
+import { defineConfig } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
 
 export default defineConfig({
   schema: './src/db/schema.ts',

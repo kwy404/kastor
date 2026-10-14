@@ -63,7 +63,7 @@ describe('docs playground', () => {
   }
 
   it('strips the TypeScript the examples use', () => {
-    const js = app.stripTypes(`import { table, t } from 'kastor'
+    const js = app.stripTypes(`import { table, t } from 'kastor-orm'
 import type { X } from './x'
 export const a = t.json<{ tags: string[] }>().nullable()
 export const relations = ({ users }: typeof schema) => ({ users })

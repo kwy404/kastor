@@ -16,7 +16,7 @@
     "totalTime": "PT2H",
     "tools": ["Node.js 18 or newer", "kastor", "the driver for your database (pg, mysql2, better-sqlite3, mssql or mongodb)"],
     "steps": [
-      { "name": "Install kastor and the driver", "text": "Run npm install kastor plus the driver for the datasource provider, for example pg for postgresql.", "anchor": "install" },
+      { "name": "Install kastor and the driver", "text": "Run npm install kastor-orm plus the driver for the datasource provider, for example pg for postgresql.", "anchor": "install" },
       { "name": "Convert schema.prisma", "text": "Run npx kastor import prisma --config to write src/db/schema.ts and kastor.config.ts, then read the report it prints.", "anchor": "import" },
       { "name": "Keep data and migration history", "text": "Run npx kastor migrate baseline --from-prisma prisma/migrations, then npx kastor migrate dev to confirm the database is already in sync.", "anchor": "baseline" },
       { "name": "Create the client", "text": "Replace new PrismaClient() with kastor({ adapter, schema, relations }) in one db module.", "anchor": "client" },
@@ -42,7 +42,7 @@
 <section id="install"><h2>Step 1: install kastor and the driver</h2>
 <p>kastor ships no driver. Install the one that matches the <code>provider</code> in your datasource block: <code>pg</code> for <code>postgresql</code> (also Neon, Supabase and Vercel Postgres) and <code>cockroachdb</code>, <code>mysql2</code> for <code>mysql</code> (also PlanetScale), <code>better-sqlite3</code> for <code>sqlite</code>, <code>mssql</code> for <code>sqlserver</code> and <code>mongodb</code> for <code>mongodb</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
+npm install kastor-orm pg
 </pre>
 </section>
 <section id="import"><h2>Step 2: convert schema.prisma with kastor import prisma</h2>
@@ -105,7 +105,7 @@ model Tag {
 kastor / import prisma
 
   Prisma schema  prisma/schema.prisma
-  Provider       postgresql (kastor/postgres)
+  Provider       postgresql (kastor-orm/postgres)
 
 ok    Wrote src/db/schema.ts: 4 models, 1 join table, 1 enum, 6 relation fields.
 ok    Wrote kastor.config.ts for postgres, reading DATABASE_URL.
@@ -123,7 +123,7 @@ Good to know (2)
 // Prisma provider: postgresql. Table, column and constraint names match the database Prisma created.
 // This file is now the source of truth: edit it, then run kastor migrate dev.
 import { randomBytes } from 'node:crypto';
-import { table, t, index, one, many } from 'kastor';
+import { table, t, index, one, many } from 'kastor-orm';
 
 /** Collision resistant id in the cuid format (Prisma @default(cuid())): 'c', a time part and random base 36 characters. */
 function cuid(length = 25): string {
@@ -246,8 +246,8 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const create = () =&gt;
@@ -314,7 +314,7 @@ export async function register(email: string) {
 }
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../db'
 
 export const feed = (tag: string, after?: string) =&gt;
@@ -401,8 +401,8 @@ export async function register(email: string) {
 </table>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/logged.ts">
 import pg from 'pg'
-import { kastor, type InferSelect } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, type InferSelect } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations, user } from './schema'
 
 // Was: prisma.$extends({ query: { $allOperations } }) timing every query

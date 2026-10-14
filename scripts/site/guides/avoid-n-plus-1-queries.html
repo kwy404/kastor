@@ -47,8 +47,8 @@ for (const user of users) {
 <p>You cannot fix what you cannot see. The fastest check is to log every statement the client runs. Pass <code>log: true</code> when you create the client:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({

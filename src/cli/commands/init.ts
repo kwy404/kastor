@@ -19,7 +19,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'postgres',
     label: 'PostgreSQL (also Neon, Supabase, Vercel Postgres)',
     packages: ['pg'],
-    imports: ["import pg from 'pg';", "import { postgres } from 'kastor/postgres';"],
+    imports: ["import pg from 'pg';", "import { postgres } from 'kastor-orm/postgres';"],
     adapter: 'adapter: () => postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),',
     env: 'DATABASE_URL=postgres://postgres:postgres@localhost:5432/app',
   },
@@ -27,7 +27,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'cockroach',
     label: 'CockroachDB',
     packages: ['pg'],
-    imports: ["import pg from 'pg';", "import { cockroach } from 'kastor/cockroach';"],
+    imports: ["import pg from 'pg';", "import { cockroach } from 'kastor-orm/cockroach';"],
     adapter: 'adapter: () => cockroach(new pg.Pool({ connectionString: process.env.DATABASE_URL })),',
     env: 'DATABASE_URL=postgres://root@localhost:26257/defaultdb?sslmode=disable',
   },
@@ -35,7 +35,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'mysql',
     label: 'MySQL (also PlanetScale)',
     packages: ['mysql2'],
-    imports: ["import { createPool } from 'mysql2/promise';", "import { mysql } from 'kastor/mysql';"],
+    imports: ["import { createPool } from 'mysql2/promise';", "import { mysql } from 'kastor-orm/mysql';"],
     adapter: 'adapter: () => mysql(createPool(process.env.DATABASE_URL!)),',
     env: 'DATABASE_URL=mysql://root:root@localhost:3306/app',
   },
@@ -43,7 +43,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'mariadb',
     label: 'MariaDB',
     packages: ['mariadb'],
-    imports: ["import { createPool } from 'mariadb';", "import { mariadb } from 'kastor/mariadb';"],
+    imports: ["import { createPool } from 'mariadb';", "import { mariadb } from 'kastor-orm/mariadb';"],
     adapter: 'adapter: () => mariadb(createPool(process.env.DATABASE_URL!)),',
     env: 'DATABASE_URL=mariadb://root:root@localhost:3306/app',
   },
@@ -51,7 +51,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'sqlite',
     label: 'SQLite (better-sqlite3)',
     packages: ['better-sqlite3'],
-    imports: ["import Database from 'better-sqlite3';", "import { sqlite } from 'kastor/sqlite';"],
+    imports: ["import Database from 'better-sqlite3';", "import { sqlite } from 'kastor-orm/sqlite';"],
     adapter: "adapter: () => sqlite(new Database(process.env.DATABASE_URL ?? 'dev.db')),",
     env: 'DATABASE_URL=dev.db',
   },
@@ -59,7 +59,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'libsql',
     label: 'libSQL and Turso',
     packages: ['@libsql/client'],
-    imports: ["import { createClient } from '@libsql/client';", "import { libsql } from 'kastor/libsql';"],
+    imports: ["import { createClient } from '@libsql/client';", "import { libsql } from 'kastor-orm/libsql';"],
     adapter: "adapter: () => libsql(createClient({ url: process.env.DATABASE_URL ?? 'file:dev.db', authToken: process.env.DATABASE_TOKEN })),",
     env: 'DATABASE_URL=file:dev.db',
   },
@@ -67,7 +67,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'd1',
     label: 'Cloudflare D1 (through wrangler)',
     packages: ['wrangler'],
-    imports: ["import { getPlatformProxy } from 'wrangler';", "import { d1 } from 'kastor/d1';"],
+    imports: ["import { getPlatformProxy } from 'wrangler';", "import { d1 } from 'kastor-orm/d1';"],
     adapter: 'adapter: async () => {\n    const { env } = await getPlatformProxy<{ DB: D1Database }>();\n    return d1(env.DB);\n  },',
     env: '# D1 uses the binding named DB in wrangler.toml',
   },
@@ -75,7 +75,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'mssql',
     label: 'SQL Server',
     packages: ['mssql'],
-    imports: ["import sql from 'mssql';", "import { mssql } from 'kastor/mssql';"],
+    imports: ["import sql from 'mssql';", "import { mssql } from 'kastor-orm/mssql';"],
     adapter: 'adapter: async () => mssql(await new sql.ConnectionPool(process.env.DATABASE_URL!).connect()),',
     env: 'DATABASE_URL=Server=localhost,1433;Database=app;User Id=sa;Password=yourStrong(!)Password;Encrypt=false',
   },
@@ -83,7 +83,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'oracle',
     label: 'Oracle',
     packages: ['oracledb'],
-    imports: ["import oracledb from 'oracledb';", "import { oracle } from 'kastor/oracle';"],
+    imports: ["import oracledb from 'oracledb';", "import { oracle } from 'kastor-orm/oracle';"],
     adapter:
       'adapter: async () =>\n    oracle(await oracledb.createPool({ user: process.env.ORACLE_USER, password: process.env.ORACLE_PASSWORD, connectString: process.env.ORACLE_CONNECT })),',
     env: 'ORACLE_USER=app\nORACLE_PASSWORD=app\nORACLE_CONNECT=localhost:1521/FREEPDB1',
@@ -92,7 +92,7 @@ export const DATABASES: DatabaseTemplate[] = [
     id: 'mongodb',
     label: 'MongoDB',
     packages: ['mongodb'],
-    imports: ["import { MongoClient } from 'mongodb';", "import { mongodb } from 'kastor/mongodb';"],
+    imports: ["import { MongoClient } from 'mongodb';", "import { mongodb } from 'kastor-orm/mongodb';"],
     adapter: 'adapter: async () => mongodb((await new MongoClient(process.env.DATABASE_URL!).connect()).db()),',
     env: 'DATABASE_URL=mongodb://localhost:27017/app',
   },
@@ -100,7 +100,7 @@ export const DATABASES: DatabaseTemplate[] = [
 
 export function configTemplate(db: DatabaseTemplate): string {
   return `${db.imports.join('\n')}
-import { defineConfig } from 'kastor';
+import { defineConfig } from 'kastor-orm';
 
 export default defineConfig({
   schema: './src/db/schema.ts',
@@ -111,7 +111,7 @@ export default defineConfig({
 `;
 }
 
-export const SCHEMA_TEMPLATE = `import { table, t, index, many, one } from 'kastor';
+export const SCHEMA_TEMPLATE = `import { table, t, index, many, one } from 'kastor-orm';
 
 export const users = table('users', {
   id: t.id(),
@@ -197,7 +197,7 @@ export async function init(ctx: CliContext): Promise<number> {
   ui.line();
   ui.box([
     ui.c.bold('Next steps'),
-    `1. npm install kastor ${db.packages.join(' ')}`,
+    `1. npm install kastor-orm ${db.packages.join(' ')}`,
     `2. Set the connection in .env`,
     `3. npx kastor migrate dev --name init`,
     `4. npx kastor studio`,

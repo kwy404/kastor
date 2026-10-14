@@ -103,7 +103,7 @@ export async function runSeed(ctx: CliContext, project: Project): Promise<void> 
 export async function makeClient(project: Project): Promise<unknown> {
   const core = (await import('../../index')) as Record<string, unknown>;
   const create = core.kastor as ((config: Record<string, unknown>) => unknown) | undefined;
-  if (typeof create !== 'function') throw new KastorError('UNSUPPORTED', 'This build of kastor has no client.', { hint: 'Reinstall kastor.' });
+  if (typeof create !== 'function') throw new KastorError('UNSUPPORTED', 'This build of kastor has no client.', { hint: 'Reinstall kastor-orm.' });
   const { config, schemaPath } = project.loaded;
   const raw = typeof config.schema === 'string' ? await importModule(schemaPath!) : config.schema;
   const relations = typeof raw.relations === 'function' ? raw.relations : undefined;

@@ -39,7 +39,7 @@ describe('documented API', () => {
   it('has an entry point and an adapter for every database on the site', () => {
     const pkg = JSON.parse(read('package.json'));
     for (const db of DATABASES) {
-      const sub = db.entry.replace('kastor/', '');
+      const sub = db.entry.replace('kastor-orm/', '');
       expect(pkg.exports[`./${sub}`], db.entry).toBeTruthy();
       expect(exportsOf(`src/${sub}.ts`).has(DB_INFO[db.id]!.adapter), `${db.entry} exports ${DB_INFO[db.id]!.adapter}`).toBe(true);
     }
@@ -69,12 +69,14 @@ describe('documented API', () => {
 describe('README', () => {
   for (const file of ['README.md', 'i18n/README.pt-BR.md']) {
     const md = read(file);
-    it(`${file}: uses absolute image URLs on jsDelivr that point at files in the repo`, () => {
+    it(`${file}: uses absolute image URLs on raw.githubusercontent.com that point at files in the repo`, () => {
       const images = [...md.matchAll(/(?:src|srcset)="([^"]+)"/g)].map((m) => m[1] as string).filter((u) => !u.includes('shields.io') && !u.includes('packagephobia') && !u.includes('/npm/'));
       expect(images.length).toBeGreaterThan(10);
       for (const url of images) {
-        expect(url.startsWith('https://cdn.jsdelivr.net/gh/kwy404/kastor@main/'), url).toBe(true);
-        expect(existsSync(join(root, url.replace('https://cdn.jsdelivr.net/gh/kwy404/kastor@main/', ''))), url).toBe(true);
+        // Pinned to a full commit sha: GitHub's image proxy caches failed fetches of a branch.
+        const pinned = /^https:\/\/raw\.githubusercontent\.com\/kwy404\/kastor\/[0-9a-f]{40}\/(.+)$/.exec(url);
+        expect(pinned, url).not.toBeNull();
+        expect(existsSync(join(root, pinned![1] as string)), url).toBe(true);
       }
     });
     it(`${file}: uses absolute links, and repo links point at files that exist`, () => {

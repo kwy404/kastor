@@ -31,8 +31,8 @@
 <section id="inferred-rows"><h2>Inferred row types and select narrowing</h2>
 <p>Everything starts with the schema. Each column builder carries a TypeScript type: <code>t.datetime()</code> is a <code>Date</code>, <code>t.decimal(10, 2)</code> is a <code>string</code> (so no precision is lost), <code>t.bigint()</code> is a <code>bigint</code>, <code>t.enum([...])</code> is a union of literals, and <code>.nullable()</code> adds <code>| null</code>.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t } from 'kastor'
-import type { InferSelect, InferInsert } from 'kastor'
+import { table, t } from 'kastor-orm'
+import type { InferSelect, InferInsert } from 'kastor-orm'
 
 export const customers = table('customers', {
   id: t.id(),
@@ -144,7 +144,7 @@ export async function refund(orderId: number) {
 <section id="sql-fragments"><h2>sql fragments inside normal queries</h2>
 <p>Often you need one piece of SQL, not a whole query. The <code>sql</code> tag builds a fragment you can put in a <code>where</code> clause next to typed filters. The rest of the query, including its result type, stays the same.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/orders/search.ts">
-import { sql } from 'kastor'
+import { sql } from 'kastor-orm'
 import { db } from '../db/client'
 
 export function longNotes(minLength: number) {

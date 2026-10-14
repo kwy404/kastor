@@ -36,10 +36,10 @@
 <p>kastor was built around these five points. The rest of this guide is a quick tour, so you can judge it against your own list.</p>
 </section>
 <section id="schema-and-client"><h2>Step 1: schema and client</h2>
-<p>Install kastor and the driver for your database. kastor ships no drivers, so you stay in control of versions and pooling. For PostgreSQL that is <code>npm install kastor pg</code>, for SQLite <code>npm install kastor better-sqlite3</code>.</p>
+<p>Install kastor and the driver for your database. kastor ships no drivers, so you stay in control of versions and pooling. For PostgreSQL that is <code>npm install kastor-orm pg</code>, for SQLite <code>npm install kastor-orm better-sqlite3</code>.</p>
 <p>The schema is plain TypeScript. Each <code>table()</code> call declares columns with the <code>t</code> builders and returns an object you can import anywhere.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index } from 'kastor'
+import { table, t, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -61,8 +61,8 @@ export const posts = table('posts', {
 <p>The client combines an adapter, the schema and the relations between tables. Relations are declared once and used by <code>include</code> and relation filters.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 export const db = kastor({
@@ -79,7 +79,7 @@ export const db = kastor({
 <section id="queries"><h2>Step 2: queries, relations and transactions</h2>
 <p>Queries take an object with <code>where</code>, <code>select</code>, <code>include</code>, <code>orderBy</code>, <code>take</code> and <code>skip</code>. The return type follows your arguments: select two columns and the result has exactly those two keys.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/routes/feed.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../db/client'
 
 // Users with their five latest published posts, one root query
@@ -122,7 +122,7 @@ try {
 </ul>
 </section>
 <section id="migrations"><h2>Step 3: migrations from the TypeScript schema</h2>
-<p>Create a <code>kastor.config.ts</code> that points to the schema file, an adapter factory, a migrations folder and an optional seed script. Running <code>npx kastor init</code> writes one for you, together with a starter <code>src/db/schema.ts</code>, a <code>src/db/seed.ts</code> and a <code>.env</code> with <code>DATABASE_URL</code>, which the CLI reads from the folder of the config.</p>
+<p>Create a <code>kastor.config.ts</code> that points to the schema file, an adapter factory, a migrations folder and an optional seed script. Running <code>npx kastor-orm init</code> writes one for you, together with a starter <code>src/db/schema.ts</code>, a <code>src/db/seed.ts</code> and a <code>.env</code> with <code>DATABASE_URL</code>, which the CLI reads from the folder of the config.</p>
 <p>From then on the loop is short: edit <code>schema.ts</code>, run <code>migrate dev</code>, commit the generated SQL file. kastor compares the TypeScript schema with the live database, writes the difference to a timestamped folder and applies it. If a column disappears and a compatible one appears, it asks whether you renamed it instead of silently dropping data. Outside an interactive terminal it stops and asks you to pass <code>--rename users.name:fullName</code> or <code>--accept-data-loss</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npx kastor migrate dev --name add_posts

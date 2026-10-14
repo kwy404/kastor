@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["SvelteKit 2", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres, with the schema in src/lib/server/schema.ts.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm pg and npx kastor-orm init --db postgres, with the schema in src/lib/server/schema.ts.", "anchor": "structure" },
       { "name": "Create the client in $lib/server", "text": "Read DATABASE_URL from $env/dynamic/private and reuse the client through globalThis in development.", "anchor": "client" },
       { "name": "Read in load functions", "text": "Return kastor results from +page.server.ts load functions so the page props are typed.", "anchor": "load" },
       { "name": "Write in form actions", "text": "Use form actions with fail() for validation and kastor error codes for conflicts.", "anchor": "actions" },
@@ -46,8 +46,8 @@ kastor/migrations/
 .env                              DATABASE_URL
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 <p>Move the starter schema to <code>src/lib/server/schema.ts</code> and update the <code>schema</code> path in <code>kastor.config.ts</code>. SvelteKit and the CLI both read <code>.env</code>, so one <code>DATABASE_URL</code> serves both in development.</p>
@@ -57,8 +57,8 @@ npx kastor migrate dev --name init
 <pre data-kind="editor" data-lang="ts" data-title="src/lib/server/db.ts">
 import pg from 'pg'
 import { env } from '$env/dynamic/private'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const create = () =&gt;
@@ -77,7 +77,7 @@ if (process.env.NODE_ENV !== 'production') g.db = db
 <p>Whatever a server load function returns becomes the page's <code>data</code> prop, typed from the return value. Because kastor infers the row types, the page knows that <code>post.author.name</code> is <code>string | null</code> without a single hand written interface.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/routes/posts/+page.server.ts">
 import { fail } from '@sveltejs/kit'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '$lib/server/db'
 
 export const load = async ({ url }: { url: URL }) =&gt; {

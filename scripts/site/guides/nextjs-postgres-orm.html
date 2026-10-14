@@ -22,9 +22,9 @@
 <section id="install"><h2>Install kastor and the Postgres driver</h2>
 <p>kastor ships no database drivers. For PostgreSQL you install <code>pg</code> yourself and hand a pool to the <code>postgres</code> adapter. There is no generate step and no binary engine, so nothing extra runs in <code>next build</code>: types come straight from your TypeScript schema.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg server-only
+npm install kastor-orm pg server-only
 npm install -D @types/pg
-npx kastor init --db postgres
+npx kastor-orm init --db postgres
 </pre>
 <p><code>init --db postgres</code> writes <code>kastor.config.ts</code>, a starter <code>src/db/schema.ts</code> with <code>users</code> and <code>posts</code>, a <code>src/db/seed.ts</code> and a <code>.env</code> with <code>DATABASE_URL</code>, and adds <code>.env</code> to <code>.gitignore</code>. <code>server-only</code> is a small package from the Next.js ecosystem that makes the build fail if a module marked with it ends up in a client bundle. It is the cheapest insurance against leaking your database module, and we will use it below. If you have not set up the framework side yet, the <a href="frameworks.html#nextjs">Next.js setup notes</a> cover project layout.</p>
 </section>
@@ -34,8 +34,8 @@ npx kastor init --db postgres
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import 'server-only'
 import pg from 'pg'
-import { kastor, one, many } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor, one, many } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { users, posts } from './schema'
 
 function createDb() {
@@ -94,7 +94,7 @@ export default async function PostsPage() {
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '@/db'
 
 export async function createPost(_prev: { error: string | null }, formData: FormData) {
@@ -149,8 +149,8 @@ export async function GET(request: Request) {
 <p>Next.js loads <code>.env.local</code> for the app, but the kastor CLI runs outside Next.js. On its own, the CLI reads only a <code>.env</code> file next to <code>kastor.config.ts</code> (the one <code>kastor init</code> writes), and never overrides variables that are already set. The simplest way to give the CLI the same variables is <code>loadEnvConfig</code> from <code>@next/env</code>, which ships with Next.js, at the top of your config. Because the CLI loads <code>.env</code> before it runs the config, a variable defined in both files keeps the <code>.env</code> value for the CLI, so define each connection string in only one of them. The config below also prefers a direct URL for migrations when one is set:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import { loadEnvConfig } from '@next/env'
-import { defineConfig } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { defineConfig } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import pg from 'pg'
 
 loadEnvConfig(process.cwd())

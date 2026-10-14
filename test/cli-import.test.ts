@@ -68,7 +68,7 @@ describe('kastor import prisma', { timeout: 120000 }, () => {
     expect(r.err).toBe('');
     expect(r.code).toBe(0);
     expect(r.out).toContain('Prisma schema  prisma/schema.prisma');
-    expect(r.out).toContain('sqlite (kastor/sqlite)');
+    expect(r.out).toContain('sqlite (kastor-orm/sqlite)');
     expect(r.out).toContain('Wrote src/db/schema.ts: 9 models, 3 join tables, 2 enums, 24 relation fields.');
     expect(r.out).toContain('Wrote kastor.config.ts for sqlite, reading APP_DB.');
     expect(r.out).toContain('Not mapped exactly (1)');
@@ -79,7 +79,7 @@ describe('kastor import prisma', { timeout: 120000 }, () => {
     const code = readFileSync(join(dir, 'src', 'db', 'schema.ts'), 'utf8');
     expect(code).toContain("export const user = table('User', {");
     const config = readFileSync(join(dir, 'kastor.config.ts'), 'utf8');
-    expect(config).toContain("import { sqlite } from 'kastor/sqlite';");
+    expect(config).toContain("import { sqlite } from 'kastor-orm/sqlite';");
     expect(config).toContain("schema: './src/db/schema.ts',");
     expect(config).toContain(`resolve("prisma", (process.env.APP_DB ?? 'file:./dev.db').replace(/^file:/, ''))`);
   });
@@ -118,10 +118,10 @@ describe('kastor import prisma', { timeout: 120000 }, () => {
   it('writes configs for every provider', () => {
     const configFor = (provider: string): string => importedConfig(prismaToKastor(`datasource db {\n  provider = "${provider}"\n  url = env("DB_URL")\n}\nmodel A {\n  id Int @id\n}`), { schemaPath: './src/db/schema.ts', prismaDir: 'prisma' });
     expect(configFor('postgresql')).toContain('postgres(new pg.Pool({ connectionString: process.env.DB_URL }))');
-    expect(configFor('cockroachdb')).toContain("import { cockroach } from 'kastor/cockroach';");
+    expect(configFor('cockroachdb')).toContain("import { cockroach } from 'kastor-orm/cockroach';");
     expect(configFor('mysql')).toContain('mysql(createPool(process.env.DB_URL!))');
     expect(configFor('mysql')).toContain('MariaDB works too');
-    expect(configFor('sqlserver')).toContain("import { mssql } from 'kastor/mssql';");
+    expect(configFor('sqlserver')).toContain("import { mssql } from 'kastor-orm/mssql';");
     expect(configFor('mongodb')).toContain('mongodb((await new MongoClient(process.env.DB_URL!).connect()).db())');
   });
 });
@@ -155,7 +155,7 @@ export default {
     writeFileSync(join(dir, 'kastor.config.ts'), config(join(dir, 'dev.db')));
     expect((await run(dir, ['import', 'prisma'])).code).toBe(0);
     const schemaFile = join(dir, 'src', 'db', 'schema.ts');
-    writeFileSync(schemaFile, readFileSync(schemaFile, 'utf8').replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
+    writeFileSync(schemaFile, readFileSync(schemaFile, 'utf8').replace(/from 'kastor-orm'/g, `from '${posix(join(root, 'src/index'))}'`));
   }, 120000);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 

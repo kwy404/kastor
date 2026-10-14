@@ -5,7 +5,7 @@
 export const DB_INFO = {
   postgres: {
     driver: 'pg',
-    install: 'npm i kastor pg',
+    install: 'npm i kastor-orm pg',
     adapter: 'postgres',
     includes: 'json_agg + json_build_object',
     returning: 'RETURNING',
@@ -14,8 +14,8 @@ export const DB_INFO = {
     pagination: 'LIMIT / OFFSET',
     note: 'Also Neon, Supabase and Vercel Postgres through pg compatible pools.',
     setup: `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
@@ -25,7 +25,7 @@ export const db = kastor({ adapter: postgres(pool), schema, relations })`,
   },
   cockroach: {
     driver: 'pg',
-    install: 'npm i kastor pg',
+    install: 'npm i kastor-orm pg',
     adapter: 'cockroach',
     includes: 'json_agg + json_build_object',
     returning: 'RETURNING',
@@ -34,8 +34,8 @@ export const db = kastor({ adapter: postgres(pool), schema, relations })`,
     pagination: 'LIMIT / OFFSET',
     note: 'Serializable by default: kastor surfaces retry errors as SERIALIZATION_FAILURE.',
     setup: `import pg from 'pg'
-import { kastor } from 'kastor'
-import { cockroach } from 'kastor/cockroach'
+import { kastor } from 'kastor-orm'
+import { cockroach } from 'kastor-orm/cockroach'
 import { schema, relations } from './schema'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
@@ -45,7 +45,7 @@ export const db = kastor({ adapter: cockroach(pool), schema, relations })`,
   },
   mysql: {
     driver: 'mysql2',
-    install: 'npm i kastor mysql2',
+    install: 'npm i kastor-orm mysql2',
     adapter: 'mysql',
     includes: 'JSON_ARRAYAGG + JSON_OBJECT',
     returning: 'Re-select by key',
@@ -54,8 +54,8 @@ export const db = kastor({ adapter: cockroach(pool), schema, relations })`,
     pagination: 'LIMIT / OFFSET',
     note: 'PlanetScale works through mysql2.',
     setup: `import mysql2 from 'mysql2/promise'
-import { kastor } from 'kastor'
-import { mysql } from 'kastor/mysql'
+import { kastor } from 'kastor-orm'
+import { mysql } from 'kastor-orm/mysql'
 import { schema, relations } from './schema'
 
 const pool = mysql2.createPool(process.env.DATABASE_URL!)
@@ -65,7 +65,7 @@ export const db = kastor({ adapter: mysql(pool), schema, relations })`,
   },
   mariadb: {
     driver: 'mariadb',
-    install: 'npm i kastor mariadb',
+    install: 'npm i kastor-orm mariadb',
     adapter: 'mariadb',
     includes: 'JSON_ARRAYAGG + JSON_OBJECT',
     returning: 'Re-select by key',
@@ -74,8 +74,8 @@ export const db = kastor({ adapter: mysql(pool), schema, relations })`,
     pagination: 'LIMIT / OFFSET',
     note: 'Works with the mariadb driver, or with mysql2 against a MariaDB server.',
     setup: `import * as mariadbDriver from 'mariadb'
-import { kastor } from 'kastor'
-import { mariadb } from 'kastor/mariadb'
+import { kastor } from 'kastor-orm'
+import { mariadb } from 'kastor-orm/mariadb'
 import { schema, relations } from './schema'
 
 const pool = mariadbDriver.createPool(process.env.DATABASE_URL!)
@@ -85,7 +85,7 @@ export const db = kastor({ adapter: mariadb(pool), schema, relations })`,
   },
   sqlite: {
     driver: 'better-sqlite3',
-    install: 'npm i kastor better-sqlite3',
+    install: 'npm i kastor-orm better-sqlite3',
     adapter: 'sqlite',
     includes: 'json_group_array + json_object',
     returning: 'RETURNING',
@@ -94,8 +94,8 @@ export const db = kastor({ adapter: mariadb(pool), schema, relations })`,
     pagination: 'LIMIT / OFFSET',
     note: 'Also node:sqlite and bun:sqlite with the same adapter.',
     setup: `import Database from 'better-sqlite3'
-import { kastor } from 'kastor'
-import { sqlite } from 'kastor/sqlite'
+import { kastor } from 'kastor-orm'
+import { sqlite } from 'kastor-orm/sqlite'
 import { schema, relations } from './schema'
 
 export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, relations })`,
@@ -103,7 +103,7 @@ export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, rela
   },
   libsql: {
     driver: '@libsql/client',
-    install: 'npm i kastor @libsql/client',
+    install: 'npm i kastor-orm @libsql/client',
     adapter: 'libsql',
     includes: 'json_group_array + json_object',
     returning: 'RETURNING',
@@ -112,8 +112,8 @@ export const db = kastor({ adapter: sqlite(new Database('app.db')), schema, rela
     pagination: 'LIMIT / OFFSET',
     note: 'Turso in the cloud, file: URLs and embedded replicas locally.',
     setup: `import { createClient } from '@libsql/client'
-import { kastor } from 'kastor'
-import { libsql } from 'kastor/libsql'
+import { kastor } from 'kastor-orm'
+import { libsql } from 'kastor-orm/libsql'
 import { schema, relations } from './schema'
 
 const client = createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -123,7 +123,7 @@ export const db = kastor({ adapter: libsql(client), schema, relations })`,
   },
   d1: {
     driver: 'D1 binding',
-    install: 'npm i kastor',
+    install: 'npm i kastor-orm',
     adapter: 'd1',
     includes: 'json_group_array + json_object',
     returning: 'RETURNING',
@@ -131,8 +131,8 @@ export const db = kastor({ adapter: libsql(client), schema, relations })`,
     insensitive: 'LOWER() comparison',
     pagination: 'LIMIT / OFFSET',
     note: 'D1 has no interactive transactions: the array form of $transaction runs as one D1 batch, the callback form is refused by default.',
-    setup: `import { kastor } from 'kastor'
-import { d1 } from 'kastor/d1'
+    setup: `import { kastor } from 'kastor-orm'
+import { d1 } from 'kastor-orm/d1'
 import { schema, relations } from './schema'
 
 export default {
@@ -145,7 +145,7 @@ export default {
   },
   mssql: {
     driver: 'mssql',
-    install: 'npm i kastor mssql',
+    install: 'npm i kastor-orm mssql',
     adapter: 'mssql',
     includes: 'FOR JSON PATH',
     returning: 'OUTPUT',
@@ -154,8 +154,8 @@ export default {
     pagination: 'TOP / OFFSET FETCH',
     note: 'Azure SQL works with the same driver.',
     setup: `import sql from 'mssql'
-import { kastor } from 'kastor'
-import { mssql } from 'kastor/mssql'
+import { kastor } from 'kastor-orm'
+import { mssql } from 'kastor-orm/mssql'
 import { schema, relations } from './schema'
 
 const pool = await new sql.ConnectionPool(process.env.DATABASE_URL!).connect()
@@ -165,7 +165,7 @@ export const db = kastor({ adapter: mssql(pool), schema, relations })`,
   },
   oracle: {
     driver: 'oracledb',
-    install: 'npm i kastor oracledb',
+    install: 'npm i kastor-orm oracledb',
     adapter: 'oracle',
     includes: 'JSON_ARRAYAGG + JSON_OBJECT',
     returning: 'RETURNING INTO',
@@ -174,8 +174,8 @@ export const db = kastor({ adapter: mssql(pool), schema, relations })`,
     pagination: 'OFFSET / FETCH NEXT',
     note: 'node-oracledb thin mode: no Instant Client to install.',
     setup: `import oracledb from 'oracledb'
-import { kastor } from 'kastor'
-import { oracle } from 'kastor/oracle'
+import { kastor } from 'kastor-orm'
+import { oracle } from 'kastor-orm/oracle'
 import { schema, relations } from './schema'
 
 const pool = await oracledb.createPool({ user: 'app', password: process.env.ORACLE_PASSWORD, connectString: 'localhost:1521/FREEPDB1' })
@@ -185,7 +185,7 @@ export const db = kastor({ adapter: oracle(pool), schema, relations })`,
   },
   mongodb: {
     driver: 'mongodb',
-    install: 'npm i kastor mongodb',
+    install: 'npm i kastor-orm mongodb',
     adapter: 'mongodb',
     includes: '$lookup pipeline',
     returning: 'Native documents',
@@ -194,8 +194,8 @@ export const db = kastor({ adapter: oracle(pool), schema, relations })`,
     pagination: '$skip / $limit',
     note: "Keys are ObjectIds exposed as strings by default; `mongodb(db, { ids: 'int' })` keeps numbers like SQL. Transactions need a replica set (a single node one works locally).",
     setup: `import { MongoClient } from 'mongodb'
-import { kastor } from 'kastor'
-import { mongodb } from 'kastor/mongodb'
+import { kastor } from 'kastor-orm'
+import { mongodb } from 'kastor-orm/mongodb'
 import { schema, relations } from './schema'
 
 const client = await new MongoClient(process.env.MONGO_URL!).connect()

@@ -15,7 +15,7 @@
     "totalTime": "PT30M",
     "tools": ["AdonisJS 6", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres with the schema in database/schema.ts.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm pg and npx kastor-orm init --db postgres with the schema in database/schema.ts.", "anchor": "structure" },
       { "name": "Validate the env var", "text": "Add DATABASE_URL to start/env.ts with Env.schema.string().", "anchor": "env" },
       { "name": "Create a service module", "text": "Export the client from app/services/db.ts and reuse it across hot module reloads.", "anchor": "service" },
       { "name": "Close the pool in a provider", "text": "Register a provider whose shutdown method calls db.$disconnect().", "anchor": "service" },
@@ -45,8 +45,8 @@ kastor.config.ts                schema: './database/schema.ts'
 kastor/migrations/
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 </pre>
 <p>Move the starter schema to <code>database/schema.ts</code> and update the config. If the project already uses Lucid, run <code>npx kastor db pull --out database/schema.ts</code> instead, so kastor describes the tables Lucid migrations created.</p>
 </section>
@@ -67,8 +67,8 @@ export default await Env.create(new URL('../', import.meta.url), {
 <p>The AdonisJS dev server reloads changed modules with hot module replacement. Keeping the client on <code>globalThis</code> in development makes every reload reuse one pool.</p>
 <pre data-kind="editor" data-lang="ts" data-title="app/services/db.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import env from '#start/env'
 import { schema, relations } from '../../database/schema'
 

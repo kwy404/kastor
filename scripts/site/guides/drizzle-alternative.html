@@ -13,7 +13,7 @@
     { "q": "What is a good Drizzle alternative?", "a": "It depends on what you want to change. If you like TypeScript schemas but prefer an object query API with nested <code>include</code>, one schema for every database and readable error codes, kastor is built around exactly that." },
     { "q": "Do Drizzle and kastor both avoid code generation?", "a": "Yes. Both define the schema in TypeScript and infer types from it, so neither needs a generate step to get a typed client. The difference is in the query API and tooling, not in how types are produced." },
     { "q": "Can kastor load relations in one query like Drizzle's relational API?", "a": "Yes. Every SQL adapter in kastor loads nested includes in one query per root call, built with JSON aggregation, and the MongoDB adapter turns them into <code>$lookup</code> stages of one aggregation. See <a href=\"avoid-n-plus-1-queries.html\">avoiding N+1 queries</a>." },
-    { "q": "Does kastor support MongoDB, SQL Server and Oracle?", "a": "Yes, through the <code>kastor/mongodb</code>, <code>kastor/mssql</code> and <code>kastor/oracle</code> adapters, with the same query API as the SQL adapters. You install the official driver and pass its instance in." },
+    { "q": "Does kastor support MongoDB, SQL Server and Oracle?", "a": "Yes, through the <code>kastor-orm/mongodb</code>, <code>kastor-orm/mssql</code> and <code>kastor-orm/oracle</code> adapters, with the same query API as the SQL adapters. You install the official driver and pass its instance in." },
     { "q": "Can I write SQL-like queries in kastor?", "a": "kastor's main API is object based. For queries that read better as SQL, use <code>db.$sql</code> with bound parameters and a typed row, or add <code>sql</code> fragments to a <code>where</code> clause." }
   ],
   "related": ["typescript-orm", "prisma-alternative-without-codegen", "type-safe-sql-typescript"]
@@ -37,7 +37,7 @@
 <section id="schema-and-queries"><h2>One schema, nested includes</h2>
 <p>A kastor schema does not import anything dialect specific. The adapter decides the database, so the same file serves a PostgreSQL app and an SQLite test suite.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index } from 'kastor'
+import { table, t, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -94,7 +94,7 @@ npx kastor db push
 <section id="errors"><h2>Errors you can act on</h2>
 <p>Every driver reports constraint failures differently: PostgreSQL uses SQLSTATE codes, MySQL numeric error numbers, SQL Server and Oracle their own. kastor maps them to one set of codes, so the same handler works on every database.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/users/create.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../db/client'
 
 export async function addComment(postId: number, body: string) {
@@ -115,7 +115,7 @@ export async function addComment(postId: number, body: string) {
 <p>You can evaluate kastor without touching your Drizzle code. Both tools take a driver instance you create, so they can share the same database while you compare.</p>
 <ol>
 <li><strong>Install kastor</strong> next to your current setup. You already have the driver, for example <code>pg</code> or <code>better-sqlite3</code>.</li>
-<li><strong>Run <code>npx kastor init</code></strong> and point <code>kastor.config.ts</code> at a development database.</li>
+<li><strong>Run <code>npx kastor-orm init</code></strong> and point <code>kastor.config.ts</code> at a development database.</li>
 <li><strong>Run <code>npx kastor db pull</code></strong> to introspect the tables Drizzle created into a kastor schema file. It replaces the starter schema that <code>init</code> wrote (after asking) and guesses relations from the foreign keys. Review the names and the relations.</li>
 <li><strong>Port one read path</strong>, ideally one with nested data, and compare the code, the types you get and the statements from <code>toSQL()</code>.</li>
 <li><strong>Keep one migration owner.</strong> While you evaluate, let drizzle-kit keep managing the schema. Only hand migrations over once you decide to switch for real.</li>

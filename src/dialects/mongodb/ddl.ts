@@ -206,7 +206,7 @@ export function mongoDdl(op: MigrationOpLike, schema: SchemaIR, ids: IdMode): st
       return text ? [text] : [];
     }
     default:
-      throw mongoError('UNSUPPORTED', `Unknown migration op "${o.kind}".`, 'Update kastor/mongodb to the same version as kastor.');
+      throw mongoError('UNSUPPORTED', `Unknown migration op "${o.kind}".`, 'Update kastor-orm/mongodb to the same version as kastor.');
   }
 }
 

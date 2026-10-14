@@ -10,7 +10,7 @@ import { DEFAULT_STRING_LENGTH, normalizeDefault } from './diff';
 export interface CodegenOptions {
   /** Used to keep `nativeType` only where it changes the DDL. */
   dialect?: Pick<Dialect, 'name' | 'ddl'>;
-  /** Import path of kastor. Default `kastor`. */
+  /** Import path of kastor. Default `kastor-orm`. */
   importFrom?: string;
   /** Header note, for example the database the file came from. */
   source?: string;
@@ -177,7 +177,7 @@ export function generateSchema(schema: SchemaIR, options: CodegenOptions = {}): 
     `// Schema pulled from ${options.source ?? 'the database'} by kastor db pull on ${date}.`,
     '// This file is now the source of truth: edit it, then run kastor migrate dev.',
   ];
-  const from = options.importFrom ?? 'kastor';
+  const from = options.importFrom ?? 'kastor-orm';
   const importLine = `import { ${[...imports].sort(importOrder).join(', ')} } from ${q(from)};`;
   const typeImport = needsAnyColumn ? `\nimport type { AnyColumn } from ${q(from)};` : '';
   const schemaObj = `export const schema = { ${tables.map((t) => names.get(t.name)!.ident).join(', ')} };`;

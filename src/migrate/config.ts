@@ -151,7 +151,7 @@ export async function createAdapter(loaded: LoadedConfig): Promise<Adapter> {
   const adapter = typeof a === 'function' ? await a() : a;
   if (!adapter || typeof adapter !== 'object' || !adapter.dialect || !adapter.executor) {
     throw new KastorError('INVALID_ARGUMENT', 'The adapter in the config is not a kastor adapter.', {
-      hint: "Return an adapter from a kastor driver entry: adapter: () => postgres(pool) from 'kastor/postgres'.",
+      hint: "Return an adapter from a kastor driver entry: adapter: () => postgres(pool) from 'kastor-orm/postgres'.",
     });
   }
   return adapter;

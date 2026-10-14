@@ -1,9 +1,9 @@
 /**
- * kastor/mariadb: MariaDB through the mariadb package or mysql2.
+ * kastor-orm/mariadb: MariaDB through the mariadb package or mysql2.
  *
  * ```ts
  * import * as mariadbDriver from 'mariadb'
- * import { mariadb } from 'kastor/mariadb'
+ * import { mariadb } from 'kastor-orm/mariadb'
  * const db = kastor({ adapter: mariadb(mariadbDriver.createPool(process.env.DATABASE_URL)), schema })
  * ```
  */

@@ -13,7 +13,7 @@ Requests for other owners. sqlpg works around each item until it lands.
    transaction, and with foreign keys on, dropping the old table fires the
    ON DELETE actions of every table that points at it (cascades delete rows).
    Please do what `test/sqlite-schema.int.test.ts` does in `migrate()`:
-   when `needsForeignKeysOff(statements)` (exported from `kastor/sqlite`) is
+   when `needsForeignKeysOff(statements)` (exported from `kastor-orm/sqlite`) is
    true, run `PRAGMA foreign_keys = OFF` before BEGIN, run the statements and
    `PRAGMA foreign_key_check` inside the transaction (fail if it returns rows),
    and run `PRAGMA foreign_keys = ON` after COMMIT or ROLLBACK. If a rebuild
@@ -38,7 +38,7 @@ Requests for other owners. sqlpg works around each item until it lands.
 
 1. **Cloudflare D1 batches.** D1 has no interactive transactions (no BEGIN or
    SAVEPOINT over the binding), only `db.batch([...])`, which is atomic. The D1
-   executor (`d1Executor`, `kastor/d1`) exposes
+   executor (`d1Executor`, `kastor-orm/d1`) exposes
    `batch(statements: { sql, params }[]): Promise<ExecResult[]>`. Please make
    `$transaction([q1, q2])` use `executor.batch` when it exists and every query
    compiles to a single statement (true on SQLite for create, update, delete,

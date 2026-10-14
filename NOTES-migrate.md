@@ -56,7 +56,7 @@ each item until it lands.
   `Adapter`, or a function returning one (sync or async), `migrations` a folder
   (default `./kastor/migrations`) and `seed` a path to a script whose default
   export receives the client, or a function `(db) => Promise<void>`. The type
-  is exported as `KastorConfig` from `kastor/migrate`; feel free to import it
+  is exported as `KastorConfig` from `kastor-orm/migrate`; feel free to import it
   for `defineConfig` so both stay in sync.
 - package.json: the migrate owner added `jiti` as the only runtime dependency.
   It loads `kastor.config.ts`, the schema and the seed script on Node 18 and

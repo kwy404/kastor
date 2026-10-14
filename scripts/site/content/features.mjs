@@ -6,7 +6,7 @@ export const FEATURES = [
     title: 'Schema in plain TypeScript',
     text: 'Tables, columns, indexes and relations are ordinary TypeScript values. No schema language to learn, no extension to install, and your editor already understands every line.',
     file: 'src/db/schema.ts',
-    code: `import { table, t, index } from 'kastor'
+    code: `import { table, t, index } from 'kastor-orm'
 
 export const users = table('users', {
   id: t.id(),
@@ -29,7 +29,7 @@ export const posts = table('posts', {
     title: 'Types inferred as you type',
     text: 'There is no generate step. Change a column and every query that touches it is checked again on the next keystroke, in the editor and in CI, with nothing to regenerate.',
     file: 'src/types.ts',
-    code: `import type { InferSelect, InferInsert } from 'kastor'
+    code: `import type { InferSelect, InferInsert } from 'kastor-orm'
 import { users } from './db/schema'
 
 type User = InferSelect<typeof users>
@@ -129,7 +129,7 @@ const rows = await db.$sql<{ day: string; signups: number }>\`
     title: 'Errors that tell you the fix',
     text: 'Driver errors become a KastorError with a stable code, a plain English message and a hint, the same on every database.',
     file: 'src/signup.ts',
-    code: `import { isKastorError } from 'kastor'
+    code: `import { isKastorError } from 'kastor-orm'
 
 try {
   await db.users.create({ data: { email } })
@@ -186,7 +186,7 @@ const next = await db.notes.findPage({ first: 20, orderBy: { id: 'desc' }, after
     title: 'Seeds and test factories',
     text: 'A typed seed file for every environment, and factories that build valid, unique rows for tests in one line each.',
     file: 'src/db/seed.ts and factories',
-    code: `import { defineSeed, factory } from 'kastor'
+    code: `import { defineSeed, factory } from 'kastor-orm'
 import { db as client, type Db } from './index'
 
 // tests: one line per row, unique by sequence

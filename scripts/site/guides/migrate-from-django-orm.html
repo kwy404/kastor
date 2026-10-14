@@ -17,7 +17,7 @@
     "tools": ["Node.js 18 or newer", "kastor", "the pg or mysql2 driver", "your Django project"],
     "steps": [
       { "name": "Choose the path", "text": "Decide whether a service moves to TypeScript or a TypeScript API runs next to Django on the same database.", "anchor": "paths" },
-      { "name": "Pull the schema Django built", "text": "Run npx kastor init and npx kastor db pull against the database that manage.py migrate created.", "anchor": "pull" },
+      { "name": "Pull the schema Django built", "text": "Run npx kastor-orm init and npx kastor db pull against the database that manage.py migrate created.", "anchor": "pull" },
       { "name": "Pick the migration owner", "text": "Keep makemigrations and refresh with db pull, or run npx kastor migrate baseline --name init and let kastor own changes.", "anchor": "owner" },
       { "name": "Translate QuerySets", "text": "Map filter, exclude, select_related, prefetch_related, annotate and transaction.atomic to the kastor client.", "anchor": "queries" },
       { "name": "Share authentication safely", "text": "Verify Django password hashes or tokens from TypeScript instead of sharing session cookies.", "anchor": "side-by-side" }
@@ -43,8 +43,8 @@
 </section>
 <section id="pull"><h2>Step 1: pull the schema Django built</h2>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 npx kastor db pull --out src/db/schema.ts
 </pre>
 <p><code>db pull</code> reads the tables <code>manage.py migrate</code> created, including the many to many join tables Django generates, and writes <code>table()</code> definitions plus relations guessed from foreign keys. Django names tables <code>app_model</code>; rename the exports to something readable and keep the table names as they are.</p>
@@ -66,7 +66,7 @@ class Post(models.Model):
         indexes = [models.Index(fields=["published", "created_at"])]
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
-import { table, t, index, one, many } from 'kastor'
+import { table, t, index, one, many } from 'kastor-orm'
 
 export const users = table('auth_user', {
   id: t.id(),

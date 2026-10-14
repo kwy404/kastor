@@ -8,6 +8,8 @@ All notable changes to kastor are documented in this file. The format follows
 
 ## [0.1.0] - 2026-10-13
 
+Published on npm as `kastor-orm` (`npm i kastor-orm`, imports from `kastor-orm` and `kastor-orm/<adapter>`). The project, the repository and the CLI keep the name kastor: the package installs both a `kastor` and a `kastor-orm` command.
+
 ### Added
 
 - Schema in plain TypeScript: `table()`, the `t` column builders (`id`, `bigId`, `uuid`, `string`, `text`, `int`, `bigint`, `float`, `decimal`, `boolean`, `datetime`, `date`, `time`, `json`, `bytes`, `enum`), modifiers, indexes, composite primary keys, soft delete and relations with `one()` and `many()`, including many to many through a join table.

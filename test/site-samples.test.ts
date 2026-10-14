@@ -1,7 +1,7 @@
 // Type checks the TypeScript samples of the migration and framework guides
 // and of the frameworks page against the real kastor sources. Each guide is
 // a small virtual project: every ts or tsx block becomes a file named after
-// its title, `kastor` resolves to src/, drivers with types in node_modules
+// its title, `kastor-orm` resolves to src/, drivers with types in node_modules
 // keep their real types, and other packages (frameworks, the ORM being
 // replaced) are typed as any. A block marked data-check="skip" is left out.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -59,8 +59,8 @@ for (const f of FRAMEWORKS) {
 const { SCHEMA } = (await import(pathToFileURL(join(root, 'scripts', 'site', 'playground', 'presets.mjs')).href)) as { SCHEMA: string };
 
 const DEFAULT_DB = `import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 export const db = kastor({ adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })), schema, relations })
@@ -175,8 +175,8 @@ function findVirtual(path: string): string | undefined {
 function resolveSpecifier(spec: string, from: string): string | undefined {
   const project = /^(.*\/\.samples\/[^/]+)\//.exec(from)?.[1];
   const s = spec.replace(/^npm:/, '');
-  if (s === 'kastor') return `${root}/src/index.ts`;
-  const sub = /^kastor\/(\w+)$/.exec(s);
+  if (s === 'kastor-orm') return `${root}/src/index.ts`;
+  const sub = /^kastor-orm\/(\w+)$/.exec(s);
   if (sub) return existsSync(`${root}/src/${sub[1]}.ts`) ? `${root}/src/${sub[1]}.ts` : `${root}/src/${sub[1]}/index.ts`;
   if (!project) return undefined;
   const candidates: string[] = [];

@@ -1,9 +1,9 @@
 /**
- * kastor/cockroach: CockroachDB through the `pg` package or postgres.js.
+ * kastor-orm/cockroach: CockroachDB through the `pg` package or postgres.js.
  *
  * ```ts
  * import pg from 'pg'
- * import { cockroach } from 'kastor/cockroach'
+ * import { cockroach } from 'kastor-orm/cockroach'
  * const db = kastor({ adapter: cockroach(new pg.Pool({ connectionString })), schema })
  * ```
  */

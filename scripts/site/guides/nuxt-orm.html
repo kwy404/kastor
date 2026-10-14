@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["Nuxt 3 or newer", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres, moving the schema to server/db/schema.ts.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm pg and npx kastor-orm init --db postgres, moving the schema to server/db/schema.ts.", "anchor": "structure" },
       { "name": "Read secrets from runtimeConfig", "text": "Declare databaseUrl in runtimeConfig and set NUXT_DATABASE_URL in the environment.", "anchor": "config" },
       { "name": "Create the client in server/utils", "text": "Create server/utils/db.ts that reuses the client through globalThis in development.", "anchor": "client" },
       { "name": "Write server routes", "text": "Use defineEventHandler with getQuery, readBody and getRouterParam to call kastor.", "anchor": "routes" },
@@ -47,8 +47,8 @@ kastor.config.ts          used by the CLI
 kastor/migrations/        SQL files
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg
-npx kastor init --db postgres
+npm install kastor-orm pg
+npx kastor-orm init --db postgres
 </pre>
 <p>Move the starter schema to <code>server/db/schema.ts</code> and set <code>schema: &#39;./server/db/schema.ts&#39;</code> in <code>kastor.config.ts</code>, so the app and the CLI read the same file.</p>
 </section>
@@ -68,8 +68,8 @@ export default defineNuxtConfig({
 <p>Nitro reloads the server bundle when you edit server files in development. Keep the client on <code>globalThis</code> outside production so each reload reuses the same pool instead of opening another one.</p>
 <pre data-kind="editor" data-lang="ts" data-title="server/utils/db.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from '../db/schema'
 
 const create = () =&gt;
@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) =&gt; {
 })
 </pre>
 <pre data-kind="editor" data-lang="ts" data-title="server/api/posts.post.ts">
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '../utils/db'
 
 export default defineEventHandler(async (event) =&gt; {

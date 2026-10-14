@@ -168,7 +168,7 @@ function node(where: WhereIR, neg: boolean, scope: FilterScope, stages: Doc[]): 
         'Express the condition with the where operators (equals, in, contains, AND, OR, NOT, relation filters) instead of sql`...`.',
       );
     default:
-      throw mongoError('UNSUPPORTED', `Unknown filter node "${(where as { kind: string }).kind}".`, 'Update kastor/mongodb to the same version as kastor.');
+      throw mongoError('UNSUPPORTED', `Unknown filter node "${(where as { kind: string }).kind}".`, 'Update kastor-orm/mongodb to the same version as kastor.');
   }
 }
 

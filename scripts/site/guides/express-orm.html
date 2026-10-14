@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["Express 4 or 5", "Node.js 20 or newer", "kastor", "the pg driver"],
     "steps": [
-      { "name": "Install and scaffold", "text": "Run npm install kastor pg express and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Install and scaffold", "text": "Run npm install kastor-orm pg express and npx kastor-orm init --db postgres.", "anchor": "structure" },
       { "name": "Create the client module", "text": "Create src/db/index.ts that builds one client per process from DATABASE_URL.", "anchor": "client" },
       { "name": "Write async routes", "text": "Query kastor in route handlers; Express 5 forwards rejected promises to the error middleware.", "anchor": "routes" },
       { "name": "Map errors and shut down cleanly", "text": "Turn KastorError codes into status codes in one middleware and close the pool on SIGTERM.", "anchor": "errors" },
@@ -45,9 +45,9 @@ kastor/migrations/
 .env                      DATABASE_URL (not committed)
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg express
+npm install kastor-orm pg express
 npm install -D tsx @types/express
-npx kastor init --db postgres
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 </section>
@@ -55,8 +55,8 @@ npx kastor migrate dev --name init
 <p>A Node process imports a module once, so a client created at the top level of <code>src/db/index.ts</code> is shared by every route. In development, <code>tsx watch</code> restarts the whole process on change, so there is no stale module cache to guard against; the shutdown handler below closes the old pool on each restart.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 export const db = kastor({
@@ -113,7 +113,7 @@ posts.post('/:id/views', async (req, res) =&gt; {
 <section id="errors"><h2>Errors and graceful shutdown</h2>
 <pre data-kind="editor" data-lang="ts" data-title="src/errors.ts">
 import type { NextFunction, Request, Response } from 'express'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 
 const STATUS: Record&lt;string, number&gt; = { NOT_FOUND: 404, UNIQUE_VIOLATION: 409, FOREIGN_KEY_VIOLATION: 422, NOT_NULL_VIOLATION: 422 }
 

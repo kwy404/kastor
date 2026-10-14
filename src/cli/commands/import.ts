@@ -64,9 +64,9 @@ export function importedConfig(result: PrismaImportResult, options: { schemaPath
   }
   if (result.database === 'mssql') lines.push(`// The mssql driver takes "Server=...;Database=...;User Id=...;Password=..." strings, not Prisma's sqlserver:// URLs.`);
   if (result.database === 'postgres') lines.push(`// Prisma URLs may end in ?schema=name; pg ignores it, so set search_path on the database user if you used another schema than public.`);
-  if (result.database === 'mysql') lines.push(`// MariaDB works too: use createPool from 'mariadb' and the mariadb adapter from 'kastor/mariadb'.`);
+  if (result.database === 'mysql') lines.push(`// MariaDB works too: use createPool from 'mariadb' and the mariadb adapter from 'kastor-orm/mariadb'.`);
   return `${imports.join('\n')}
-import { defineConfig } from 'kastor';
+import { defineConfig } from 'kastor-orm';
 
 export default defineConfig({
   schema: '${options.schemaPath.replace(/\\/g, '/').replace(/'/g, "\\'")}',
@@ -89,7 +89,7 @@ export async function importPrisma(ctx: CliContext): Promise<number> {
   ui.title('import prisma');
   ui.keyValues([
     ['Prisma schema', rel(ctx, schemaPath)],
-    ['Provider', `${result.provider} (kastor/${result.database})`],
+    ['Provider', `${result.provider} (kastor-orm/${result.database})`],
   ]);
   ui.line();
 

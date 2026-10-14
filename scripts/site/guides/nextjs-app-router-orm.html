@@ -15,7 +15,7 @@
     "totalTime": "PT20M",
     "tools": ["Next.js 14 or newer", "kastor", "pg, @neondatabase/serverless or @libsql/client"],
     "steps": [
-      { "name": "Install kastor and the driver", "text": "Run npm install kastor pg server-only and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Install kastor and the driver", "text": "Run npm install kastor-orm pg server-only and npx kastor-orm init --db postgres.", "anchor": "structure" },
       { "name": "Create one client module", "text": "Create src/db/index.ts that reuses the client through globalThis in development and imports server-only.", "anchor": "client" },
       { "name": "Query in server components and actions", "text": "Await db calls in async server components and write in server actions with revalidatePath.", "anchor": "server-components" },
       { "name": "Expose route handlers", "text": "Add app/api route handlers that return Response.json from kastor queries.", "anchor": "route-handlers" },
@@ -47,8 +47,8 @@ kastor/migrations/        SQL files written by migrate dev
 .env.local                DATABASE_URL, never NEXT_PUBLIC_
 </pre>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npm install kastor pg server-only
-npx kastor init --db postgres
+npm install kastor-orm pg server-only
+npx kastor-orm init --db postgres
 npx kastor migrate dev --name init
 </pre>
 <p><code>init</code> writes <code>kastor.config.ts</code> and a starter schema in <code>src/db/schema.ts</code>. The CLI reads <code>.env</code> next to the config, while Next.js reads <code>.env.local</code>; either keep the variable in both or point the CLI at the right file in CI. Keep the name without the <code>NEXT_PUBLIC_</code> prefix so it never reaches the browser bundle.</p>
@@ -58,8 +58,8 @@ npx kastor migrate dev --name init
 <pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
 import 'server-only'
 import pg from 'pg'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from './schema'
 
 const create = () =&gt;
@@ -109,7 +109,7 @@ export default async function PostsPage() {
 <pre data-kind="editor" data-lang="ts" data-title="app/posts/actions.ts">
 'use server'
 import { revalidatePath } from 'next/cache'
-import { isKastorError } from 'kastor'
+import { isKastorError } from 'kastor-orm'
 import { db } from '@/db'
 
 export async function publish(formData: FormData) {
@@ -157,8 +157,8 @@ export async function POST(request: Request) {
 <p>Code that sets <code>export const runtime = &#39;edge&#39;</code> runs without Node.js TCP sockets, so the <code>pg</code> pool above is not available there. kastor's core has no Node only imports, so the same schema works with a driver built for the edge. Create the client inside the request: edge isolates do not keep connections between requests the way a Node process does.</p>
 <pre data-kind="editor" data-lang="ts" data-title="app/api/edge/route.ts">
 import { Pool } from '@neondatabase/serverless'
-import { kastor } from 'kastor'
-import { postgres } from 'kastor/postgres'
+import { kastor } from 'kastor-orm'
+import { postgres } from 'kastor-orm/postgres'
 import { schema, relations } from '@/db/schema'
 
 export const runtime = 'edge'
@@ -177,8 +177,8 @@ export async function GET() {
 <p>For Turso, use the web build of the libSQL client, which talks HTTP:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/turso.ts">
 import { createClient } from '@libsql/client/web'
-import { kastor } from 'kastor'
-import { libsql } from 'kastor/libsql'
+import { kastor } from 'kastor-orm'
+import { libsql } from 'kastor-orm/libsql'
 import { schema, relations } from './schema'
 
 export const tursoDb = () =&gt;
@@ -191,8 +191,8 @@ export const tursoDb = () =&gt;
 <p>When the whole app runs on Cloudflare through the OpenNext adapter, the D1 binding comes from the Cloudflare context instead of an environment variable. D1 runs batches instead of interactive transactions, so use the array form of <code>$transaction</code> there.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/d1.ts">
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { kastor } from 'kastor'
-import { d1 } from 'kastor/d1'
+import { kastor } from 'kastor-orm'
+import { d1 } from 'kastor-orm/d1'
 import { schema, relations } from './schema'
 
 export const d1Db = () =&gt; kastor({ adapter: d1(getCloudflareContext().env.DB), schema, relations })
