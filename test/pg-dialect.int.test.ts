@@ -136,6 +136,27 @@ for (const target of targets) {
       expect(kept.name).toBe('tx-kept');
     });
 
+    it('keeps applied migrations in _kastor_migrations', async () => {
+      // The bookkeeping table may be shared with other suites: only touch our own rows.
+      const { dialect, executor } = handle.adapter;
+      const tag = Math.random().toString(36).slice(2, 10);
+      const first = `20260102030405_init_${tag}`;
+      const second = `20260103000000_more_${tag}`;
+      await dialect.migrationTable.ensure(executor);
+      await dialect.migrationTable.ensure(executor);
+      const appliedAt = new Date('2026-01-02T03:04:05.678Z');
+      await dialect.migrationTable.record(executor, { id: first, checksum: 'abc', appliedAt });
+      await dialect.migrationTable.record(executor, { id: second, checksum: 'def', appliedAt });
+      const ours = async () => (await dialect.migrationTable.list(executor)).filter((m) => m.id.endsWith(tag));
+      expect(await ours()).toEqual([
+        { id: first, checksum: 'abc', appliedAt },
+        { id: second, checksum: 'def', appliedAt },
+      ]);
+      await dialect.migrationTable.remove(executor, second);
+      await dialect.migrationTable.remove(executor, first);
+      expect(await ours()).toEqual([]);
+    });
+
     it('runs concurrent transactions on separate connections', async () => {
       const names = Array.from({ length: 6 }, (_, i) => `par-${i}`);
       await Promise.all(names.map((name) => db.$transaction(async (tx) => tx.things.create({ data: { name } }))));

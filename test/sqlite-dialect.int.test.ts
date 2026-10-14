@@ -99,6 +99,27 @@ for (const driver of drivers) {
       expect(rows.map((r) => r.meta)).toEqual([{ a: 1 }, 42, null]);
     });
 
+    it('keeps applied migrations in _kastor_migrations', async () => {
+      // The bookkeeping table may be shared with other suites: only touch our own rows.
+      const { dialect, executor } = adapter;
+      const tag = Math.random().toString(36).slice(2, 10);
+      const first = `20260102030405_init_${tag}`;
+      const second = `20260103000000_more_${tag}`;
+      await dialect.migrationTable.ensure(executor);
+      await dialect.migrationTable.ensure(executor);
+      const appliedAt = new Date('2026-01-02T03:04:05.678Z');
+      await dialect.migrationTable.record(executor, { id: first, checksum: 'abc', appliedAt });
+      await dialect.migrationTable.record(executor, { id: second, checksum: 'def', appliedAt });
+      const ours = async () => (await dialect.migrationTable.list(executor)).filter((m) => m.id.endsWith(tag));
+      expect(await ours()).toEqual([
+        { id: first, checksum: 'abc', appliedAt },
+        { id: second, checksum: 'def', appliedAt },
+      ]);
+      await dialect.migrationTable.remove(executor, second);
+      await dialect.migrationTable.remove(executor, first);
+      expect(await ours()).toEqual([]);
+    });
+
     it('isolates a transaction from statements outside it', async () => {
       let release!: () => void;
       const gate = new Promise<void>((resolve) => (release = resolve));
