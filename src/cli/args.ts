@@ -33,6 +33,7 @@ export const OPTIONS: Record<string, OptionSpec> = {
   'skip-seed': { type: 'boolean', description: 'Do not run the seed script after a reset' },
   port: { type: 'number', alias: 'p', value: 'port', description: 'Port for the studio server (default: 5555)' },
   open: { type: 'boolean', description: 'Open the browser (use --no-open to skip)' },
+  'read-only': { type: 'boolean', description: 'Browse without create, edit and delete' },
   out: { type: 'string', alias: 'o', value: 'path', description: 'Output file for db pull (default: the schema path from the config)' },
   print: { type: 'boolean', description: 'Print to stdout instead of writing a file' },
   db: { type: 'string', value: 'database', description: 'Database for init: postgres, cockroach, mysql, mariadb, sqlite, libsql, d1, mssql, oracle, mongodb' },
@@ -94,8 +95,8 @@ export const COMMANDS: CommandSpec[] = [
   {
     name: 'studio',
     summary: 'Browse and edit your data in a local web UI',
-    options: [...COMMON, 'port', 'open'],
-    examples: ['kastor studio', 'kastor studio --port 4000 --no-open'],
+    options: [...COMMON, 'port', 'open', 'read-only'],
+    examples: ['kastor studio', 'kastor studio --port 4000 --no-open', 'kastor studio --read-only'],
   },
   {
     name: 'doctor',

@@ -30,6 +30,7 @@ export async function studio(ctx: CliContext): Promise<number> {
         adapter: project.adapter,
         port: opt.num(ctx, 'port') ?? project.loaded.config.studio?.port,
         version: ctx.version,
+        readOnly: opt.bool(ctx, 'read-only'),
       }),
       (s) => `Studio ready with ${s.state.schema.tables.length} table${s.state.schema.tables.length === 1 ? '' : 's'}`,
     );

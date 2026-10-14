@@ -183,7 +183,7 @@ export function clientMain(): void {
       .filter((t) => t.name.toLowerCase().includes(filter))
       .map(
         (t) =>
-          `<a href="${tableHref(t.name)}" class="sidebar-item"${t.name === active ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg><span class="sidebar-label">${esc(t.name)}</span><span class="sidebar-badge">${t.columns.length}</span></a>`,
+          `<a href="${tableHref(t.name)}" class="sidebar-item"${t.name === active ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg><span class="sidebar-label">${esc(t.name)}</span><span class="sidebar-badge" title="${t.columns.length} columns">${t.columns.length}</span></a>`,
       )
       .join('');
     list.innerHTML = `<p class="sidebar-title">Tables (${schema?.tables.length ?? 0})</p>${items || '<p class="px-3 text-sm text-muted-foreground">No tables match.</p>'}`;
@@ -477,8 +477,9 @@ export function clientMain(): void {
   function inputFor(c: Col, value: unknown, id?: string): string {
     const v = value === null || value === undefined ? '' : c.type === 'json' ? JSON.stringify(value, null, 2) : String(value);
     const attrs = `${id ? `id="${id}" ` : ''}name="${esc(c.name)}" aria-label="${esc(c.name)}"`;
-    if (c.type === 'boolean') return `<select class="select select-sm" ${attrs}><option value="true"${value === true ? ' selected' : ''}>true</option><option value="false"${value === false ? ' selected' : ''}>false</option>${c.nullable ? `<option value=""${value === null ? ' selected' : ''}>NULL</option>` : ''}</select>`;
-    if (c.type === 'enum') return `<select class="select select-sm" ${attrs}>${c.nullable ? '<option value="">NULL</option>' : ''}${(c.enumValues ?? []).map((e) => `<option${e === value ? ' selected' : ''}>${esc(e)}</option>`).join('')}</select>`;
+    const useDefault = value === undefined && c.default !== undefined ? '<option value="" selected>(default)</option>' : '';
+    if (c.type === 'boolean') return `<select class="select select-sm" ${attrs}>${useDefault}<option value="true"${value === true ? ' selected' : ''}>true</option><option value="false"${value === false ? ' selected' : ''}>false</option>${c.nullable && !useDefault ? `<option value=""${value === null ? ' selected' : ''}>NULL</option>` : ''}</select>`;
+    if (c.type === 'enum') return `<select class="select select-sm" ${attrs}>${useDefault}${c.nullable && !useDefault ? `<option value=""${value === null ? ' selected' : ''}>NULL</option>` : ''}${(c.enumValues ?? []).map((e) => `<option${e === value ? ' selected' : ''}>${esc(e)}</option>`).join('')}</select>`;
     if (c.type === 'json' || c.type === 'text') return `<textarea class="textarea textarea-sm" rows="3" ${attrs}>${esc(v)}</textarea>`;
     if (c.type === 'int' || c.type === 'float' || c.type === 'bigint' || c.type === 'decimal') return `<input class="input input-sm" inputmode="decimal" ${attrs} value="${esc(v)}">`;
     if (c.type === 'datetime') return `<input class="input input-sm" ${attrs} value="${esc(v)}" placeholder="2026-01-31T12:00:00Z">`;

@@ -201,6 +201,11 @@ describe('kastor CLI end to end on SQLite', () => {
     expect(noOpen.code).toBe(0);
     expect(opened).toHaveLength(1);
     await studio!.close();
+    await run(dir, ['studio', '--port', '0', '--no-open', '--read-only'], { onStudio: (s) => (studio = s) });
+    const ro = new URL(studio!.url);
+    const schema = (await (await fetch(`${ro.origin}/api/schema`, { headers: { 'X-Kastor-Token': ro.searchParams.get('token')! } })).json()) as { readOnly: boolean };
+    expect(schema.readOnly).toBe(true);
+    await studio!.close();
   });
 
   it('reports a missing config with a hint', async () => {
