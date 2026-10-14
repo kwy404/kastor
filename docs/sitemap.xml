@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://kwy404.github.io/kastor/</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/frameworks.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/api.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/guides.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/guides.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/guides.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/pt-br/</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/guides.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/guides.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/typescript-orm.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/typescript-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/orm-typescript.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/typescript-orm.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/prisma-alternative-without-codegen.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/drizzle-alternative.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/type-safe-sql-typescript.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/evitar-consultas-n-mais-1.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/database-migrations-explained.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/database-migrations-explained.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/migracoes-banco-de-dados.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/database-migrations-explained.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/nextjs-postgres-orm.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/nextjs-postgres-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/nextjs-postgres-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/nextjs-postgres-orm.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/database-seeding-typescript.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/multi-database-apps.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/sql-server-orm-nodejs.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/oracle-orm-nodejs.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/mongodb-orm-typescript.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/cloudflare-d1-orm.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/turso-libsql-orm.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/pt-br/orm-typescript.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/orm-typescript.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/typescript-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/typescript-orm.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/pt-br/migracoes-banco-de-dados.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/migracoes-banco-de-dados.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/database-migrations-explained.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/database-migrations-explained.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/pt-br/evitar-consultas-n-mais-1.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/evitar-consultas-n-mais-1.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html"/>
+  </url>
+  <url>
+    <loc>https://kwy404.github.io/kastor/pt-br/nextjs-postgres-orm.html</loc>
+    <lastmod>2026-10-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="pt-BR" href="https://kwy404.github.io/kastor/pt-br/nextjs-postgres-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://kwy404.github.io/kastor/nextjs-postgres-orm.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/nextjs-postgres-orm.html"/>
+  </url>
+</urlset>
