@@ -174,7 +174,7 @@ export function isDestructive(op: MigrationOp): boolean {
 /** Type changes that never lose data. */
 export function isWidening(from: ColumnIR, to: ColumnIR): boolean {
   if (from.type === to.type) {
-    if (from.type === 'string') return (to.length ?? Infinity) >= (from.length ?? Infinity);
+    if (from.type === 'string') return (to.length ?? 255) >= (from.length ?? 255);
     if (from.type === 'decimal') {
       const fp = from.precision ?? 0;
       const fs = from.scale ?? 0;
