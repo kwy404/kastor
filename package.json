@@ -1,0 +1,269 @@
+{
+  "name": "kastor",
+  "version": "0.1.0",
+  "description": "TypeScript ORM for almost every database: PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, CockroachDB and MongoDB. Schema in plain TypeScript with instant type inference, no generate step, no binary engine, nested includes in one query, automatic migrations and a local studio.",
+  "keywords": [
+    "orm",
+    "typescript orm",
+    "node orm",
+    "nodejs orm",
+    "javascript orm",
+    "database",
+    "sql",
+    "query builder",
+    "typesafe sql",
+    "type safe orm",
+    "postgres orm",
+    "postgresql",
+    "mysql orm",
+    "mysql",
+    "mariadb",
+    "sqlite orm",
+    "sqlite",
+    "libsql",
+    "turso",
+    "cloudflare d1",
+    "sql server",
+    "mssql",
+    "oracle",
+    "cockroachdb",
+    "mongodb orm",
+    "mongodb",
+    "migrations",
+    "database migrations",
+    "schema migrations",
+    "serverless",
+    "edge",
+    "neon",
+    "supabase",
+    "planetscale",
+    "data mapper",
+    "active record alternative"
+  ],
+  "homepage": "https://kwy404.github.io/kastor/",
+  "bugs": {
+    "url": "https://github.com/kwy404/kastor/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kwy404/kastor.git"
+  },
+  "license": "MIT",
+  "author": "Alexandre Kohler (https://github.com/kwy404)",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "kastor": "bin/kastor.mjs"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./postgres": {
+      "import": {
+        "types": "./dist/postgres.d.ts",
+        "default": "./dist/postgres.js"
+      },
+      "require": {
+        "types": "./dist/postgres.d.cts",
+        "default": "./dist/postgres.cjs"
+      }
+    },
+    "./cockroach": {
+      "import": {
+        "types": "./dist/cockroach.d.ts",
+        "default": "./dist/cockroach.js"
+      },
+      "require": {
+        "types": "./dist/cockroach.d.cts",
+        "default": "./dist/cockroach.cjs"
+      }
+    },
+    "./sqlite": {
+      "import": {
+        "types": "./dist/sqlite.d.ts",
+        "default": "./dist/sqlite.js"
+      },
+      "require": {
+        "types": "./dist/sqlite.d.cts",
+        "default": "./dist/sqlite.cjs"
+      }
+    },
+    "./libsql": {
+      "import": {
+        "types": "./dist/libsql.d.ts",
+        "default": "./dist/libsql.js"
+      },
+      "require": {
+        "types": "./dist/libsql.d.cts",
+        "default": "./dist/libsql.cjs"
+      }
+    },
+    "./d1": {
+      "import": {
+        "types": "./dist/d1.d.ts",
+        "default": "./dist/d1.js"
+      },
+      "require": {
+        "types": "./dist/d1.d.cts",
+        "default": "./dist/d1.cjs"
+      }
+    },
+    "./mysql": {
+      "import": {
+        "types": "./dist/mysql.d.ts",
+        "default": "./dist/mysql.js"
+      },
+      "require": {
+        "types": "./dist/mysql.d.cts",
+        "default": "./dist/mysql.cjs"
+      }
+    },
+    "./mariadb": {
+      "import": {
+        "types": "./dist/mariadb.d.ts",
+        "default": "./dist/mariadb.js"
+      },
+      "require": {
+        "types": "./dist/mariadb.d.cts",
+        "default": "./dist/mariadb.cjs"
+      }
+    },
+    "./mssql": {
+      "import": {
+        "types": "./dist/mssql.d.ts",
+        "default": "./dist/mssql.js"
+      },
+      "require": {
+        "types": "./dist/mssql.d.cts",
+        "default": "./dist/mssql.cjs"
+      }
+    },
+    "./oracle": {
+      "import": {
+        "types": "./dist/oracle.d.ts",
+        "default": "./dist/oracle.js"
+      },
+      "require": {
+        "types": "./dist/oracle.d.cts",
+        "default": "./dist/oracle.cjs"
+      }
+    },
+    "./mongodb": {
+      "import": {
+        "types": "./dist/mongodb.d.ts",
+        "default": "./dist/mongodb.js"
+      },
+      "require": {
+        "types": "./dist/mongodb.d.cts",
+        "default": "./dist/mongodb.cjs"
+      }
+    },
+    "./migrate": {
+      "import": {
+        "types": "./dist/migrate.d.ts",
+        "default": "./dist/migrate.js"
+      },
+      "require": {
+        "types": "./dist/migrate.d.cts",
+        "default": "./dist/migrate.cjs"
+      }
+    },
+    "./browser": "./dist/kastor.browser.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "check:rules": "node scripts/check-rules.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "peerDependencies": {
+    "@libsql/client": ">=0.10",
+    "better-sqlite3": ">=9",
+    "mariadb": ">=3",
+    "mongodb": ">=5",
+    "mssql": ">=10",
+    "mysql2": ">=3",
+    "oracledb": ">=6",
+    "pg": ">=8",
+    "postgres": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "@libsql/client": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "mariadb": {
+      "optional": true
+    },
+    "mongodb": {
+      "optional": true
+    },
+    "mssql": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "oracledb": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "postgres": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@libsql/client": "^0.18.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^20.19.43",
+    "@types/oracledb": "^7.0.3",
+    "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^3.2.7",
+    "better-sqlite3": "^11.10.0",
+    "eslint": "^9.39.5",
+    "mariadb": "~3.4",
+    "mongodb": "^6.21.0",
+    "mssql": "^11.0.2",
+    "mysql2": "^3.24.6",
+    "oracledb": "^6.10.0",
+    "pg": "^8.23.1",
+    "postgres": "^3.4.9",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^3.2.7"
+  }
+}

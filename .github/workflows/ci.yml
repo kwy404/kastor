@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run check:rules
+
+      - run: npm test
+
+  integration:
+    name: Integration (all databases)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KASTOR_PG_URL: postgres://kastor:kastor@localhost:54329/kastor
+      KASTOR_COCKROACH_URL: postgres://root@localhost:26259/defaultdb?sslmode=disable
+      KASTOR_MYSQL_URL: mysql://root:kastor@localhost:33069/kastor
+      KASTOR_MARIADB_URL: mysql://root:kastor@localhost:33079/kastor
+      KASTOR_MSSQL_URL: mssql://sa:Kastor_pass1@localhost:14339/master
+      KASTOR_ORACLE_URL: oracle://kastor:kastor@localhost:15219/FREEPDB1
+      KASTOR_MONGO_URL: mongodb://localhost:27019/kastor?replicaSet=rs0&directConnection=true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Start databases
+        run: docker compose up -d --wait --wait-timeout 600
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run test:integration
+
+      - name: Database logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
+
+      - name: Stop databases
+        if: always()
+        run: docker compose down -v
