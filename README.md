@@ -66,7 +66,7 @@ The name comes from *castor*, Latin for beaver. Beavers build strong structures 
 
 ```bash
 npm i kastor pg          # or mysql2, mariadb, better-sqlite3, @libsql/client, mssql, oracledb, mongodb
-npx kastor init          # writes kastor.config.ts and a starter schema
+npx kastor init --db postgres   # writes kastor.config.ts, a starter schema, a seed and .env
 ```
 
 Declare the schema in `src/db/schema.ts`:
@@ -164,7 +164,7 @@ kastor ships no drivers. Install the one you use and pass its instance to the ad
 | Oracle | `kastor/oracle` | `oracle(await oracledb.createPool(...))` | `JSON_ARRAYAGG` + `JSON_OBJECT` |
 | MongoDB | `kastor/mongodb` | `mongodb(client.db('app'))` | `$lookup` pipelines (keys are ObjectId strings by default, `{ ids: 'int' }` for numbers) |
 
-Every adapter runs the same conformance suite in CI. See the [support matrix](https://kwy404.github.io/kastor/#databases) for returning, upsert and paging syntax per database, and [Get started in 60 seconds](https://kwy404.github.io/kastor/#start) for each one.
+The adapters share one conformance suite, run against real databases in CI. See the [support matrix](https://kwy404.github.io/kastor/#databases) for returning, upsert and paging syntax per database, and [Get started in 60 seconds](https://kwy404.github.io/kastor/#start) for each one.
 
 ## Schema
 
@@ -377,7 +377,7 @@ One that infers types from a TypeScript schema and keeps the same API on every d
 Yes. kastor infers every type from the schema with the TypeScript compiler, so there is no `generate` command and no generated client to keep in sync. See [the guide on moving from a generated client](https://kwy404.github.io/kastor/prisma-alternative-without-codegen.html).
 
 ### How do I avoid N+1 queries in Node.js?
-Use `include`. kastor loads nested relations in one statement with JSON aggregation, or one query per include level with IN lists where JSON aggregation is not available. Read [avoid N+1 queries](https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html).
+Use `include`. kastor loads nested relations in one statement per call: JSON aggregation on every SQL database, `$lookup` stages in one pipeline on MongoDB. Read [avoid N+1 queries](https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html).
 
 ### Which ORM works with SQL Server and Oracle in Node.js?
 kastor supports both with the `mssql` and `oracledb` drivers: OUTPUT and MERGE on SQL Server, FETCH FIRST and MERGE on Oracle. See the [SQL Server](https://kwy404.github.io/kastor/sql-server-orm-nodejs.html) and [Oracle](https://kwy404.github.io/kastor/oracle-orm-nodejs.html) guides.

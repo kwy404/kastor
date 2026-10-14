@@ -59,7 +59,7 @@ type NewUser = InferInsert<typeof users>
     id: 'includes',
     icon: 'one-query',
     title: 'Nested includes in one query',
-    text: 'Relations load with JSON aggregation inside a single statement on every SQL database that supports it, and with one IN list query per level where it does not. Never one query per row.',
+    text: 'Relations load with JSON aggregation inside a single statement on every SQL database, and as $lookup stages of one pipeline on MongoDB. Never one query per row.',
     file: 'src/routes/feed.ts',
     code: `const feed = await db.users.findMany({
   include: {

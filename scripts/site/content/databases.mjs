@@ -68,11 +68,11 @@ export const db = kastor({ adapter: mysql(pool), schema, relations })`,
     install: 'npm i kastor mariadb',
     adapter: 'mariadb',
     includes: 'JSON_ARRAYAGG + JSON_OBJECT',
-    returning: 'RETURNING',
+    returning: 'Re-select by key',
     upsert: 'ON DUPLICATE KEY UPDATE',
     insensitive: 'LOWER() comparison',
     pagination: 'LIMIT / OFFSET',
-    note: 'Uses MariaDB native RETURNING on inserts and deletes.',
+    note: 'Works with the mariadb driver, or with mysql2 against a MariaDB server.',
     setup: `import * as mariadbDriver from 'mariadb'
 import { kastor } from 'kastor'
 import { mariadb } from 'kastor/mariadb'
@@ -130,7 +130,7 @@ export const db = kastor({ adapter: libsql(client), schema, relations })`,
     upsert: 'ON CONFLICT',
     insensitive: 'LOWER() comparison',
     pagination: 'LIMIT / OFFSET',
-    note: 'Transactions use D1 batches: prefer the array form of $transaction.',
+    note: 'D1 has no interactive transactions: the array form of $transaction runs as one D1 batch, the callback form is refused by default.',
     setup: `import { kastor } from 'kastor'
 import { d1 } from 'kastor/d1'
 import { schema, relations } from './schema'
@@ -150,8 +150,8 @@ export default {
     includes: 'FOR JSON PATH',
     returning: 'OUTPUT',
     upsert: 'MERGE',
-    insensitive: 'Collation aware LOWER()',
-    pagination: 'OFFSET / FETCH',
+    insensitive: 'LOWER() comparison',
+    pagination: 'TOP / OFFSET FETCH',
     note: 'Azure SQL works with the same driver.',
     setup: `import sql from 'mssql'
 import { kastor } from 'kastor'
@@ -170,8 +170,8 @@ export const db = kastor({ adapter: mssql(pool), schema, relations })`,
     includes: 'JSON_ARRAYAGG + JSON_OBJECT',
     returning: 'RETURNING INTO',
     upsert: 'MERGE',
-    insensitive: 'UPPER() comparison',
-    pagination: 'OFFSET / FETCH FIRST',
+    insensitive: 'LOWER() comparison',
+    pagination: 'OFFSET / FETCH NEXT',
     note: 'node-oracledb thin mode: no Instant Client to install.',
     setup: `import oracledb from 'oracledb'
 import { kastor } from 'kastor'
@@ -189,7 +189,7 @@ export const db = kastor({ adapter: oracle(pool), schema, relations })`,
     adapter: 'mongodb',
     includes: '$lookup pipeline',
     returning: 'Native documents',
-    upsert: 'updateOne upsert',
+    upsert: 'findAndModify, then insert',
     insensitive: 'Regex with i flag',
     pagination: '$skip / $limit',
     note: "Keys are ObjectIds exposed as strings by default; `mongodb(db, { ids: 'int' })` keeps numbers like SQL. Transactions need a replica set (a single node one works locally).",

@@ -64,11 +64,11 @@ function openSearch() {
   requestAnimationFrame(() => $('#search-input')?.focus());
 }
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-search-open]')) openSearch();
-  if (dialog?.open && e.target.closest('#search a[href]')) dialog.close();
+  if (e.target.closest?.('[data-search-open]')) openSearch();
+  if (dialog?.open && e.target.closest?.('#search a[href]')) dialog.close();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === '/' && !e.target.closest('input, textarea, select, [contenteditable]')) {
+  if (e.key === '/' && !e.target.closest?.('input, textarea, select, [contenteditable]')) {
     e.preventDefault();
     openSearch();
   }

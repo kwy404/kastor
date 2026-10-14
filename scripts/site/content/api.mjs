@@ -18,10 +18,9 @@ export const API = [
         text: `Creates the client. ${c('schema')} is an object of tables, ${c('relations')} a function that receives the tables and returns the relations of each one, ${c('log')} prints every statement when set to ${c('true')} or calls your function with it.`,
         file: 'src/db/index.ts',
         code: `import pg from 'pg'
-import { kastor } from 'kastor'
+import { kastor, one, many } from 'kastor'
 import { postgres } from 'kastor/postgres'
 import { users, posts } from './schema'
-import { one, many } from 'kastor'
 
 export const db = kastor({
   adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
@@ -129,7 +128,7 @@ export const memberships = table('memberships', {
       { id: 'findUnique', name: 'findUnique and findUniqueOrThrow', text: 'One row by a primary key or unique column.', code: `await db.users.findUnique({ where: { email: 'ada@example.com' } })` },
       { id: 'findPage', name: 'findPage', sig: 'findPage({ first, after?, before?, where?, orderBy?, select?, include? })', text: `Cursor pagination with opaque cursors. Returns ${c('{ items, pageInfo }')}, where ${c('pageInfo')} holds ${c('startCursor')}, ${c('endCursor')} and ${c('hasNextPage')}. Pass ${c('after: pageInfo.endCursor')} for the next page, ${c('before')} for the previous one. ${c('first')} is the page size, 1 to 1000.`, code: `const page = await db.posts.findPage({ first: 20, orderBy: { id: 'desc' } })
 const next = await db.posts.findPage({ first: 20, orderBy: { id: 'desc' }, after: page.pageInfo.endCursor })` },
-      { id: 'include', name: 'include', text: `Loads relations, nested as deep as you like, each level with its own ${c('where')}, ${c('orderBy')}, ${c('take')}, ${c('skip')}, ${c('select')} and ${c('include')}. ${c('_count')} counts related rows. One query per root call where the database has JSON aggregation, one query per level otherwise.`, code: `await db.users.findMany({
+      { id: 'include', name: 'include', text: `Loads relations, nested as deep as you like, each level with its own ${c('where')}, ${c('orderBy')}, ${c('take')}, ${c('skip')}, ${c('select')} and ${c('include')}. ${c('_count')} counts related rows. One query per root call: JSON aggregation on SQL databases, $lookup stages on MongoDB.`, code: `await db.users.findMany({
   include: {
     posts: { where: { published: true }, take: 3, include: { tags: true } },
     _count: { select: { posts: true } },

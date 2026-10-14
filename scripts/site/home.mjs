@@ -38,7 +38,7 @@ export const FAQ = [
   },
   {
     q: 'How does kastor avoid N+1 queries?',
-    a: 'Nested includes load in one statement per root call using JSON aggregation where the database supports it. Where it does not, kastor runs one extra query per include level with an IN list, never one query per row. See <a href="avoid-n-plus-1-queries.html">the N+1 guide</a>.',
+    a: 'Nested includes load in one statement per root call: JSON aggregation on every SQL database and a single aggregation pipeline with $lookup stages on MongoDB. Never one query per row. See <a href="avoid-n-plus-1-queries.html">the N+1 guide</a>.',
   },
   {
     q: 'Can I use kastor with an existing database?',
@@ -213,7 +213,7 @@ ${rows}
         </tbody>
       </table>
     </div>
-    <p class="matrix-note">${ui('info')}<span>Each adapter runs the shared conformance suite in CI. Serverless Postgres (Neon, Supabase, Vercel Postgres) runs through pg compatible pools and PlanetScale through mysql2.</span></p>
+    <p class="matrix-note">${ui('info')}<span>The adapters share one conformance suite, run against real databases in CI. Serverless Postgres (Neon, Supabase, Vercel Postgres) runs through pg compatible pools and PlanetScale through mysql2.</span></p>
   </div>
 </section>`;
 }
