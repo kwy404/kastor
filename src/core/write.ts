@@ -36,20 +36,32 @@ export function randomUUID(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
+function nowFor(f: FieldMeta): unknown {
+  const now = new Date();
+  if (f.ir.type === 'date') return now.toISOString().slice(0, 10);
+  if (f.ir.type === 'time') return now.toISOString().slice(11, 19);
+  return now;
+}
+
+/** Sets `.updatedAt()` columns the update leaves out. No-op for an empty update. */
+export function touchUpdatedAt(m: ModelMeta, data: Record<string, UpdateValueIR>): Record<string, UpdateValueIR> {
+  if (Object.keys(data).length === 0) return data;
+  for (const f of m.fields.values()) {
+    if (f.config.updatedAt && data[f.column] === undefined) data[f.column] = { op: 'set', value: nowFor(f) };
+  }
+  return data;
+}
+
 function defaultValue(f: FieldMeta): unknown {
   const c = f.config;
   if (c.defaultFn) return c.defaultFn();
   const d = c.default;
-  if (!d) return undefined;
+  if (!d) return c.updatedAt ? nowFor(f) : undefined;
   switch (d.kind) {
     case 'random':
       return randomUUID();
-    case 'now': {
-      const now = new Date();
-      if (f.ir.type === 'date') return now.toISOString().slice(0, 10);
-      if (f.ir.type === 'time') return now.toISOString().slice(11, 19);
-      return now;
-    }
+    case 'now':
+      return nowFor(f);
     case 'value': {
       const v = d.value;
       if (v === null || v === undefined) return v;
@@ -171,7 +183,7 @@ export function updateOps(m: ModelMeta, scalars: Map<FieldMeta, unknown>): Recor
     checkValue(m, f, value);
     out[f.column] = { op: 'set', value: f.ir.type === 'datetime' && typeof value === 'string' ? new Date(value) : value };
   }
-  return out;
+  return touchUpdatedAt(m, out);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -207,7 +219,7 @@ async function findUniqueOrThrow(s: Session, m: ModelMeta, where: unknown, metho
 async function removeWhere(s: Session, target: ModelMeta, where: WhereIR): Promise<number> {
   if (target.softDelete) {
     const res = await s.run(
-      { kind: 'updateMany', table: target.table, where: and(where, softDeleteWhere(target, false))!, data: { [target.softDelete.column]: { op: 'set', value: new Date() } } },
+      { kind: 'updateMany', table: target.table, where: and(where, softDeleteWhere(target, false))!, data: touchUpdatedAt(target, { [target.softDelete.column]: { op: 'set', value: new Date() } }) },
       target.key,
     );
     return Array.isArray(res) ? res.length : res.count;
@@ -343,7 +355,7 @@ async function writeChildren(s: Session, m: ModelMeta, parent: Row, rel: Relatio
   const linkChild = async (child: Row): Promise<void> => {
     if (rel.through) await linkThrough(s, m, rel, parent, child, true);
     else {
-      const res = await s.run({ kind: 'update', table: target.table, where: pkWhere(target, child), data: Object.fromEntries(Object.entries(childLink(rel, parent)).map(([k, v]) => [target.fields.get(k)!.column, { op: 'set' as const, value: v }])), returning: [] }, target.key);
+      const res = await s.run({ kind: 'update', table: target.table, where: pkWhere(target, child), data: touchUpdatedAt(target, Object.fromEntries(Object.entries(childLink(rel, parent)).map(([k, v]) => [target.fields.get(k)!.column, { op: 'set' as const, value: v }]))), returning: [] }, target.key);
       if (!res) throw errors.notFound(target.key, `${method} (connect ${rel.key})`);
     }
   };
@@ -362,7 +374,7 @@ async function writeChildren(s: Session, m: ModelMeta, parent: Row, rel: Relatio
       );
     }
     const data = Object.fromEntries(rel.toFields.map((k) => [target.fields.get(k)!.column, { op: 'set' as const, value: null }]));
-    const res = await s.run({ kind: 'updateMany', table: target.table, where: and(where, linked())!, data }, target.key);
+    const res = await s.run({ kind: 'updateMany', table: target.table, where: and(where, linked())!, data: touchUpdatedAt(target, data) }, target.key);
     return Array.isArray(res) ? res.length : res.count;
   };
 

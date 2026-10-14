@@ -9,12 +9,13 @@ types is `src/core/ir.ts`; this file explains it.
 | Name | What it is |
 | --- | --- |
 | `kastor(options)` | Creates a client: `{ adapter, schema, relations?, log? }` (type `KastorOptions`). `schema` may be a module namespace; non table exports are ignored |
-| `table(name, columns, options?)` | Declares a table. Options: `indexes(cols) => [...]`, `primaryKey(cols) => [cols.a, cols.b]` for composite keys, `softDelete: 'deletedAt'` |
+| `table(name, columns, options?)` | Declares a table. Options: `indexes(cols) => [...]`, `primaryKey(cols) => [cols.a, cols.b]` for composite keys, `foreignKeys(cols) => [foreignKey(...)]` for composite foreign keys, `softDelete: 'deletedAt'` |
 | `t` | Column builders: `id`, `bigId`, `uuid`, `string(len?)`, `text`, `int`, `bigint`, `float`, `decimal(p, s)`, `boolean`, `datetime`, `date`, `time`, `json<T>()`, `bytes`, `enum([...])` |
-| column modifiers | `nullable()`, `default(v)`, `defaultNow()`, `defaultRandom()`, `defaultSql('...')`, `unique()`, `primaryKey()`, `references(() => other.col, { onDelete, onUpdate })`, `map('db_name')`, `nativeType('varchar(64)')` |
+| column modifiers | `nullable()`, `default(v)`, `defaultNow()`, `defaultRandom()`, `defaultSql('...')`, `unique()`, `primaryKey()`, `references(() => other.col, { onDelete, onUpdate, name })`, `updatedAt()` (time of the last write, set by the client), `map('db_name')`, `nativeType('varchar(64)')` |
 | `index(...cols)` / `uniqueIndex(...cols)` | Index builders for `table(..., { indexes })`, `.name('custom')` sets the name |
-| `one(target, { fields, references }?)` | To-one relation. `fields` are columns of the source table, `references` of the target. Leave the config out on the side without the foreign key |
-| `many(target, { fields, references }?)` / `many(target, { through: joinTable })` | To-many and many-to-many relations |
+| `foreignKey([c.a, c.b], () => [other.x, other.y], { onDelete, onUpdate, name })` | Composite foreign key for `table(..., { foreignKeys })`; goes into `TableIR.foreignKeys` like `.references()` |
+| `one(target, { fields, references }?)` | To-one relation. `fields` are columns of the source table, `references` of the target. On the side without the foreign key use `one(target)`, or `one(target, { from: 'ownerRelation' })` to name the owning relation of the target (needed for self relations and tables linked more than once) |
+| `many(target, { fields, references }?)` / `many(target, { from: 'ownerRelation' })` / `many(target, { through: joinTable })` | To-many and many-to-many relations |
 | `sql` | Tagged template for raw SQL fragments (`sql.raw`, `sql.join`, `sql.ident`) usable in `where: { AND: [sql\`...\`] }` and `$sql` |
 | `KastorError`, `isKastorError(e)` | Error class with `code`, `message`, `hint`, `meta`, `cause` |
 | `toSchemaIR(schema)` | Converts the TypeScript schema object (`{ users, posts }`) to SchemaIR |
@@ -183,3 +184,21 @@ db.users.findMany({ include: { posts: true } }).toSQL(); // [{ sql, params }]
 - Soft delete tables: reads, counts, aggregates, updates and relation filters
   skip deleted rows unless `withDeleted: true`; `delete` and `deleteMany` set
   the column, `restore`, `hardDelete` and `hardDeleteMany` are extra methods.
+
+## Composite keys, back sides, updatedAt
+
+- `foreignKey()` entries become `ForeignKeyIR` with every column, default
+  name `<table>_<cols>_fkey`, actions default `no action`. Relation inference
+  (`one(target)` / `many(target)` without config) uses them like single column
+  keys. Types only know the columns of an owning relation when it lists them:
+  write `one(orders, { fields: ['shop', 'number'], references: ['shop', 'number'] })`
+  so nested creates fill those columns.
+- `from` resolves after every owning relation: the back side reads `fields`
+  and `references` from the named relation of the target, which must be a
+  `one()` holding the foreign key and pointing back at the source. The back
+  side is always nullable (`one`) and never owns a key.
+- `.updatedAt()` lives on `ColumnConfig.updatedAt` only; it is not part of
+  `ColumnIR`, so migrations and diffs ignore it. The client fills it on create
+  when left out, and sets it on update, upsert update, updateMany, nested
+  updates, connect / disconnect of children, soft delete and restore, unless
+  the data sets the column itself. An update with no column changes leaves it.

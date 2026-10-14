@@ -185,6 +185,20 @@ describe('inputs', () => {
     expectTypeOf(u.age).toEqualTypeOf<number | null>();
   });
 
+  it('types back sides, composite links and updatedAt', async () => {
+    const user = await db.users.findUniqueOrThrow({ where: { id: 1 }, include: { mentee: true, profile: true } });
+    expectTypeOf(user.mentee).toEqualTypeOf<InferSelect<typeof fixture.schema.profiles> | null>();
+    expectTypeOf(user.profile).toEqualTypeOf<InferSelect<typeof fixture.schema.profiles> | null>();
+    const vote = await db.tagVotes.findFirstOrThrow({ include: { postTag: true } });
+    expectTypeOf(vote.postTag).toEqualTypeOf<{ postId: string; tagId: number }>();
+    type NewPost = InferInsert<typeof posts>;
+    expectTypeOf<NewPost['updatedAt']>().toEqualTypeOf<Date | undefined>();
+    expectTypeOf<InferSelect<typeof posts>['updatedAt']>().toEqualTypeOf<Date>();
+    db.users.create({ data: { email: 'a@b.c', mentee: { connect: { id: 1 } } } });
+    db.tagVotes.create({ data: { postTag: { connect: { postId: 'p', tagId: 1 } } } });
+    db.postTags.create({ data: { postId: 'p', tagId: 1, votes: { create: [{ value: 2 }] } } });
+  });
+
   it('works without relations', async () => {
     const simple = kastor({ adapter, schema: { users } });
     const rows = await simple.users.findMany({ where: { email: { contains: 'a' } } });

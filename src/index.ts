@@ -8,11 +8,12 @@
  */
 export { kastor, KastorQuery } from './core/client';
 export type { KastorClient, KastorOptions, ModelClient, QueryEvent, TablesOf } from './core/client';
-export { table, t, index, uniqueIndex, one, many, Column, IndexBuilder, isTable, isColumn } from './core/schema';
+export { table, t, index, uniqueIndex, foreignKey, one, many, Column, IndexBuilder, ForeignKeyBuilder, isTable, isColumn } from './core/schema';
 export type {
   AnyColumn,
   AnyRelation,
   AnyTable,
+  BackConfig,
   ColumnConfig,
   ColumnState,
   Many,

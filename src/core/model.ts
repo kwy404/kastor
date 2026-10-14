@@ -136,6 +136,7 @@ export function buildModels(schema: Record<string, unknown>, relationsFn?: (tabl
 
   if (relationsFn) {
     const declared = relationsFn(Object.fromEntries(tables));
+    const pending: [ModelMeta, string, AnyRelation][] = [];
     if (typeof declared !== 'object' || declared === null) {
       throw errors.schema('The relations option must return an object.', 'Example: relations: ({ users, posts }) => ({ users: { posts: many(posts) } }).');
     }
@@ -149,9 +150,16 @@ export function buildModels(schema: Record<string, unknown>, relationsFn?: (tabl
         if (model.fields.has(relKey)) {
           throw errors.schema(`Relation "${relKey}" of ${modelKey} has the same name as a column.`, 'Rename the relation, for example authorId (column) and author (relation).');
         }
-        model.relations.set(relKey, resolveRelation(models, model, relKey, rel));
+        pending.push([model, relKey, rel]);
       }
-      model.relationKeys = [...model.relations.keys()];
+    }
+    // Owning sides first: back sides declared with `from` read their keys.
+    for (const [model, relKey, rel] of pending) if (rel.from === undefined) model.relations.set(relKey, resolveRelation(models, model, relKey, rel));
+    for (const [model, relKey, rel] of pending) if (rel.from !== undefined) model.relations.set(relKey, resolveRelation(models, model, relKey, rel));
+    for (const model of byKey.values()) {
+      const order = pending.filter(([m]) => m === model).map(([, k]) => k);
+      model.relations = new Map(order.map((k) => [k, model.relations.get(k)!]));
+      model.relationKeys = order;
     }
   }
   return models;
@@ -198,7 +206,24 @@ function resolveRelation(models: Models, source: ModelMeta, key: string, rel: An
   let owner = false;
   let through: RelationMeta['through'];
 
-  if (rel.kind === 'one') {
+  if (rel.from !== undefined) {
+    const owning = target.relations.get(rel.from);
+    const candidates = [...target.relations.values()].filter((r) => r.kind === 'one' && r.owner && r.targetKey === source.key).map((r) => r.key);
+    if (!owning) {
+      throw errors.schema(
+        `Relation ${where} names "${rel.from}" as its owner, but ${target.key} has no relation "${rel.from}".`,
+        candidates.length ? `Relations of ${target.key} that point at ${source.key}: ${candidates.map((c) => `"${c}"`).join(', ')}.` : `Declare the owning side on ${target.key}: one(${source.key}, { fields: [...], references: [...] }).`,
+      );
+    }
+    if (owning.kind !== 'one' || !owning.owner || owning.targetKey !== source.key) {
+      throw errors.schema(
+        `Relation ${where} names ${target.key}.${rel.from} as its owner, but that relation does not hold a foreign key to ${source.key}.`,
+        candidates.length ? `Use one of: ${candidates.map((c) => `"${c}"`).join(', ')}.` : 'The owner must be a one() relation with fields on the other table.',
+      );
+    }
+    fromFields = [...owning.toFields];
+    toFields = [...owning.fromFields];
+  } else if (rel.kind === 'one') {
     if (rel.fields && rel.references) {
       fromFields = fieldKeys(source, rel.fields, `relation ${where}`);
       toFields = fieldKeys(target, rel.references, `relation ${where}`);
@@ -220,7 +245,11 @@ function resolveRelation(models: Models, source: ModelMeta, key: string, rel: An
           `Add .references() to the foreign key column, or spell it out: one(${target.key}, { fields: ['${target.key.replace(/s$/, '')}Id'], references: ['id'] }).`,
         );
       } else {
-        throw ambiguous(where, `several foreign keys link ${source.table} and ${target.table}`, `Pass them explicitly: one(${target.key}, { fields: [...], references: [...] }).`);
+        throw ambiguous(
+          where,
+          `several foreign keys link ${source.table} and ${target.table}`,
+          `Pass them explicitly: one(${target.key}, { fields: [...], references: [...] }), or on the side without the key name the owning relation: one(${target.key}, { from: '<relation of ${target.key}>' }).`,
+        );
       }
     }
   } else if (rel.through) {
@@ -266,7 +295,7 @@ function resolveRelation(models: Models, source: ModelMeta, key: string, rel: An
       throw ambiguous(
         where,
         back.length === 0 ? `${target.table} has no foreign key to ${source.table}` : `${target.table} has several foreign keys to ${source.table}`,
-        `Spell it out: many(${target.key}, { fields: ['id'], references: ['<column of ${target.key} pointing at ${source.key}>'] }).`,
+        `Name the owning relation: many(${target.key}, { from: '<one() relation of ${target.key}>' }), or spell it out: many(${target.key}, { fields: ['id'], references: ['<column of ${target.key} pointing at ${source.key}>'] }).`,
       );
     }
     const f = fkFields(target, source, back[0]!);

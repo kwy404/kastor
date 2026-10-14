@@ -71,3 +71,46 @@ the callback) are mapped to KastorError, through `mapError` or QUERY_FAILED.
 The conformance suite now checks the identity (`expect(caught).toBe(boom)`)
 and that a duplicate insert inside the callback keeps `UNIQUE_VIOLATION`; it
 passes on every dialect suite. Unit tests: `test/core-transaction.test.ts`.
+
+## For migrate and docs: composite foreign keys, one-to-one back sides, updatedAt
+
+The three gaps reported by `kastor import prisma` are closed. All public names
+come from `kastor`.
+
+1. **Composite foreign keys.** Table option `foreignKeys` with `foreignKey`:
+   ```ts
+   table('order_lines', { ... }, {
+     foreignKeys: (c) => [foreignKey([c.shop, c.number], () => [orders.shop, orders.number], { onDelete: 'cascade', onUpdate: 'cascade', name: 'lines_order_fkey' })],
+   })
+   ```
+   Each entry becomes one `ForeignKeyIR` in `toSchemaIR` (default name
+   `<table>_<db columns>_fkey`, actions default to `no action`), so
+   `migrate dev` keeps the constraint. `one(target, { fields: [a, b],
+   references: [x, y] })` works as before, and `one(target)` / `many(target)`
+   without config are inferred from composite keys too. For the importer:
+   emit the relation with explicit `fields` / `references` so the types know
+   which columns nested creates fill in.
+2. **One-to-one back side.** `one(target, { from: 'pinnedBy' })` names the
+   owning relation on the target (a `one()` with the foreign key, pointing back
+   here). Works for self relations (`partnerOf: one(people, { from: 'partner' })`)
+   and tables linked more than once. `many(target, { from: 'editor' })` does
+   the same for lists. Wrong names fail at `kastor()` with a hint listing the
+   valid owners. The back side is nullable, holds no key, and needs no column.
+3. **updatedAt.** Column modifier `t.datetime().defaultNow().updatedAt()`
+   (also for `date` and `time`). Optional on input, `Date` on output. The
+   client sets it on create when left out, and on update, upsert update,
+   updateMany, nested updates, connect and disconnect, soft delete and
+   restore, unless the data sets it. It is client behaviour only:
+   `ColumnIR` has no flag for it, so diffs and DDL are unchanged. For
+   `db pull` there is nothing to introspect; the Prisma importer can map
+   `@updatedAt` to `.updatedAt()`.
+
+The conformance fixture now has `tag_votes` (composite key to `post_tags`),
+`profiles.mentor_id` (users linked to profiles twice, read through
+`users.profile` / `users.mentee` with `from`) and `posts.updated_at`. Dialect
+`resetWithDdl` users get the new table and columns automatically. Unit tests:
+`test/core-schema-extras.test.ts`, plus `test/core-types.test-d.ts`.
+
+Also fixed on the way: a native upsert on a table whose key has a JS side
+default (`t.uuid().defaultRandom()`) now always uses the `where` values as the
+conflict key instead of a freshly generated one.

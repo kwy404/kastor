@@ -65,6 +65,7 @@ import {
   hasRelations,
   pkWhere,
   plainUpdate,
+  touchUpdatedAt,
   uniqueWhere,
   updateRecord,
   type Session,
@@ -712,7 +713,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
     checkKeys(m.key, method, args, DELETE_KEYS);
     const where = uniqueWhere(s, m, args.where, method, hard);
     if (softDelete && !hard) {
-      const updated = await s.run({ kind: 'update', table: m.table, where, data: { [softDelete.column]: { op: 'set', value: new Date() } }, returning: allFields(m) }, m.key);
+      const updated = await s.run({ kind: 'update', table: m.table, where, data: touchUpdatedAt(m, { [softDelete.column]: { op: 'set', value: new Date() } }), returning: allFields(m) }, m.key);
       if (!updated) throw errors.notFound(m.key, method, args.where);
       const selection = scalarSelection(m, args);
       return selection ? projectRow(updated, selection) : readBackWithDeleted(s, updated, args);
@@ -753,7 +754,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
   const deleteMany = async (s: SessionImpl, raw: unknown, method: string, hard: boolean): Promise<{ count: number }> => {
     const where = manyWhere(s, method, raw, hard);
     if (softDelete && !hard) {
-      const res = await s.run({ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [softDelete.column]: { op: 'set', value: new Date() } } }, m.key);
+      const res = await s.run({ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: touchUpdatedAt(m, { [softDelete.column]: { op: 'set', value: new Date() } }) }, m.key);
       return { count: Array.isArray(res) ? res.length : res.count };
     }
     return s.run({ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }, m.key);
@@ -941,7 +942,8 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           table: m.table,
           conflict,
           where: uniqueWhere(session, m, args.where, 'upsert'),
-          create: createRow(m, args.create as Record<string, unknown>, 'upsert'),
+          // The unique values of `where` win over JS defaults (a random uuid key must not dodge the conflict).
+          create: { ...createRow(m, args.create as Record<string, unknown>, 'upsert'), ...conflict },
           update: plainUpdate(m, args.update, 'upsert'),
           returning: selection,
         };
@@ -981,7 +983,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
           const args = argsObject(m, 'delete', raw, true);
           const where = uniqueWhere(session, m, args.where, 'delete');
           return softDelete
-            ? [{ kind: 'update', table: m.table, where, data: { [softDelete.column]: { op: 'set', value: new Date() } }, returning: allFields(m) }]
+            ? [{ kind: 'update', table: m.table, where, data: touchUpdatedAt(m, { [softDelete.column]: { op: 'set', value: new Date() } }), returning: allFields(m) }]
             : [{ kind: 'delete', table: m.table, where, returning: scalarSelection(m, args) ?? allFields(m) }];
         },
       ) as never,
@@ -991,13 +993,13 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
         () => {
           const where = manyWhere(session, 'deleteMany', raw, false);
           return softDelete
-            ? [{ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [softDelete.column]: { op: 'set', value: new Date() } } }]
+            ? [{ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: touchUpdatedAt(m, { [softDelete.column]: { op: 'set', value: new Date() } }) }]
             : [{ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }];
         },
         () => {
           const where = manyWhere(session, 'deleteMany', raw, false);
           return softDelete
-            ? plan({ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [softDelete.column]: { op: 'set', value: new Date() } } }, countOf)
+            ? plan({ kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: touchUpdatedAt(m, { [softDelete.column]: { op: 'set', value: new Date() } }) }, countOf)
             : plan({ kind: 'deleteMany', table: m.table, ...(where ? { where } : {}) }, countOf);
         },
       ) as never,
@@ -1017,7 +1019,7 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
       const sd = requireSoft('restore');
       const build = (s: SessionImpl): QueryIR & { kind: 'updateMany' } => {
         const where = and(manyWhere(s, 'restore', raw, true), { kind: 'null', column: sd.column, negate: true });
-        return { kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: { [sd.column]: { op: 'set', value: null } } };
+        return { kind: 'updateMany', table: m.table, ...(where ? { where } : {}), data: touchUpdatedAt(m, { [sd.column]: { op: 'set', value: null } }) };
       };
       return q(async (s) => {
         const res = await s.run(build(s), m.key);

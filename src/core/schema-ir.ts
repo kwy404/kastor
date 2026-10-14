@@ -4,7 +4,7 @@
  */
 import { errors } from './errors';
 import type { ColumnIR, EnumIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR } from './ir';
-import { isColumn, isTable, type AnyColumn, type AnyTable } from './schema';
+import { ForeignKeyBuilder, isColumn, isTable, type AnyColumn, type AnyTable } from './schema';
 
 /** Postgres limits identifiers to 63 bytes; long generated names get a short hash suffix. */
 export function constraintName(...parts: string[]): string {
@@ -117,6 +117,35 @@ export function tableToIR(tbl: AnyTable): TableIR {
       onDelete: ref.options.onDelete ?? 'no action',
       onUpdate: ref.options.onUpdate ?? 'no action',
     });
+  }
+
+  for (const fk of meta.options.foreignKeys?.(meta.columns) ?? []) {
+    if (!(fk instanceof ForeignKeyBuilder)) {
+      throw errors.schema(`The foreignKeys option of table "${meta.name}" must return foreignKey(...) entries.`, 'Example: foreignKeys: (c) => [foreignKey([c.a, c.b], () => [other.x, other.y])].');
+    }
+    for (const c of fk.columns) checkOwnColumn(meta.name, c, 'foreignKeys');
+    const targets = fk.targets();
+    const refTable = targets[0]?.tableName;
+    if (!Array.isArray(targets) || targets.length !== fk.columns.length || targets.some((c) => !isColumn(c) || c.tableName === undefined || c.tableName !== refTable)) {
+      throw errors.schema(
+        `A foreign key of table "${meta.name}" on (${fk.columns.map((c) => c.key).join(', ')}) must point at as many columns of one other table.`,
+        'Return the referenced columns in the same order: () => [other.a, other.b].',
+      );
+    }
+    const cols = fk.columns.map((c) => c.name);
+    foreignKeys.push({
+      name: fk.options.name ?? constraintName(meta.name, ...cols, 'fkey'),
+      columns: cols,
+      refTable: refTable!,
+      refColumns: targets.map((c) => c.name),
+      onDelete: fk.options.onDelete ?? 'no action',
+      onUpdate: fk.options.onUpdate ?? 'no action',
+    });
+  }
+  const fkNames = new Set<string>();
+  for (const fk of foreignKeys) {
+    if (fkNames.has(fk.name)) throw errors.schema(`Table "${meta.name}" has two foreign keys named "${fk.name}".`, 'Give one of them another name with { name }.');
+    fkNames.add(fk.name);
   }
 
   return { name: meta.name, columns: columnIRs, primaryKey, indexes, foreignKeys };

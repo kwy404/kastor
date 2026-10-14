@@ -126,7 +126,13 @@ type OneKeys<R, K> = { [N in RelKey<R, K>]: Rel<R, K, N> extends One<any, any> ?
 
 /** Foreign key fields of the source for a to-one relation, never when the source does not hold them. */
 type OwnedFields<Src extends AnyTable, Rl> =
-  Rl extends One<infer T, infer F> ? (F extends readonly [] ? RefKeys<Src, T['$table']['name']> : F[number] & keyof ColumnsOf<Src> & string) : never;
+  Rl extends One<infer T, infer F, infer B>
+    ? true extends B
+      ? never
+      : F extends readonly []
+        ? RefKeys<Src, T['$table']['name']>
+        : F[number] & keyof ColumnsOf<Src> & string
+    : never;
 
 type OwnerOneKeys<S extends SchemaShape, R, K extends keyof S> = {
   [N in OneKeys<R, K>]: [OwnedFields<S[K], Rel<R, K, N>>] extends [never] ? never : N;

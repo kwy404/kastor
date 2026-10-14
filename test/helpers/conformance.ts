@@ -644,6 +644,61 @@ export function runConformance(name: string, makeDb: () => Promise<ConformanceTa
       expect(d.posts).toEqual([]);
     });
 
+    test('composite foreign keys: includes, filters, violations and cascades', async () => {
+      await db.tagVotes.createMany({ data: [{ postId: ids.engine, tagId: ids.math }, { postId: ids.engine, tagId: ids.math, value: 3 }, { postId: ids.cobol, tagId: ids.history, value: -1 }] });
+      const link = await db.postTags.findUniqueOrThrow({ where: { postId: ids.engine, tagId: ids.math }, include: { votes: { orderBy: { value: 'asc' } }, _count: true } });
+      expect(link.votes.map((v) => v.value)).toEqual([1, 3]);
+      expect(link._count.votes).toBe(2);
+      const vote = await db.tagVotes.findFirstOrThrow({ where: { value: -1 }, include: { postTag: { include: { tag: true } } } });
+      expect(vote.postTag.tag.name).toBe('history');
+      const voted = await db.postTags.findMany({ where: { votes: { some: { value: { gt: 2 } } } }, select: { postId: true, tagId: true } });
+      expect(voted).toEqual([{ postId: ids.engine, tagId: ids.math }]);
+      const viaRelation = await db.tagVotes.create({ data: { postTag: { connect: { postId: ids.cobol, tagId: ids.history } }, value: 7 } });
+      expect([viaRelation.postId, viaRelation.tagId]).toEqual([ids.cobol, ids.history]);
+      if (db.$dialect.name !== 'mongodb') {
+        await expectError(db.tagVotes.create({ data: { postId: ids.kernel, tagId: ids.math } }), 'FOREIGN_KEY_VIOLATION');
+      }
+      await db.postTags.delete({ where: { postId: ids.cobol, tagId: ids.history } });
+      expect(await db.tagVotes.count({ where: { postId: ids.cobol } })).toBe(0);
+      expect(await db.tagVotes.count()).toBe(2);
+    });
+
+    test('one-to-one back sides named with from', async () => {
+      const adaProfile = await db.profiles.findFirstOrThrow({ where: { userId: ids.ada } });
+      await db.profiles.update({ where: { id: adaProfile.id }, data: { mentor: { connect: { id: ids.grace } } } });
+      const grace = await db.users.findUniqueOrThrow({ where: { id: ids.grace }, include: { profile: true, mentee: { include: { user: { select: { email: true } } } } } });
+      expect(grace.profile?.bio).toBe('Rear admiral');
+      expect(grace.mentee?.id).toBe(adaProfile.id);
+      expect(grace.mentee?.user.email).toBe('ada@acme.com');
+      const ada = await db.users.findUniqueOrThrow({ where: { id: ids.ada }, include: { profile: { include: { mentor: true } }, mentee: true } });
+      expect(ada.profile?.mentor?.email).toBe('grace@acme.com');
+      expect(ada.mentee).toBeNull();
+      const mentors = await db.users.findMany({ where: { mentee: { isNot: null } }, select: { id: true } });
+      expect(mentors).toEqual([{ id: ids.grace }]);
+      await db.users.update({ where: { id: ids.grace }, data: { mentee: { disconnect: true } } });
+      expect((await db.profiles.findUniqueOrThrow({ where: { id: adaProfile.id } })).mentorId).toBeNull();
+    });
+
+    test('updatedAt columns follow every write', async () => {
+      const past = new Date('2020-01-01T00:00:00.000Z');
+      const created = await db.posts.create({ data: { title: 'Stamped', authorId: ids.linus } });
+      expect(created.updatedAt).toBeInstanceOf(Date);
+      expect(Math.abs(created.updatedAt.getTime() - Date.now())).toBeLessThan(5 * 60 * 1000);
+      const old = await db.posts.create({ data: { title: 'Old stamp', authorId: ids.linus, updatedAt: past } });
+      expect(old.updatedAt.getTime()).toBe(past.getTime());
+      const touched = await db.posts.update({ where: { id: old.id }, data: { views: { increment: 1 } } });
+      expect(touched.updatedAt.getTime()).toBeGreaterThan(past.getTime());
+      const kept = await db.posts.update({ where: { id: old.id }, data: { views: 2, updatedAt: past } });
+      expect(kept.updatedAt.getTime()).toBe(past.getTime());
+      await db.posts.updateMany({ where: { id: old.id }, data: { views: 3 } });
+      expect((await db.posts.findUniqueOrThrow({ where: { id: old.id } })).updatedAt.getTime()).toBeGreaterThan(past.getTime());
+      await db.posts.update({ where: { id: old.id }, data: { updatedAt: past } });
+      const upserted = await db.posts.upsert({ where: { id: old.id }, create: { title: 'never', authorId: ids.linus }, update: { views: 4 } });
+      expect(upserted.updatedAt.getTime()).toBeGreaterThan(past.getTime());
+      expect(upserted.id).toBe(old.id);
+      expect(await db.posts.count({ where: { title: 'never' } })).toBe(0);
+    });
+
     test('delete returns the row and deleteMany counts', async () => {
       const t1 = await db.tags.create({ data: { name: 'del-1' } });
       await db.tags.createMany({ data: [{ name: 'del-2' }, { name: 'del-3' }] });

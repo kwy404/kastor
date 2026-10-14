@@ -48,6 +48,8 @@ export interface ColumnConfig {
   default?: ColumnDefaultIR;
   /** JS side default, called for every insert that leaves the column out. */
   defaultFn?: () => unknown;
+  /** Set to the current time by the client on every update. */
+  updatedAt?: boolean;
   references?: { target: () => AnyColumn; options: ReferenceOptions };
   /** Database column name when it differs from the property name. */
   dbName?: string;
@@ -125,6 +127,18 @@ export class Column<S extends ColumnState = ColumnState> {
   /** Raw SQL default expression, written into migrations as is. */
   defaultSql(expression: string): Column<Mod<S, { hasDefault: true }>> {
     return this.with({ default: { kind: 'sql', value: expression }, defaultFn: undefined });
+  }
+
+  /**
+   * Keeps the column at the time of the last write: the client sets it on
+   * create (when left out) and on every update, upsert update and updateMany.
+   * Datetime, date and time columns.
+   */
+  updatedAt(): Column<Mod<S, { hasDefault: true }>> {
+    if (!['datetime', 'date', 'time'].includes(this.config.type)) {
+      throw errors.schema(`updatedAt() needs a datetime, date or time column, got ${this.config.type}.`, 'Use t.datetime().defaultNow().updatedAt().');
+    }
+    return this.with({ updatedAt: true });
   }
 
   /** Adds a unique index on this column. */
@@ -278,6 +292,34 @@ export class IndexBuilder {
   }
 }
 
+/** A foreign key over one or more columns, for the `foreignKeys` table option. */
+export class ForeignKeyBuilder {
+  constructor(
+    readonly columns: readonly AnyColumn[],
+    readonly targets: () => readonly AnyColumn[],
+    readonly options: ReferenceOptions = {},
+  ) {
+    if (!Array.isArray(columns) || columns.length === 0 || columns.some((c) => !isColumn(c))) {
+      throw errors.schema('foreignKey() needs the columns of the table.', 'Example: foreignKey([c.postId, c.tagId], () => [postTags.postId, postTags.tagId]).');
+    }
+    if (typeof targets !== 'function') {
+      throw errors.schema('foreignKey() takes the referenced columns as a function.', 'Wrap them so tables can reference each other in any order: () => [other.a, other.b].');
+    }
+  }
+}
+
+/**
+ * Foreign key over several columns (composite keys), for the `foreignKeys`
+ * table option. Single columns can use `.references()` instead.
+ *
+ * ```ts
+ * table('votes', { ... }, { foreignKeys: (c) => [foreignKey([c.postId, c.tagId], () => [postTags.postId, postTags.tagId], { onDelete: 'cascade' })] })
+ * ```
+ */
+export function foreignKey(columns: AnyColumn[], targets: () => AnyColumn[], options: ReferenceOptions = {}): ForeignKeyBuilder {
+  return new ForeignKeyBuilder(columns, targets, options);
+}
+
 export function index(...columns: AnyColumn[]): IndexBuilder {
   return new IndexBuilder(columns, false);
 }
@@ -301,6 +343,8 @@ export interface TableOptions<C extends ColumnMap = ColumnMap> {
   indexes?(columns: C): IndexBuilder[];
   /** Composite primary key: `primaryKey: (p) => [p.postId, p.tagId]`. */
   primaryKey?(columns: C): AnyColumn[];
+  /** Foreign keys over several columns: `foreignKeys: (c) => [foreignKey([c.a, c.b], () => [other.x, other.y])]`. */
+  foreignKeys?(columns: C): ForeignKeyBuilder[];
   /**
    * Turns deletes into updates that set this nullable datetime column. Reads
    * skip deleted rows unless `withDeleted: true`.
@@ -397,11 +441,25 @@ export interface OneConfig<T extends AnyTable, F extends readonly string[]> {
   references: readonly (keyof T['$table']['columns'] & string)[];
 }
 
-export interface One<T extends AnyTable = AnyTable, F extends readonly string[] = readonly string[]> {
+/** The side without the foreign key, tied to the relation that owns it. */
+export interface BackConfig {
+  /**
+   * Name of the relation on the target model that holds the foreign key and
+   * points back here, for example `one(posts, { from: 'pinnedBy' })`.
+   * Needed when two tables are linked more than once, and for self relations.
+   */
+  from: string;
+}
+
+export interface One<T extends AnyTable = AnyTable, F extends readonly string[] = readonly string[], B extends boolean = boolean> {
   readonly kind: 'one';
   readonly target: T;
   readonly fields: F | undefined;
   readonly references: readonly string[] | undefined;
+  /** Owning relation on the target (back side only). */
+  readonly from: string | undefined;
+  /** Type level marker: true on the back side declared with `from`. */
+  readonly back?: B;
 }
 
 export interface ManyConfig<T extends AnyTable, Refs extends readonly string[]> {
@@ -415,6 +473,8 @@ export interface ManyConfig<T extends AnyTable, Refs extends readonly string[]> 
    * where `fields` point at the source and `references` at the target.
    */
   through?: AnyTable | { table: AnyTable; fields: readonly string[]; references: readonly string[] };
+  /** Name of the to-one relation on the target that holds the foreign key (see `BackConfig`). */
+  from?: string;
 }
 
 export interface Many<T extends AnyTable = AnyTable, Refs extends readonly string[] = readonly string[]> {
@@ -423,6 +483,7 @@ export interface Many<T extends AnyTable = AnyTable, Refs extends readonly strin
   readonly fields: readonly string[] | undefined;
   readonly references: Refs | undefined;
   readonly through: ManyConfig<T, Refs>['through'];
+  readonly from: string | undefined;
 }
 
 export type AnyRelation = One<AnyTable, readonly string[]> | Many<AnyTable, readonly string[]>;
@@ -432,24 +493,35 @@ export type AnyRelation = One<AnyTable, readonly string[]> | Many<AnyTable, read
  * `{ fields, references }` (kastor can also infer them from `.references()`);
  * on the other side call `one(target)` alone.
  */
-export function one<T extends AnyTable, const F extends readonly string[] = readonly []>(target: T, config?: OneConfig<T, F>): One<T, F> {
+export function one<T extends AnyTable>(target: T, config: BackConfig): One<T, readonly [], true>;
+export function one<T extends AnyTable, const F extends readonly string[] = readonly []>(target: T, config?: OneConfig<T, F>): One<T, F, false>;
+export function one(target: AnyTable, config?: OneConfig<AnyTable, readonly string[]> | BackConfig): One<AnyTable, readonly string[], boolean> {
   if (!isTable(target)) throw errors.schema('one() needs a table.', 'Pass a table: one(users, { fields: [...], references: [...] }).');
+  if (config && 'from' in config) {
+    if (typeof config.from !== 'string' || config.from.length === 0 || 'fields' in config) {
+      throw errors.schema(`one(${target.$table.name}, { from }) needs the name of the owning relation, and no fields.`, "Example: one(posts, { from: 'pinnedBy' }).");
+    }
+    return Object.freeze({ kind: 'one' as const, target, fields: undefined, references: undefined, from: config.from });
+  }
   if (config && (!Array.isArray(config.fields) || !Array.isArray(config.references) || config.fields.length !== config.references.length || config.fields.length === 0)) {
     throw errors.schema(
       `one(${target.$table.name}) needs fields and references of the same, non zero length.`,
       "Example: one(users, { fields: ['authorId'], references: ['id'] }).",
     );
   }
-  return Object.freeze({ kind: 'one' as const, target, fields: config?.fields, references: config?.references });
+  return Object.freeze({ kind: 'one' as const, target, fields: config?.fields, references: config?.references, from: undefined });
 }
 
 /** To-many relation, or many-to-many with `{ through: joinTable }`. */
 export function many<T extends AnyTable, const Refs extends readonly string[] = readonly []>(target: T, config: ManyConfig<T, Refs> = {}): Many<T, Refs> {
   if (!isTable(target)) throw errors.schema('many() needs a table.', 'Pass a table: many(posts).');
+  if (config.from !== undefined && (typeof config.from !== 'string' || config.from.length === 0 || config.fields !== undefined || config.through !== undefined)) {
+    throw errors.schema(`many(${target.$table.name}, { from }) needs the name of the owning relation, without fields or through.`, "Example: many(posts, { from: 'editor' }).");
+  }
   if ((config.fields === undefined) !== (config.references === undefined) && config.through === undefined) {
     throw errors.schema(`many(${target.$table.name}) needs both fields and references, or neither.`, "Example: many(comments, { fields: ['id'], references: ['parentId'] }).");
   }
-  return Object.freeze({ kind: 'many' as const, target, fields: config.fields, references: config.references, through: config.through });
+  return Object.freeze({ kind: 'many' as const, target, fields: config.fields, references: config.references, through: config.through, from: config.from });
 }
 
 export function isRelation(value: unknown): value is AnyRelation {

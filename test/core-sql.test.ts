@@ -142,7 +142,8 @@ describe('generic ANSI dialect', () => {
     const [ins] = ansi.tags.create({ data: { name: 'x' } }).toSQL();
     expect(ins).toEqual({ sql: 'INSERT INTO "tags" ("name") VALUES (?)', params: ['x'] });
     const [upd] = ansi.posts.update({ where: { id: '00000000-0000-4000-8000-000000000000' }, data: { views: { increment: 2 }, title: 'T' } }).toSQL();
-    expect(upd!.sql).toBe('UPDATE "posts" SET "views" = "posts"."views" + ?, "title" = ? WHERE "posts"."id" = ?');
+    expect(upd!.sql).toBe('UPDATE "posts" SET "views" = "posts"."views" + ?, "title" = ?, "updated_at" = ? WHERE "posts"."id" = ?');
+    expect(upd!.params[2]).toBeInstanceOf(Date);
     expect(ansi.tags.deleteMany({ where: { name: { startsWith: 'a' } } }).toSQL()[0]!.sql).toBe('DELETE FROM "tags" WHERE "tags"."name" LIKE ? ESCAPE \'!\'');
     const [many] = ansi.tags.createMany({ data: [{ name: 'a' }, { name: 'b' }] }).toSQL();
     expect(many).toEqual({ sql: 'INSERT INTO "tags" ("name") VALUES (?), (?)', params: ['a', 'b'] });

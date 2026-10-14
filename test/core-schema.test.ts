@@ -77,7 +77,7 @@ describe('table()', () => {
 describe('toSchemaIR', () => {
   it('converts the fixture with keys, indexes, foreign keys and enums', () => {
     const ir = toSchemaIR(fixture.schema);
-    expect(ir.tables.map((tb) => tb.name)).toEqual(['users', 'profiles', 'posts', 'tags', 'post_tags', 'comments']);
+    expect(ir.tables.map((tb) => tb.name)).toEqual(['users', 'profiles', 'posts', 'tags', 'post_tags', 'tag_votes', 'comments']);
     const posts = ir.tables.find((tb) => tb.name === 'posts')!;
     expect(posts.primaryKey).toEqual(['id']);
     expect(posts.indexes).toEqual([
