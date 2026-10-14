@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mascot, mascotHead } from './art/mascot.mjs';
 import { dam, THEMES, wordmark } from './art/scene.mjs';
@@ -64,7 +64,7 @@ export function brandCard(w, h) {
   <div style="font-size:${21 * scale}px;color:#a9bde6;margin-top:${14 * scale}px;max-width:${660 * scale}px;line-height:1.4">Schema in plain TypeScript, types inferred as you type. No generate step. Nested includes in one query.</div>
   <div style="display:flex;flex-wrap:wrap;gap:${9 * scale}px;margin-top:${26 * scale}px;max-width:${580 * scale}px">${chips(shown)}<span class="chip" style="padding-left:14px">+4 more</span></div>
 </div>
-<svg style="position:absolute;right:${30 * scale}px;bottom:${86 * scale}px;width:${210 * scale}px;height:${170 * scale}px" viewBox="0 0 210 170">${dam({ w: 210, h: 170, n: 5, t, dims: false })}</svg>
+${w >= 1280 ? `<svg style="position:absolute;right:${30 * scale}px;bottom:${86 * scale}px;width:${210 * scale}px;height:${170 * scale}px" viewBox="0 0 210 170">${dam({ w: 210, h: 170, n: 5, t, dims: false })}</svg>` : ""}
 <div class="tb"><span>PROJECT</span><span><b>kastor 0.1.0</b></span><span>DRAWN BY</span><span><b>kwy404</b></span></div>`,
   );
 }
@@ -130,9 +130,9 @@ export async function renderImages(root, guides) {
   for (const [name, html, png, w, h] of jobs) {
     const file = join(work, `${name}.html`);
     writeFileSync(file, html);
-    const ok = await shoot(browser, profile, file, png, w, h);
+    const ok = await shoot(browser, join(profile, name), file, png, w, h);
     results.push([png, ok]);
-    console.log(`${ok ? 'rendered' : 'FAILED  '} ${png.slice(root.length + 1)}`);
+    console.log(`${ok ? 'rendered' : 'FAILED  '} ${relative(root, png)}`);
   }
   try {
     rmSync(work, { recursive: true, force: true });
