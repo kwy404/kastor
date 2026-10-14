@@ -1,3 +1,5 @@
 #!/usr/bin/env node
-// Placeholder launcher for the kastor command line. The migrate owner fills it in.
-import '../dist/cli.js';
+// kastor command line: migrations, db push and pull, seed, studio and doctor.
+import { run } from '../dist/cli.js';
+
+await run();
