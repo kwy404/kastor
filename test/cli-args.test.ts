@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ArgsError, COMMANDS, levenshtein, parseArgs, parseRenameFlags, renderHelp, resolveCommand, suggest } from '../src/cli/args';
-import { ScriptedPrompter } from '../src/cli/prompt';
+import { PassThrough } from 'node:stream';
+import { PromptCancelled, ScriptedPrompter, TerminalPrompter } from '../src/cli/prompt';
 import { detectColor, makeColors, MemoryStream, padEnd, stripAnsi, Ui, visibleWidth } from '../src/cli/ui';
 
 const plain = makeColors(false);
@@ -158,5 +159,58 @@ describe('ScriptedPrompter', () => {
     expect(await p.select('Pick', [{ label: 'a', value: 'A' }, { label: 'b', value: 'B' }])).toBe('B');
     expect(p.asked).toEqual(['Sure?', 'Pick', 'Name', 'Other', 'Pick']);
     await expect(p.confirm('More?')).rejects.toThrow(/No scripted answer/);
+  });
+});
+
+describe('TerminalPrompter', () => {
+  const setup = () => {
+    const input = new PassThrough();
+    const out = new MemoryStream();
+    const ui = new Ui({ stdout: out, color: false, env: {} });
+    return { input, out, prompter: new TerminalPrompter(ui, input as never) };
+  };
+  const later = (fn: () => void) => setTimeout(fn, 10);
+
+  it('selects with the arrow keys and enter', async () => {
+    const { input, out, prompter } = setup();
+    later(() => input.write('\u001b[B\u001b[B\u001b[A\r'));
+    const value = await prompter.select('Pick one', [
+      { label: 'first', value: 1 },
+      { label: 'second', value: 2, hint: 'the middle' },
+      { label: 'third', value: 3 },
+    ]);
+    expect(value).toBe(2);
+    expect(out.text).toContain('Pick one');
+    expect(out.text).toContain('-> second');
+  });
+
+  it('confirms with y, n or the default', async () => {
+    const a = setup();
+    later(() => a.input.write('y'));
+    expect(await a.prompter.confirm('Go?')).toBe(true);
+    const b = setup();
+    later(() => b.input.write('\r'));
+    expect(await b.prompter.confirm('Go?', true)).toBe(true);
+    const c = setup();
+    later(() => c.input.write('n'));
+    expect(await c.prompter.confirm('Go?', true)).toBe(false);
+  });
+
+  it('reads text with backspace and falls back to the default', async () => {
+    const a = setup();
+    later(() => a.input.write('abx\u007fc\r'));
+    expect(await a.prompter.text('Name')).toBe('abc');
+    const b = setup();
+    later(() => b.input.write('\r'));
+    expect(await b.prompter.text('Name', 'init')).toBe('init');
+  });
+
+  it('cancels on ctrl+c and escape', async () => {
+    const a = setup();
+    later(() => a.input.write('\u0003'));
+    await expect(a.prompter.confirm('Go?')).rejects.toBeInstanceOf(PromptCancelled);
+    const b = setup();
+    later(() => b.input.write('\u001b'));
+    await expect(b.prompter.select('Pick', [{ label: 'a', value: 1 }])).rejects.toBeInstanceOf(PromptCancelled);
   });
 });
