@@ -288,6 +288,7 @@ describe('db pull codegen', () => {
     expect(code).toContain('parentId: t.int().nullable().references((): AnyColumn => posts.id),');
     expect(code).toContain('posts: many(posts, { through: postTags }),');
     expect(code).toContain("author: one(appUsers, { fields: ['authorId'], references: ['id'] }),");
+    mkdirSync(resolve('.kastor'), { recursive: true });
     const dir = mkdtempSync(join(resolve('.kastor'), 'pull-'));
     try {
       const file = join(dir, 'schema.ts');
