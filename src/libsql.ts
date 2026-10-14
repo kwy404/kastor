@@ -9,14 +9,14 @@
  * ```
  */
 import type { Adapter } from './core/ir';
-import { sqliteDialect } from './dialects/sqlite/dialect';
+import { libsqlDialect } from './dialects/sqlite/dialect';
 import { libsqlExecutor, type LibsqlClientLike } from './dialects/sqlite/executor-libsql';
 
 /** Adapter for an `@libsql/client` Client. */
 export function libsql(client: LibsqlClientLike): Adapter {
-  return { dialect: sqliteDialect, executor: libsqlExecutor(client) };
+  return { dialect: libsqlDialect, executor: libsqlExecutor(client) };
 }
 
-export { sqliteDialect as libsqlDialect } from './dialects/sqlite/dialect';
+export { libsqlDialect } from './dialects/sqlite/dialect';
 export { libsqlExecutor } from './dialects/sqlite/executor-libsql';
 export type { LibsqlClientLike, LibsqlResultLike, LibsqlStatementLike, LibsqlTransactionLike, LibsqlValue } from './dialects/sqlite/executor-libsql';

@@ -64,8 +64,22 @@ export function sqliteTextMatch(column: Sql, mode: TextMatchMode, value: Sql, in
   }
 }
 
-export function sqliteHooks(limits: { maxParams: number; maxInList: number } = { maxParams: 32766, maxInList: 10000 }): SqlHooks {
+export interface SqliteHookOptions {
+  maxParams?: number;
+  maxInList?: number;
+  /**
+   * Read bigint columns as text. For drivers that turn every INTEGER into a JS
+   * number (libSQL in its default `intMode`, D1), so values past 2^53 neither
+   * throw nor lose digits.
+   */
+  bigintAsText?: boolean;
+}
+
+export function sqliteHooks(options: SqliteHookOptions = {}): SqlHooks {
   return defineHooks({
+    ...(options.bigintAsText
+      ? { selectColumn: (expr: Sql, column: ColumnIR) => (column.type === 'bigint' ? q`CAST(${expr} AS TEXT)` : expr) }
+      : {}),
     quoteIdent: quoteDouble,
     placeholder: placeholderQuestion,
     paginate: limitOffset('-1'),
@@ -77,8 +91,8 @@ export function sqliteHooks(limits: { maxParams: number; maxInList: number } = {
     nullsOrder: true,
     encode: encodeSqlite,
     decode: decodeSqlite,
-    maxParams: limits.maxParams,
-    maxInList: limits.maxInList,
+    maxParams: options.maxParams ?? 32766,
+    maxInList: options.maxInList ?? 10000,
     multiRowInsert: true,
     mutationSelfReference: true,
   });
@@ -96,8 +110,11 @@ export function makeSqliteDialect(hooks: SqlHooks, transactions = true): Dialect
   });
 }
 
-/** SQLite 3.35+ (RETURNING) through better-sqlite3, node:sqlite, bun:sqlite or libSQL. */
+/** SQLite 3.35+ (RETURNING) through better-sqlite3, node:sqlite or bun:sqlite. */
 export const sqliteDialect: Dialect = makeSqliteDialect(sqliteHooks());
 
-/** Cloudflare D1 caps a statement at 100 bound parameters and has no interactive transactions. */
-export const d1Dialect: Dialect = makeSqliteDialect(sqliteHooks({ maxParams: 100, maxInList: 90 }), false);
+/** libSQL and Turso: bigint columns are read as text, whatever `intMode` the client uses. */
+export const libsqlDialect: Dialect = makeSqliteDialect(sqliteHooks({ bigintAsText: true }));
+
+/** Cloudflare D1 caps a statement at 100 bound parameters, returns integers as doubles and has no interactive transactions. */
+export const d1Dialect: Dialect = makeSqliteDialect(sqliteHooks({ maxParams: 100, maxInList: 90, bigintAsText: true }), false);

@@ -135,6 +135,14 @@ export function createTableSql(flavor: PgFlavor, table: TableIR): string[] {
     lines.push(`  CONSTRAINT ${quoteIdent(`${table.name}_pkey`)} PRIMARY KEY (${table.primaryKey.map(quoteIdent).join(', ')})`);
   }
   for (const fk of table.foreignKeys) lines.push(`  ${foreignKeyClause(fk)}`);
+  if (flavor === 'cockroach') {
+    // Inline indexes are created with the table. A separate CREATE INDEX runs a
+    // backfill job, which takes seconds even on an empty table.
+    for (const i of table.indexes) {
+      lines.push(`  ${i.unique ? 'UNIQUE ' : ''}INDEX ${quoteIdent(i.name)} (${i.columns.map(quoteIdent).join(', ')})`);
+    }
+    return [`CREATE TABLE ${quoteIdent(table.name)} (\n${lines.join(',\n')}\n)`];
+  }
   return [`CREATE TABLE ${quoteIdent(table.name)} (\n${lines.join(',\n')}\n)`, ...table.indexes.map((i) => createIndexSql(table.name, i))];
 }
 
