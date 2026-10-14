@@ -244,7 +244,11 @@ export function typeFromDeclared(declared: string, column: ColumnIR): void {
   else column.type = 'decimal';
 }
 
-const normalize = (sql: string) => sql.replace(/\s+/g, ' ').trim().toLowerCase();
+/** Lower case, single spaces, without one pair of wrapping parentheses (SQLite drops them in dflt_value). */
+const normalize = (sql: string) => {
+  const flat = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  return /^\(.*\)$/.test(flat) ? flat.slice(1, -1).trim() : flat;
+};
 const nowDefaults = new Map([
   [normalize(NOW_DATETIME), 'datetime'],
   [normalize(NOW_DATE), 'date'],
