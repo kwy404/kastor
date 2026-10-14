@@ -68,6 +68,7 @@ export async function migrateDev(ctx: CliContext): Promise<number> {
       ...base,
       ...h,
       version: ctx.version,
+      onWritten: (m) => ctx.ui.success(`Wrote ${ctx.ui.c.bold(rel(ctx, m.file))}`),
       createOnly: opt.bool(ctx, 'create-only'),
       get name() {
         return name;
@@ -90,7 +91,6 @@ export async function migrateDev(ctx: CliContext): Promise<number> {
       ui.warn('Cancelled. No migration was written.');
       return 1;
     }
-    ui.success(`Wrote ${ui.c.bold(rel(ctx, result.migration.file))}`);
     if (!result.applied) {
       ui.line();
       ui.box([`Review the SQL, then apply it with ${ui.c.cyan('kastor migrate dev')}`, `or ${ui.c.cyan('kastor migrate deploy')}.`]);

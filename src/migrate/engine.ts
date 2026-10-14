@@ -15,7 +15,7 @@ import {
 } from './diff';
 import { nextId, readLock, readMigrations, renderMigration, suggestName, writeLock, writeMigration, type LocalMigration } from './files';
 import { applyOp, rawSqlFor, type MigrationOp } from './ops';
-import { splitStatements } from './sql-split';
+import { splitStatements, stripLeadingComments } from './sql-split';
 
 export const MIGRATIONS_TABLE = '_kastor_migrations';
 
@@ -115,14 +115,45 @@ export function statementsOf(dialect: Pick<Dialect, 'splitScript'>, sql: string)
 
 /** Runs one migration file and records it, inside a transaction where DDL is transactional. */
 export async function applyMigration(adapter: Adapter, migration: LocalMigration): Promise<void> {
-  const { dialect, executor } = adapter;
+  const { dialect } = adapter;
   const statements = statementsOf(dialect, migration.sql);
-  const run = async (exec: Executor): Promise<void> => {
-    await runStatements(exec, statements, migration.id);
+  await runScript(adapter, statements, migration.id, async (exec) => {
     await dialect.migrationTable.record(exec, { id: migration.id, checksum: migration.checksum, appliedAt: new Date() });
+  });
+}
+
+const FK_OFF = /^\s*PRAGMA\s+foreign_keys\s*=\s*(OFF|0|false)\b/i;
+
+/**
+ * Runs statements as one unit: inside a transaction where DDL is
+ * transactional, statement by statement otherwise. SQLite table rebuilds need
+ * foreign keys off, which only works outside a transaction, so they are turned
+ * off around it and checked with `PRAGMA foreign_key_check` before commit.
+ */
+async function runScript(adapter: Adapter, statements: string[], label: string, after?: (exec: Executor) => Promise<void>): Promise<void> {
+  const { dialect, executor } = adapter;
+  const run = async (exec: Executor): Promise<void> => {
+    await runStatements(exec, statements, label);
+    if (fkOff) {
+      const broken = await exec.query('PRAGMA foreign_key_check', []);
+      if (broken.rows.length) {
+        const first = broken.rows[0]!;
+        throw new KastorError('MIGRATION_FAILED', `${label} leaves ${broken.rows.length} row(s) whose foreign key points nowhere, for example in ${String(first.table)} (to ${String(first.parent)}).`, {
+          hint: 'Fix or delete those rows in the migration before the tables are rebuilt.',
+          meta: { migration: label, rows: broken.rows.slice(0, 20) },
+        });
+      }
+    }
+    await after?.(exec);
   };
-  if (dialect.features.transactionalDdl && dialect.features.transactions) await executor.transaction(run);
-  else await run(executor);
+  const fkOff = dialect.name === 'sqlite' && statements.some((s) => FK_OFF.test(stripLeadingComments(s)));
+  if (fkOff) await executor.query('PRAGMA foreign_keys = OFF', []);
+  try {
+    if (dialect.features.transactionalDdl && dialect.features.transactions) await executor.transaction(run);
+    else await run(executor);
+  } finally {
+    if (fkOff) await executor.query('PRAGMA foreign_keys = ON', []);
+  }
 }
 
 async function runStatements(exec: Executor, statements: string[], label: string): Promise<void> {
@@ -236,6 +267,8 @@ export interface DevOptions extends ChangeOptions, MigrationHooks {
   createOnly?: boolean;
   /** kastor version, written in the file header. */
   version: string;
+  /** Called once the new migration file is on disk, before it is applied. */
+  onWritten?(migration: LocalMigration): void;
 }
 
 export type DevResult =
@@ -298,6 +331,7 @@ export async function dev(adapter: Adapter, target: SchemaIR, dir: string, optio
   const sql = renderMigration({ id, dialect: adapter.dialect.name, version: options.version, steps, warnings: diff.warnings });
   const migration = writeMigration(dir, id, sql);
   if (!st.lockDialect) writeLock(dir, adapter.dialect.name);
+  options.onWritten?.(migration);
   if (options.createOnly) return { kind: 'created', migration, diff, steps, applied: false, appliedPending };
   options.onApply?.(migration);
   const start = Date.now();
@@ -314,10 +348,7 @@ export async function push(adapter: Adapter, target: SchemaIR, options: ChangeOp
   if (!changes) return { kind: 'in-sync' };
   const { diff, steps } = changes;
   if (!(await gate(diff, steps, options))) return { kind: 'cancelled', diff };
-  const statements = steps.flatMap((s) => s.statements);
-  const { dialect, executor } = adapter;
-  if (dialect.features.transactionalDdl && dialect.features.transactions) await executor.transaction((tx) => runStatements(tx, statements, 'db push'));
-  else await runStatements(executor, statements, 'db push');
+  await runScript(adapter, steps.flatMap((s) => s.statements), 'db push');
   return { kind: 'pushed', diff, steps };
 }
 
@@ -326,7 +357,7 @@ export async function dropEverything(adapter: Adapter): Promise<PlannedStep[]> {
   const live = await adapter.dialect.introspect(adapter.executor);
   const { ops } = diffSchemas(live, { tables: [] }, { dialect: adapter.dialect });
   const steps = planStatements(adapter.dialect, live, ops);
-  await runStatements(adapter.executor, steps.flatMap((s) => s.statements), 'reset');
+  await runScript(adapter, steps.flatMap((s) => s.statements), 'reset');
   return steps;
 }
 

@@ -15,7 +15,7 @@ const STYLES = `
 html, body { height: 100%; }
 body { margin: 0; }
 .studio { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
-.studio-body { display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+.studio-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 0; }
 .studio-side { border-right: 1px solid var(--border); overflow: auto; min-height: 0; }
 .studio-main { overflow: auto; min-width: 0; min-height: 0; }
 .studio-side .sidebar { width: 100%; height: auto; border: 0; background: transparent; }
@@ -41,7 +41,7 @@ body { margin: 0; }
 .er-edge-end { fill: var(--muted-foreground); }
 .er-tools { position: absolute; top: .75rem; right: .75rem; display: flex; gap: .5rem; }
 .filter-chip { display: inline-flex; align-items: center; gap: .35rem; }
-@media (max-width: 760px) { .studio-body { grid-template-columns: 1fr; } .studio-side { display: none; } .studio-side.open { display: block; position: fixed; inset: 3.5rem 0 0 0; z-index: 30; background: var(--background); } }
+@media (max-width: 760px) { .studio-body { grid-template-columns: minmax(0, 1fr); } .studio-side { display: none; } .studio-side.open { display: block; position: fixed; inset: 3.5rem 0 0 0; z-index: 30; background: var(--background); } }
 `;
 
 export function renderPage(options: { version: string }): string {
@@ -65,12 +65,12 @@ export function renderPage(options: { version: string }): string {
     <div class="navbar-start gap-3">
       <button type="button" class="btn btn-ghost btn-sm md:hidden" id="menu-toggle" aria-label="Tables">Tables</button>
       <a href="#/" class="navbar-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>kastor studio</a>
-      <span class="badge badge-primary" id="dialect-badge">connecting</span>
+      <span class="badge badge-primary hidden sm:inline-flex" id="dialect-badge">connecting</span>
       <span class="text-xs text-muted-foreground hidden sm:inline">v${options.version}</span>
     </div>
     <nav class="navbar-end gap-2" aria-label="Studio">
-      <a href="#/diagram" class="btn btn-ghost btn-sm" id="diagram-link">Diagram</a>
-      <button type="button" class="btn btn-ghost btn-sm" id="refresh-schema" title="Read the schema again">Reload schema</button>
+      <a href="#/diagram" class="btn btn-ghost btn-sm hidden sm:inline-flex" id="diagram-link">Diagram</a>
+      <button type="button" class="btn btn-ghost btn-sm hidden sm:inline-flex" id="refresh-schema" title="Read the schema again">Reload schema</button>
       <button type="button" class="btn btn-outline btn-sm" id="theme-toggle" aria-label="Switch theme">Theme: system</button>
     </nav>
   </header>
@@ -81,6 +81,7 @@ export function renderPage(options: { version: string }): string {
       </div>
       <nav class="sidebar" aria-label="Tables">
         <div class="sidebar-section" id="table-list"><p class="sidebar-title">Tables</p></div>
+        <div class="sidebar-section"><p class="sidebar-title">Schema</p><a href="#/diagram" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4a2 2 0 0 1 2 2V14"/></svg><span class="sidebar-label">Diagram</span></a></div>
       </nav>
     </aside>
     <main class="studio-main p-4 md:p-6" id="view" tabindex="-1">

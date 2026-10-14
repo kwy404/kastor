@@ -108,7 +108,7 @@ export function formatStatement(stmt: string): string {
   return `${s.replace(/;\s*$/, '')};`;
 }
 
-function stripLeadingComments(stmt: string): string {
+export function stripLeadingComments(stmt: string): string {
   let s = stmt;
   for (;;) {
     const t = s.replace(/^\s+/, '');

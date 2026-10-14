@@ -56,7 +56,7 @@ type DialectLike = NonNullable<DiffOptions['dialect']>;
 /* Normalization                                                             */
 /* ------------------------------------------------------------------------ */
 
-const NOW = /^(now\(\)|current_timestamp(\(\d*\))?|localtimestamp(\(\d*\))?|getdate\(\)|getutcdate\(\)|sysdatetime\(\)|sysdate|systimestamp|datetime\('now'\)|transaction_timestamp\(\)|statement_timestamp\(\)|clock_timestamp\(\))$/i;
+const NOW = /^(strftime\('[^']*',\s*'now'\)|datetime\('now'(,\s*'[a-z]+')?\)|date\('now'\)|time\('now'\)|current_date|current_time(\(\d*\))?|now\(\)|current_timestamp(\(\d*\))?|localtimestamp(\(\d*\))?|getdate\(\)|getutcdate\(\)|sysdatetime\(\)|sysdate|systimestamp|datetime\('now'\)|transaction_timestamp\(\)|statement_timestamp\(\)|clock_timestamp\(\))$/i;
 const RANDOM = /^(gen_random_uuid\(\)|uuid_generate_v4\(\)|uuid\(\)|newid\(\)|sys_guid\(\)|lower\(hex\(randomblob\(16\)\)\)|random_uuid\(\))$/i;
 
 /** Turns introspected SQL defaults into the neutral kinds when they mean the same thing. */
@@ -168,7 +168,7 @@ export const DEFAULT_STRING_LENGTH = 255;
 const norm = (s: string | undefined): string => (s ?? '').toLowerCase().replace(/\s+/g, '');
 
 /** Asks the dialect whether two columns produce the same DDL; false when it cannot tell. */
-function sameInDialect(dialect: DialectLike | undefined, table: TableIR, from: ColumnIR, to: ColumnIR): boolean {
+function sameInDialect(dialect: DialectLike | undefined, table: TableIR, from: ColumnIR, to: ColumnIR, context?: SchemaIR): boolean {
   if (!dialect) return false;
   try {
     const strip = (c: ColumnIR): ColumnIR => {
@@ -180,7 +180,7 @@ function sameInDialect(dialect: DialectLike | undefined, table: TableIR, from: C
     };
     const render = (c: ColumnIR): string => {
       const t: TableIR = { ...table, columns: [...table.columns.filter((x) => x.name !== to.name), c] };
-      const schema: SchemaIR = { tables: [t] };
+      const schema: SchemaIR = withTable(context, t);
       return dialect.ddl({ kind: 'addColumn', table: table.name, column: c }, schema).join('\n');
     };
     const a = render(strip(from));
@@ -190,11 +190,21 @@ function sameInDialect(dialect: DialectLike | undefined, table: TableIR, from: C
   }
 }
 
-function sameFkInDialect(dialect: DialectLike | undefined, table: TableIR, a: ForeignKeyIR, b: ForeignKeyIR): boolean {
+/** The context schema with `table` in place of its namesake (or added). */
+function withTable(context: SchemaIR | undefined, table: TableIR): SchemaIR {
+  if (!context) return { tables: [table] };
+  const found = context.tables.some((t) => t.name === table.name);
+  return { ...context, tables: found ? context.tables.map((t) => (t.name === table.name ? table : t)) : [...context.tables, table] };
+}
+
+function sameFkInDialect(dialect: DialectLike | undefined, table: TableIR, a: ForeignKeyIR, b: ForeignKeyIR, context?: SchemaIR): boolean {
   if (!dialect) return false;
   try {
-    const render = (fk: ForeignKeyIR): string =>
-      dialect.ddl({ kind: 'addForeignKey', table: table.name, foreignKey: { ...fk, name: b.name } }, { tables: [table] }).join('\n');
+    const render = (fk: ForeignKeyIR): string => {
+      const named = { ...fk, name: b.name };
+      const t: TableIR = { ...table, foreignKeys: [...table.foreignKeys.filter((x) => x.name !== b.name && x.name !== fk.name), named] };
+      return dialect.ddl({ kind: 'addForeignKey', table: table.name, foreignKey: named }, withTable(context, t)).join('\n');
+    };
     const x = render(a);
     return x !== '' && x === render(b);
   } catch {
@@ -463,7 +473,7 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
       }
       const delta = compareColumns(t.name, was, col, namedEnums);
       if (!delta.type && !delta.nullable && !delta.default) continue;
-      if (sameInDialect(dialect, old, was, col)) continue;
+      if (sameInDialect(dialect, old, was, col, target)) continue;
       const op: MigrationOp = { kind: 'alterColumn', table: t.name, column: col.name, from: was, to: col, changes: delta };
       ops.alterColumns.push(op);
       if (delta.type) {
@@ -505,11 +515,11 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
     const touches = (fk: ForeignKeyIR, table: string): boolean =>
       fk.columns.some((c) => typeChanged.has(c)) || (fk.refTable === table && fk.refColumns.some((c) => typeChanged.has(c)));
     for (const fk of old.foreignKeys) {
-      const match = t.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, fk, x)));
+      const match = t.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, fk, x, target)));
       if (!match || touches(fk, t.name)) ops.dropFks.push({ kind: 'dropForeignKey', table: t.name, foreignKey: fk });
     }
     for (const fk of t.foreignKeys) {
-      const match = old.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, x, fk)));
+      const match = old.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, x, fk, target)));
       if (!match || touches(match, t.name)) ops.addFks.push({ kind: 'addForeignKey', table: t.name, foreignKey: fk });
     }
 
@@ -545,7 +555,7 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
       const changed = fk.refColumns.some((c) => {
         const a = refOld.columns.find((x) => x.name === c);
         const b = refNew.columns.find((x) => x.name === c);
-        return a && b && compareColumns(fk.refTable, a, b, namedEnums).type && !sameInDialect(dialect, refOld, a, b);
+        return a && b && compareColumns(fk.refTable, a, b, namedEnums).type && !sameInDialect(dialect, refOld, a, b, target);
       });
       if (!changed) continue;
       const already = (list: MigrationOp[]): boolean =>

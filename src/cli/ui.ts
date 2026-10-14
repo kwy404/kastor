@@ -160,9 +160,11 @@ export class Ui {
   /** A simple table with a header row. */
   table(head: string[], rows: string[][]): void {
     const widths = head.map((h, i) => Math.max(visibleWidth(h), ...rows.map((r) => visibleWidth(r[i] ?? ''))));
-    this.line(`  ${head.map((h, i) => this.c.bold(padEnd(h, widths[i]!))).join('   ')}`);
+    const last = head.length - 1;
+    const pad = (s: string, i: number): string => (i === last ? s : padEnd(s, widths[i]!));
+    this.line(`  ${head.map((h, i) => this.c.bold(pad(h, i))).join('   ')}`);
     this.line(`  ${widths.map((w) => this.c.gray('-'.repeat(w))).join('   ')}`);
-    for (const r of rows) this.line(`  ${r.map((cell, i) => padEnd(cell, widths[i]!)).join('   ')}`);
+    for (const r of rows) this.line(`  ${r.map((cell, i) => pad(cell, i)).join('   ')}`);
   }
 
   /** A box around a few lines, used for summaries and next steps. */

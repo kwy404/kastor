@@ -281,7 +281,7 @@ function buildRelations(tables: TableIR[], names: Map<string, TableNames>): stri
       const stripped = fieldKey.replace(/_?(Id|ID|_id)$/, '');
       const oneName = stripped && stripped !== fieldKey ? stripped : singular(target.ident);
       add(t.name, oneName, `one(${target.ident}, { fields: [${q(fieldKey)}], references: [${q(refKey)}] })`);
-      const manyBase = plural(n.ident);
+      const manyBase = plural(singular(n.ident));
       const manyName = (counts.get(fk.refTable) ?? 0) > 1 || fk.refTable === t.name ? `${manyBase}By${oneName.charAt(0).toUpperCase()}${oneName.slice(1)}` : manyBase;
       add(fk.refTable, manyName, `many(${n.ident}, { fields: [${q(refKey)}], references: [${q(fieldKey)}] })`);
     }

@@ -285,12 +285,12 @@ export function clientMain(): void {
       .join('');
     return `<div class="flex flex-wrap items-end gap-2 mb-3">
       <form class="flex flex-wrap items-end gap-2" id="filter-form">
-        <select class="select select-sm" id="f-col" aria-label="Column">${colOpts}</select>
-        <select class="select select-sm" id="f-op" aria-label="Operator">${opOpts}</select>
-        <input class="input input-sm" id="f-val" placeholder="value" aria-label="Value">
+        <select class="select select-sm w-auto" id="f-col" aria-label="Column">${colOpts}</select>
+        <select class="select select-sm w-auto" id="f-op" aria-label="Operator">${opOpts}</select>
+        <input class="input input-sm w-40" id="f-val" placeholder="value" aria-label="Value">
         <button class="btn btn-sm btn-outline" type="submit">Add filter</button>
       </form>
-      <form id="search-form" class="flex gap-2"><input type="search" class="input input-sm" id="q" placeholder="Search text columns" aria-label="Search" value="${esc(route.q)}"></form>
+      <form id="search-form" class="flex gap-2"><input type="search" class="input input-sm w-56" id="q" placeholder="Search text columns" aria-label="Search" value="${esc(route.q)}"></form>
       <div class="flex-1"></div>
       <button type="button" class="btn btn-sm btn-ghost" id="reload">Refresh</button>
       ${readOnly ? '' : '<button type="button" class="btn btn-sm btn-danger btn-outline" id="delete-selected" disabled>Delete selected</button><button type="button" class="btn btn-sm btn-primary" id="add-row">Add row</button>'}
@@ -366,7 +366,7 @@ export function clientMain(): void {
     const sizes = [25, 50, 100, 250].map((n) => `<option value="${n}"${n === pageSize ? ' selected' : ''}>${n} per page</option>`).join('');
     return `<div class="flex flex-wrap items-center justify-between gap-3 mt-3">
       <p class="text-sm text-muted-foreground">${total ? `Rows ${from} to ${to} of ${total}` : 'No rows'}</p>
-      <div class="flex items-center gap-3"><select class="select select-sm" id="page-size" aria-label="Rows per page">${sizes}</select>
+      <div class="flex items-center gap-3"><select class="select select-sm w-auto" id="page-size" aria-label="Rows per page">${sizes}</select>
       <nav aria-label="Pages"><ul class="pagination pagination-sm">${link(page - 1, 'Previous', 'pagination-prev', page <= 1)}${nums.join('')}${link(page + 1, 'Next', 'pagination-next', page >= pages)}</ul></nav></div>
     </div>`;
   }
@@ -693,12 +693,19 @@ export function clientMain(): void {
         .join('');
       boxes += `<g class="er-table" data-table="${esc(t.name)}"><rect class="er-box" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8"/><rect class="er-head" x="${p.x}" y="${p.y}" width="${p.w}" height="${HEAD}" rx="8"/><rect class="er-head" x="${p.x}" y="${p.y + HEAD - 8}" width="${p.w}" height="8"/><text class="er-title" x="${p.x + 10}" y="${p.y + 19}">${esc(t.name)}</text>${rows}</g>`;
     }
-    view.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h1 class="text-2xl font-bold">Diagram</h1><p class="text-sm text-muted-foreground">${s.tables.length} tables, ${s.relations.length} foreign keys. Drag to pan, scroll to zoom, click a table name to open it.</p></div></div>
+    view.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h1 class="text-2xl font-bold">Diagram</h1><p class="text-sm text-muted-foreground">${s.tables.length} table${s.tables.length === 1 ? '' : 's'}, ${s.relations.length} foreign key${s.relations.length === 1 ? '' : 's'}. Drag to pan, scroll to zoom, click a table name to open it.</p></div></div>
       <div class="er-wrap"><svg id="er" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" role="img" aria-label="Entity relationship diagram">${edges}${boxes}</svg>
       <div class="er-tools"><button type="button" class="btn btn-sm btn-outline" id="er-fit">Fit</button><button type="button" class="btn btn-sm btn-outline" id="er-download">Download SVG</button></div></div>`;
     const svg = $('#er') as unknown as SVGSVGElement;
-    let vb = { x: 0, y: 0, w: totalW, h: totalH };
+    const fit = (): { x: number; y: number; w: number; h: number } => {
+      const r = svg.getBoundingClientRect();
+      const w = Math.max(totalW, r.width || totalW);
+      const h = Math.max(totalH, r.height || totalH);
+      return { x: (totalW - w) / 2, y: (totalH - h) / 2, w, h };
+    };
+    let vb = fit();
     const apply = (): void => svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+    apply();
     svg.addEventListener(
       'wheel',
       (e) => {
@@ -736,7 +743,7 @@ export function clientMain(): void {
       el.addEventListener('click', () => go(tableHref((el.parentNode as Element).getAttribute('data-table')!))),
     );
     $('#er-fit').addEventListener('click', () => {
-      vb = { x: 0, y: 0, w: totalW, h: totalH };
+      vb = fit();
       apply();
     });
     $('#er-download').addEventListener('click', () => {
