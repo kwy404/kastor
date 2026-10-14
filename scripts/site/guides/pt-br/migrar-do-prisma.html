@@ -147,7 +147,7 @@ export const feed = (authorId: number) =&gt;
   db.post.findMany({
     where: { published: true, author: { role: 'ADMIN' }, authorId },
     include: { author: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { id: 'desc' },
     take: 20,
   })
 
