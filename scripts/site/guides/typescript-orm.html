@@ -116,32 +116,43 @@ try {
 <p>A few details are worth knowing early:</p>
 <ul>
 <li>Queries are lazy. Nothing runs until you <code>await</code>, and <code>query.toSQL()</code> returns the statements without executing them. Open the <a href="./#playground">playground</a> to see the exact SQL for each database.</li>
-<li>Nested includes load in one query per root call on databases with JSON aggregation (PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, CockroachDB). Elsewhere kastor runs one extra query per include level with an IN list, never one per row.</li>
+<li>Nested includes load in one query per root call on every SQL adapter (PostgreSQL, CockroachDB, MySQL, MariaDB, the SQLite family including libSQL and D1, SQL Server and Oracle), which build the relations with JSON aggregation. On MongoDB the same include becomes <code>$lookup</code> stages inside one aggregation, so no adapter runs one query per row.</li>
 <li>Errors are <code>KastorError</code> instances with a stable <code>code</code>, a plain English message and a <code>hint</code> that suggests the fix.</li>
 <li>When the object API is not enough, <code>db.$sql</code> runs raw SQL with bound parameters and a typed result. The <a href="type-safe-sql-typescript.html">type safe SQL guide</a> covers it in depth.</li>
 </ul>
 </section>
 <section id="migrations"><h2>Step 3: migrations from the TypeScript schema</h2>
-<p>Create a <code>kastor.config.ts</code> that points to the schema file, an adapter factory and a migrations folder. Running <code>npx kastor init</code> writes one for you.</p>
-<p>From then on the loop is short: edit <code>schema.ts</code>, run <code>migrate dev</code>, commit the generated SQL file. kastor compares the TypeScript schema with the live database, writes the difference to a timestamped folder and applies it. If a column disappears and a similar one appears, it asks whether you renamed it instead of silently dropping data.</p>
+<p>Create a <code>kastor.config.ts</code> that points to the schema file, an adapter factory, a migrations folder and an optional seed script. Running <code>npx kastor init</code> writes one for you, together with a starter <code>src/db/schema.ts</code>, a <code>src/db/seed.ts</code> and a <code>.env</code> with <code>DATABASE_URL</code>, which the CLI reads from the folder of the config.</p>
+<p>From then on the loop is short: edit <code>schema.ts</code>, run <code>migrate dev</code>, commit the generated SQL file. kastor compares the TypeScript schema with the live database, writes the difference to a timestamped folder and applies it. If a column disappears and a compatible one appears, it asks whether you renamed it instead of silently dropping data. Outside an interactive terminal it stops and asks you to pass <code>--rename users.name:fullName</code> or <code>--accept-data-loss</code>.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npx kastor migrate dev --name add_posts
 npx kastor migrate status
 npx kastor migrate deploy
 </pre>
-<p>The file it writes is plain SQL for your dialect, so reviewers can read it in the pull request:</p>
+<p>The file it writes is plain SQL for your dialect, with a short header that lists the changes, so reviewers can read it in the pull request:</p>
 <pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261013120000_add_posts/migration.sql">
+-- Migration 20261013120000_add_posts
+-- Written by kastor 0.1.0 for postgres on 2026-10-13 12:00:00 UTC.
+-- Applied by `kastor migrate deploy`. Edit it before it is applied if you need to;
+-- after that, the checksum in _kastor_migrations must keep matching.
+--
+-- Changes:
+--   + Create table posts
+
+-- Create table posts
 CREATE TABLE "posts" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id" uuid DEFAULT gen_random_uuid() NOT NULL,
   "title" varchar(200) NOT NULL,
   "body" text,
-  "published" boolean NOT NULL DEFAULT false,
-  "authorId" integer NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE,
-  "createdAt" timestamptz NOT NULL DEFAULT now()
+  "published" boolean DEFAULT false NOT NULL,
+  "authorId" integer NOT NULL,
+  "createdAt" timestamptz(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  CONSTRAINT "posts_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "posts_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
 CREATE INDEX "posts_authorId_idx" ON "posts" ("authorId");
 </pre>
-<p>In CI or on deploy, run <code>npx kastor migrate deploy</code>: it applies pending files in order and never generates new ones. For quick prototypes, <code>npx kastor db push</code> syncs the schema without writing a file. Already have a database? <code>npx kastor db pull</code> introspects it into a TypeScript schema you can start from. The <a href="database-migrations-explained.html">migrations guide</a> covers team workflows, and <code>npx kastor studio</code> opens a local UI to browse data with an ER diagram.</p>
+<p>In CI or on deploy, run <code>npx kastor migrate deploy</code>: it applies pending files in order and never generates new ones. For quick prototypes, <code>npx kastor db push</code> syncs the schema without writing a file. Already have a database? <code>npx kastor db pull</code> introspects it into a TypeScript schema you can start from, with relations guessed from the foreign keys. The <a href="database-migrations-explained.html">migrations guide</a> covers team workflows, and <code>npx kastor studio</code> opens a local UI to browse data with an ER diagram.</p>
 </section>
 <section id="when-not-to-use-an-orm"><h2>When an ORM is not the right tool</h2>
 <p>An ORM pays off when most of your queries are reads and writes on a handful of related tables. That describes most web apps, but not all database work. Consider something else when:</p>

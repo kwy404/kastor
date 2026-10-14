@@ -12,7 +12,7 @@
   "faq": [
     { "q": "What is a good Drizzle alternative?", "a": "It depends on what you want to change. If you like TypeScript schemas but prefer an object query API with nested <code>include</code>, one schema for every database and readable error codes, kastor is built around exactly that." },
     { "q": "Do Drizzle and kastor both avoid code generation?", "a": "Yes. Both define the schema in TypeScript and infer types from it, so neither needs a generate step to get a typed client. The difference is in the query API and tooling, not in how types are produced." },
-    { "q": "Can kastor load relations in one query like Drizzle's relational API?", "a": "Yes. kastor loads nested includes in one query per root call on databases with JSON aggregation, and falls back to one query per include level with IN lists elsewhere. See <a href=\"avoid-n-plus-1-queries.html\">avoiding N+1 queries</a>." },
+    { "q": "Can kastor load relations in one query like Drizzle's relational API?", "a": "Yes. Every SQL adapter in kastor loads nested includes in one query per root call, built with JSON aggregation, and the MongoDB adapter turns them into <code>$lookup</code> stages of one aggregation. See <a href=\"avoid-n-plus-1-queries.html\">avoiding N+1 queries</a>." },
     { "q": "Does kastor support MongoDB, SQL Server and Oracle?", "a": "Yes, through the <code>kastor/mongodb</code>, <code>kastor/mssql</code> and <code>kastor/oracle</code> adapters, with the same query API as the SQL adapters. You install the official driver and pass its instance in." },
     { "q": "Can I write SQL-like queries in kastor?", "a": "kastor's main API is object based. For queries that read better as SQL, use <code>db.$sql</code> with bound parameters and a typed row, or add <code>sql</code> fragments to a <code>where</code> clause." }
   ],
@@ -27,7 +27,7 @@
 <p>Drizzle's core query API is SQL-like: you compose <code>select</code>, <code>from</code>, <code>where</code> and joins in TypeScript, and it also offers a relational query API for loading nested data. Its schema uses dialect specific builders such as <code>pgTable</code> and <code>mysqlTable</code>, which give direct access to each database's native types. That is a good fit for developers who think in SQL and want the code to mirror it.</p>
 <p>kastor starts from the other end:</p>
 <ul>
-<li><strong>The object API is the main API.</strong> <code>findMany</code>, <code>where</code>, <code>include</code>, <code>select</code> and nested writes cover everyday work, and nested includes load in one query per root call where the database supports JSON aggregation.</li>
+<li><strong>The object API is the main API.</strong> <code>findMany</code>, <code>where</code>, <code>include</code>, <code>select</code> and nested writes cover everyday work, and nested includes load in one query per root call on every SQL database, using JSON aggregation.</li>
 <li><strong>One schema for every dialect.</strong> The same <code>table()</code> and <code>t</code> builders work for PostgreSQL, MySQL, SQLite, SQL Server, Oracle and MongoDB. When you need a specific database type, <code>.nativeType('varchar(64)')</code> sets it on one column.</li>
 <li><strong>Migrations that ask before dropping.</strong> <code>migrate dev</code> diffs the TypeScript schema against the live database, writes a SQL file, applies it and asks when a change looks like a rename.</li>
 <li><strong>Readable errors.</strong> Driver errors become a <code>KastorError</code> with a stable code and a <code>hint</code> that suggests the fix.</li>
@@ -85,11 +85,11 @@ const preview = db.posts.findMany({ include: { author: true } }).toSQL()
 <section id="migrations"><h2>Migrations and renames</h2>
 <p>Both tools generate SQL migration files from the TypeScript schema, and both can push a schema directly while prototyping. In kastor, the commands live in one CLI:</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
-npx kastor migrate dev --name rename_body_to_content
+npx kastor migrate dev --rename comments.body:content --name rename_body_to_content
 npx kastor migrate deploy
 npx kastor db push
 </pre>
-<p><code>migrate dev</code> compares the schema with the live database, writes <code>kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql</code> and applies it. When a column disappears and a compatible one appears in the same table, it asks whether you renamed it, so the data stays. <code>migrate deploy</code> applies pending files in CI and production without generating anything. The <a href="database-migrations-explained.html">migrations guide</a> covers team workflows and rollbacks.</p>
+<p><code>migrate dev</code> compares the schema with the live database, writes <code>kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql</code> and applies it. When a column disappears and a compatible one appears in the same table, it asks whether you renamed it, so the data stays. You can also answer up front with <code>--rename table.old:new</code>, as in the first line, which is what scripts and other non interactive shells need; without an answer there, kastor stops instead of guessing. Add <code>--create-only</code> to write the file without applying it, so you can edit the SQL first. <code>migrate deploy</code> applies pending files in CI and production without generating anything. The <a href="database-migrations-explained.html">migrations guide</a> covers team workflows and safe destructive changes.</p>
 </section>
 <section id="errors"><h2>Errors you can act on</h2>
 <p>Every driver reports constraint failures differently: PostgreSQL uses SQLSTATE codes, MySQL numeric error numbers, SQL Server and Oracle their own. kastor maps them to one set of codes, so the same handler works on every database.</p>
@@ -109,14 +109,14 @@ export async function addComment(postId: number, body: string) {
   }
 }
 </pre>
-<p>Other codes include <code>UNIQUE_VIOLATION</code>, <code>NOT_NULL_VIOLATION</code>, <code>SERIALIZATION_FAILURE</code>, <code>DEADLOCK</code> and <code>TIMEOUT</code>. The original driver error stays available, so you lose nothing by using the mapped code.</p>
+<p>Other codes include <code>UNIQUE_VIOLATION</code>, <code>NOT_NULL_VIOLATION</code>, <code>SERIALIZATION_FAILURE</code>, <code>DEADLOCK</code> and <code>TIMEOUT</code>. The original driver error stays available as <code>e.cause</code>, and details such as the constraint name sit in <code>e.meta</code>, so you lose nothing by using the mapped code.</p>
 </section>
 <section id="trying-it"><h2>Trying kastor in an existing Drizzle project</h2>
 <p>You can evaluate kastor without touching your Drizzle code. Both tools take a driver instance you create, so they can share the same database while you compare.</p>
 <ol>
 <li><strong>Install kastor</strong> next to your current setup. You already have the driver, for example <code>pg</code> or <code>better-sqlite3</code>.</li>
 <li><strong>Run <code>npx kastor init</code></strong> and point <code>kastor.config.ts</code> at a development database.</li>
-<li><strong>Run <code>npx kastor db pull</code></strong> to introspect the tables Drizzle created into a kastor schema file. Review the names and add the relations you use.</li>
+<li><strong>Run <code>npx kastor db pull</code></strong> to introspect the tables Drizzle created into a kastor schema file. It replaces the starter schema that <code>init</code> wrote (after asking) and guesses relations from the foreign keys. Review the names and the relations.</li>
 <li><strong>Port one read path</strong>, ideally one with nested data, and compare the code, the types you get and the statements from <code>toSQL()</code>.</li>
 <li><strong>Keep one migration owner.</strong> While you evaluate, let drizzle-kit keep managing the schema. Only hand migrations over once you decide to switch for real.</li>
 </ol>

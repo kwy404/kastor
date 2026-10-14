@@ -12,7 +12,7 @@
   "faq": [
     { "q": "What is the N+1 query problem?", "a": "It happens when code runs one query to load a list of N rows, then one more query for each row to load related data. The total is N+1 queries where one or two would do, and the cost grows with the size of the list." },
     { "q": "How do I detect N+1 queries?", "a": "Turn on query logging with <code>log: true</code> in the kastor client options and load the page. If you see the same statement repeated with only the parameter changing, you have an N+1." },
-    { "q": "Does kastor prevent N+1 queries?", "a": "Relations loaded with <code>include</code> never run one query per row. On databases with JSON aggregation the whole tree loads in one query; on others kastor runs one extra query per include level with an IN list. A manual loop that queries inside it is still N+1, so use <code>include</code> instead." },
+    { "q": "Does kastor prevent N+1 queries?", "a": "Relations loaded with <code>include</code> never run one query per row. On every SQL adapter the whole tree loads in one query built with JSON aggregation, and on MongoDB it becomes <code>$lookup</code> stages of one aggregation. A manual loop that queries inside it is still N+1, so use <code>include</code> instead." },
     { "q": "Is Promise.all a fix for N+1 queries?", "a": "No. Running the per row queries in parallel hides the latency a little, but the database still executes N queries and your pool can run out of connections. Load the relation with <code>include</code> or a single <code>in</code> filter instead." },
     { "q": "How do I count related rows without loading them?", "a": "Use <code>_count</code> in <code>select</code> or <code>include</code>, for example <code>_count: { select: { posts: true } }</code>. The counts are computed in the database and returned next to each row." }
   ],
@@ -62,7 +62,7 @@ export const db = kastor({
 })
 </pre>
 <p>Now load the slow page once and read the output. The signature of an N+1 is the <strong>same statement repeated many times</strong> with only a parameter changing. A healthy request usually runs a handful of queries no matter how many rows it shows.</p>
-<p>Two more habits help. Enable logging only in development, for example with <code>log: process.env.NODE_ENV !== 'production'</code>, so production logs stay clean. And when you want to see what a single call will send without running it, remember that kastor queries are lazy: build the query and call <code>.toSQL()</code> on it before awaiting. The <a href="./#playground">playground</a> shows the exact SQL each database receives for the same call.</p>
+<p>Two more habits help. Enable logging only in development, for example with <code>log: process.env.NODE_ENV !== 'production'</code>, so production logs stay clean. Instead of <code>true</code> you can also pass a function, which receives <code>{ sql, params, durationMs, error }</code> for every statement, so a test can count queries per request or a dev server can flag slow ones. And when you want to see what a single call will send without running it, remember that kastor queries are lazy: build the query and call <code>.toSQL()</code> on it before awaiting. The <a href="./#playground">playground</a> shows the exact SQL each database receives for the same call.</p>
 </section>
 <section id="include"><h2>Load relations with include</h2>
 <p>The fix for the loop above is to tell the ORM about the relation and ask for it up front. With kastor that is <code>include</code>:</p>
@@ -79,12 +79,13 @@ const users = await db.users.findMany({
   },
 })
 
-// users[0].posts is typed as { id: string; title: string }[]
+// users[0].posts is typed as { id: string; title: string }[] (posts.id is a uuid column)
 </pre>
 <p>On PostgreSQL, CockroachDB, MySQL, MariaDB, the SQLite family, SQL Server and Oracle, kastor compiles the whole tree into <strong>one query</strong>. Each relation is built inside the database with JSON aggregation and returned as a nested value on its parent row, so 50 users with their posts is a single round trip. Includes nest as deep as you need: posts can include their author, comments, or tags, and it is still one query per root call.</p>
 <p>The result is fully typed from your schema. If you add <code>select</code> inside the include, the type of <code>posts</code> narrows to exactly those fields, which keeps you honest about what the page actually uses.</p>
-<h3>The fallback: one query per level, never per row</h3>
-<p>When a database cannot aggregate JSON, kastor switches strategy. It loads the parents, collects their keys, and runs <strong>one extra query per include level</strong> with an <code>IN</code> list of those keys, then stitches the children onto their parents in memory. Fifty users with posts becomes two queries; adding comments under posts makes it three. The count depends on how deep your include is, not on how many rows come back. MongoDB uses aggregation pipelines with <code>$lookup</code> for the same job.</p>
+<h3>MongoDB and the IN list strategy</h3>
+<p>MongoDB has no SQL, so its adapter does the same job differently: every read is one <code>aggregate</code> call, and each include, with its own <code>where</code>, <code>orderBy</code>, <code>take</code> and nested includes, becomes a <code>$lookup</code> stage inside that call. Relation counts work the same way. Again, one request per root call, not one per document.</p>
+<p>The shared SQL compiler also knows a second strategy for databases that cannot aggregate JSON. It loads the parents, collects their keys, and runs <strong>one extra query per include level</strong> with an <code>IN</code> list of those keys, then stitches the children onto their parents in memory. Fifty users with posts would become two queries, and adding comments under posts would make it three. Every SQL adapter kastor ships today uses JSON aggregation, so you only meet this path in a custom dialect, but the rule holds either way: the count depends on how deep your include is, not on how many rows come back.</p>
 </section>
 <section id="counts-and-select"><h2>Counts, select and limits inside includes</h2>
 <p>Many N+1 problems are not about loading related rows at all. A list of authors that shows "12 posts" next to each name does not need the posts, only the number. Use <code>_count</code>:</p>
@@ -137,9 +138,21 @@ const page = await db.users.findMany({
   include: { _count: { select: { posts: true } } },
 })
 
-const nextLastId = page.length === 20 ? page[page.length - 1].id : null
+const nextLastId = page.length === 20 ? page[page.length - 1]!.id : null
 </pre>
-<p>kastor also has <code>findPage</code> for cursor pagination with opaque cursors, which saves you from encoding the cursor yourself. See the <a href="api.html">API reference</a> for its options.</p>
+<p>kastor also has <code>findPage</code> for cursor pagination with opaque cursors, which saves you from encoding the cursor yourself. Pass the page size as <code>first</code> and the <code>endCursor</code> of the previous page as <code>after</code> (or a <code>startCursor</code> as <code>before</code> to go back). It takes the same <code>where</code>, <code>orderBy</code>, <code>select</code> and <code>include</code> as <code>findMany</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/authors.ts">
+// cursor: pageInfo.endCursor from the previous response, or undefined on the first page
+const { items, pageInfo } = await db.users.findPage({
+  first: 20,
+  after: cursor,
+  orderBy: { id: 'asc' },
+  include: { _count: { select: { posts: true } } },
+})
+
+// pageInfo: { startCursor, endCursor, hasNextPage, hasPreviousPage }
+</pre>
+<p>See the <a href="api.html">API reference</a> for the remaining options.</p>
 </section>
 <section id="checklist"><h2>A quick N+1 checklist</h2>
 <p>Before you ship a list page or an API endpoint that returns collections, run through this:</p>

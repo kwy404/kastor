@@ -45,7 +45,7 @@ npm install kastor pg
 npm install -D @types/pg
 npx kastor init
 </pre>
-<p>O <code>init</code> cria o <code>kastor.config.ts</code>, que aponta para o arquivo de schema, para a pasta de migrações e para o seed. O schema é um módulo TypeScript comum, com uma chamada <code>table()</code> por tabela:</p>
+<p>O <code>init</code> pergunta qual banco você usa (ou recebe <code>--db postgres</code>) e cria o <code>kastor.config.ts</code>, que aponta para o arquivo de schema, para a pasta de migrações e para o seed. Ele também escreve um <code>src/db/schema.ts</code> inicial, um <code>src/db/seed.ts</code> e um <code>.env</code> com <code>DATABASE_URL</code>, que a CLI lê da pasta do config. O schema é um módulo TypeScript comum, com uma chamada <code>table()</code> por tabela:</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
 import { table, t, index } from 'kastor'
 import type { InferSelect, InferInsert } from 'kastor'
@@ -122,7 +122,7 @@ await db.$transaction(async (tx) =&gt; {
 })
 </pre>
 <p>O tipo de <code>authors</code> já inclui <code>posts</code> com apenas <code>id</code> e <code>title</code>. Se você remover o <code>select</code>, o tipo cresce sozinho. Esse é o ponto central de um ORM para TypeScript: o formato da resposta segue a consulta.</p>
-<p>Duas propriedades valem a pena conhecer. As consultas são preguiçosas: nada roda até o <code>await</code>, e <code>query.toSQL()</code> devolve as instruções sem executar. E os includes aninhados carregam em uma única consulta por chamada raiz nos bancos com agregação JSON. Para ver o SQL exato de cada banco, abra o <a href="../#playground">playground</a>.</p>
+<p>Duas propriedades valem a pena conhecer. As consultas são preguiçosas: nada roda até o <code>await</code>, e <code>query.toSQL()</code> devolve as instruções sem executar. E os includes aninhados carregam em uma única consulta por chamada raiz em todos os adaptadores SQL, que montam as relações com agregação JSON; no MongoDB eles viram estágios <code>$lookup</code> de uma única agregação. Para ver o SQL exato de cada banco, abra o <a href="../#playground">playground</a>.</p>
 </section>
 <section id="migracoes"><h2>Migrações: do schema ao banco</h2>
 <p>Quando o schema muda, a CLI compara o TypeScript com o banco ao vivo, escreve um arquivo SQL versionado e o aplica. Em produção, outro comando aplica só o que está pendente.</p>
@@ -131,19 +131,19 @@ npx kastor migrate dev --name add_posts
 npx kastor migrate status
 npx kastor migrate deploy
 </pre>
-<p>O <code>migrate dev</code> cria <code>kastor/migrations/&lt;timestamp&gt;_add_posts/migration.sql</code>. Se você renomeou uma coluna, ele pergunta se é uma renomeação em vez de apagar e recriar. Faça commit da pasta de migrações junto com o código. O <code>migrate deploy</code> roda no CI ou na etapa de release, nunca o <code>migrate dev</code>.</p>
+<p>O <code>migrate dev</code> cria <code>kastor/migrations/&lt;timestamp&gt;_add_posts/migration.sql</code>. Se você renomeou uma coluna, ele pergunta se é uma renomeação em vez de apagar e recriar; fora de um terminal interativo, passe a resposta com <code>--rename users.name:fullName</code>. Faça commit da pasta de migrações junto com o código. O <code>migrate deploy</code> roda no CI ou na etapa de release, nunca o <code>migrate dev</code>.</p>
 <p>Para protótipos, <code>db push</code> sincroniza o schema sem criar arquivo. Para bancos que já existem, <code>db pull</code> gera o schema em TypeScript. O guia de <a href="migracoes-banco-de-dados.html">migrações de banco de dados</a> detalha cada caso, inclusive mudanças destrutivas seguras.</p>
-<div class="callout"><p>Rode <code>npx kastor doctor</code> quando algo não conectar. Ele confere o arquivo de configuração e a conexão antes de você perder tempo depurando.</p></div>
+<div class="callout"><p>Rode <code>npx kastor doctor</code> quando algo não conectar. Ele confere o arquivo de configuração, a conexão, as migrações pendentes e diferenças entre o schema e o banco antes de você perder tempo depurando.</p></div>
 </section>
 <section id="sql-puro"><h2>SQL puro e tratamento de erros</h2>
-<p>Nem tudo cabe na API de modelos, e não precisa caber. O <code>db.$sql</code> aceita uma template tag com tipo de retorno declarado; cada valor interpolado vira parâmetro, então não há concatenação de strings.</p>
+<p>Nem tudo cabe na API de modelos, e não precisa caber. O <code>db.$sql</code> aceita uma template tag com tipo de retorno declarado; cada valor interpolado vira parâmetro, então não há concatenação de strings. O tipo declarado é uma promessa, não uma conferência: os valores chegam como o driver devolve, e o <code>pg</code> devolve <code>count</code> como string, por isso o <code>::int</code> no exemplo.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/reports.ts">
 import { isKastorError } from 'kastor'
 import { db } from './db/client'
 
 const minPosts = 5
 const rows = await db.$sql&lt;{ id: number; total: number }&gt;`
-  select u.id, count(p.id) as total
+  select u.id, count(p.id)::int as total
   from users u join posts p on p."authorId" = u.id
   group by u.id having count(p.id) &gt;= ${minPosts}
 `

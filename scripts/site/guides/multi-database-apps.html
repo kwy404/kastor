@@ -44,7 +44,7 @@ export const orders = table('orders', {
 
 // src/db/events.ts (same import line): append only events, stored in MongoDB
 export const events = table('events', {
-  id: t.uuid().primaryKey().defaultRandom(),
+  id: t.id(),
   type: t.string(64),
   userId: t.int(),
   payload: t.json&lt;Record&lt;string, unknown&gt;&gt;(),
@@ -52,6 +52,7 @@ export const events = table('events', {
 })
 </pre>
 <p>Stick to the portable column types (<code>t.string</code>, <code>t.decimal</code>, <code>t.datetime</code>, <code>t.json</code> and so on) in shared tables. If one database needs a special type, <code>.nativeType()</code> sets it per column, but that column then stops being portable, so keep such tables out of the shared module.</p>
+<p>Keys deserve one decision up front. On every SQL database <code>t.id()</code> is an auto increment integer typed as <code>number</code>. On MongoDB the adapter decides: <code>mongodb(db)</code> stores an ObjectId and types <code>t.id()</code> keys, and every column with <code>.references()</code> to one, as 24 character hex strings; <code>mongodb(db, { ids: 'int' })</code> keeps them as increasing numbers, like SQL. The <code>events</code> table above keeps its own <code>t.id()</code> and stores the Postgres user id in a plain <code>t.int()</code> column without <code>.references()</code>, so <code>userId</code> stays a number on both sides whichever mode you pick.</p>
 </section>
 <section id="several-clients"><h2>Several clients side by side</h2>
 <p>Wrap client creation in a function that takes an adapter. Production picks Postgres, tests pick SQLite, and both get the exact same type. The MongoDB client is created separately with its own schema.</p>
@@ -100,15 +101,17 @@ export async function placeOrder(userId: number, total: string) {
 <section id="dialect-differences"><h2>Dialect differences that matter</h2>
 <p>kastor compiles the same query differently for each database, so your code stays the same. Some differences still change behavior, and you should know them before you rely on a test database that is not your production one. Open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
 <h3>Returning rows after a write</h3>
-<p><code>create</code>, <code>update</code> and <code>upsert</code> return the written row everywhere. PostgreSQL and SQLite support <code>RETURNING</code>, SQL Server has <code>OUTPUT</code>, and where the database cannot return rows from a write (MySQL is the usual example), kastor reads the row back by its key. That read back is a second statement, so keep such writes inside a transaction when another process may change the row at the same moment.</p>
+<p><code>create</code>, <code>update</code> and <code>upsert</code> return the written row everywhere. PostgreSQL, CockroachDB and the SQLite family support <code>RETURNING</code>, SQL Server has <code>OUTPUT</code>, Oracle uses <code>RETURNING ... INTO</code> out binds, and where the database cannot return rows from a write (MySQL and MariaDB), kastor reads the row back by its key. That read back is a second statement, so keep such writes inside a transaction when another process may change the row at the same moment.</p>
 <h3>Upsert conflicts</h3>
-<p>The native mechanisms differ: <code>ON CONFLICT</code> in PostgreSQL and SQLite, <code>ON DUPLICATE KEY UPDATE</code> in MySQL and MariaDB, <code>MERGE</code> in SQL Server and Oracle. The subtle one is MySQL, where a conflict on <em>any</em> unique index triggers the update, not only the one in your <code>where</code>. If a table has several unique columns, test upserts on MySQL specifically.</p>
+<p>The native mechanisms differ: <code>ON CONFLICT</code> in PostgreSQL and SQLite, <code>ON DUPLICATE KEY UPDATE</code> in MySQL and MariaDB, <code>MERGE</code> in SQL Server (with a HOLDLOCK hint) and Oracle. On MongoDB kastor updates the matching document or inserts when there is none, retrying the update if a concurrent insert wins the race. The subtle one is MySQL, where a conflict on <em>any</em> unique index triggers the update, not only the one in your <code>where</code>. If a table has several unique columns, test upserts on MySQL specifically.</p>
 <h3>Case insensitive matching</h3>
-<p><code>mode: 'insensitive'</code> works on every adapter, using <code>ILIKE</code> on PostgreSQL and comparing lowercased values on databases without it. The trap goes the other way: MySQL's default collations compare text case insensitively even for plain <code>equals</code>, while PostgreSQL does not. Code that passes on MySQL can miss rows on PostgreSQL, so be explicit with <code>mode</code> whenever case matters.</p>
+<p><code>mode: 'insensitive'</code> works on every adapter, using <code>ILIKE</code> on PostgreSQL and CockroachDB, comparing lowercased values on the other SQL databases, and case insensitive regular expressions on MongoDB. The trap goes the other way: the default collations of MySQL, MariaDB and SQL Server compare text case insensitively even for plain <code>equals</code>, while PostgreSQL does not. On those databases kastor makes <code>contains</code>, <code>startsWith</code> and <code>endsWith</code> exact with a binary collation, but <code>equals</code> follows the collation. Code that passes on MySQL can miss rows on PostgreSQL, so be explicit with <code>mode</code> whenever case matters.</p>
 <h3>JSON aggregation for includes</h3>
-<p>Nested includes load in one query per root call on databases with JSON aggregation (PostgreSQL, CockroachDB, MySQL, MariaDB, the SQLite family, SQL Server, Oracle). Where it is not available, kastor runs one extra query per include level with IN lists. MongoDB uses aggregation pipelines with <code>$lookup</code>. All three are free of N+1 queries, but large includes still mean large responses, so use <code>take</code> and <code>select</code> inside includes.</p>
+<p>Nested includes load in one statement per root call on every SQL adapter, each with its own JSON functions: <code>json_agg</code> on PostgreSQL and CockroachDB, <code>JSON_ARRAYAGG</code> on MySQL, MariaDB and Oracle, <code>json_group_array</code> on the SQLite family and <code>FOR JSON PATH</code> on SQL Server. MongoDB uses one aggregation pipeline with <code>$lookup</code> stages. Both are free of N+1 queries, but large includes still mean large responses, so use <code>take</code> and <code>select</code> inside includes.</p>
+<h3>Foreign keys</h3>
+<p>The SQL databases enforce <code>.references()</code> themselves, with a few dialect gaps: Oracle supports only cascade and set null on delete, MySQL's InnoDB has no set default, and SQL Server writes self referencing or multi path cascades as NO ACTION. MongoDB enforces nothing, so kastor emulates foreign keys there: <code>onDelete</code> actions on delete and an existence check before inserts and updates, for writes made through kastor only.</p>
 <h3>Schema changes</h3>
-<p>PostgreSQL, SQLite and SQL Server can run DDL inside a transaction. MySQL and Oracle commit each DDL statement on its own, so a migration that fails halfway can leave part of it applied. Keep migrations for those databases small, one logical change per file.</p>
+<p>PostgreSQL, the SQLite family and SQL Server can run DDL inside a transaction. MySQL, MariaDB and Oracle commit each DDL statement on its own, CockroachDB runs schema changes outside explicit transactions, and MongoDB collection and index commands cannot run in one either, so a migration that fails halfway can leave part of it applied there. Keep migrations for those databases small, one logical change per file. On D1, which has no interactive transactions, statements also run one by one.</p>
 </section>
 <section id="testing"><h2>Testing the same code against several databases</h2>
 <p>Run the suite once per target. A config file that reads an environment variable lets the CLI prepare each database, with a separate migrations folder per dialect since migration SQL is dialect specific.</p>
@@ -165,7 +168,7 @@ describe.each(targets)('users on $name', ({ makeDb }) =&gt; {
 <ul>
 <li><strong>Text matching:</strong> lookups by email or username, with and without <code>mode: 'insensitive'</code>.</li>
 <li><strong>Upserts</strong> on tables with more than one unique column.</li>
-<li><strong>Sorting with nulls:</strong> PostgreSQL puts nulls last in ascending order, MySQL and SQLite put them first, so assert on order only where the column cannot be null or the order is explicit.</li>
+<li><strong>Sorting with nulls:</strong> PostgreSQL and Oracle put nulls last in ascending order, MySQL, SQLite, SQL Server and MongoDB put them first. Pass <code>orderBy: { name: { sort: 'asc', nulls: 'last' } }</code> to get the same order everywhere (kastor emulates it where the database has no NULLS LAST), or assert on order only where the column cannot be null.</li>
 <li><strong>Timestamps:</strong> fractional second precision depends on the database and column type, so compare dates with a tolerance or truncate them.</li>
 </ul>
 </section>

@@ -29,10 +29,10 @@
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npm install kastor pg server-only
 npm install -D @types/pg dotenv
-npx kastor init
+npx kastor init --db postgres
 </pre>
 <p>Coloque a string de conexão em <code>.env.local</code>, que o Next.js carrega automaticamente e que não deve ir para o repositório. Use o nome <code>DATABASE_URL</code> sem o prefixo <code>NEXT_PUBLIC_</code>: variáveis com esse prefixo são embutidas no JavaScript enviado ao navegador, e a senha do banco nunca deve chegar lá.</p>
-<p>A CLI do kastor roda fora do Next.js, então ela não lê <code>.env.local</code> sozinha. Carregue o arquivo no <code>kastor.config.ts</code>. Aproveite para separar a conexão das migrações, como explicado mais adiante:</p>
+<p>O <code>init</code> escreve o <code>kastor.config.ts</code>, um <code>src/db/schema.ts</code> inicial com <code>users</code> e <code>posts</code>, um <code>src/db/seed.ts</code> e um <code>.env</code> com <code>DATABASE_URL</code>. A CLI do kastor roda fora do Next.js e, sozinha, lê só esse <code>.env</code> ao lado do config, sem sobrescrever variáveis que já existem. Ela não lê <code>.env.local</code>, então carregue esse arquivo no <code>kastor.config.ts</code>. Como o <code>.env</code> é lido antes do config, uma variável definida nos dois arquivos fica com o valor do <code>.env</code> na CLI: defina cada string de conexão em um só deles. Aproveite para separar a conexão das migrações, como explicado mais adiante:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import { config } from 'dotenv'
 import { defineConfig } from 'kastor'

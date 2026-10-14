@@ -10,7 +10,7 @@
   "readTime": "8 min read",
   "keywords": ["Cloudflare D1 ORM", "D1 ORM TypeScript", "Cloudflare Workers ORM", "D1 migrations wrangler", "D1 batch transactions"],
   "faq": [
-    { "q": "Does Cloudflare D1 support transactions?", "a": "D1 runs batches atomically: every statement in a batch succeeds or the batch rolls back. It does not offer interactive transactions that stay open across awaits. With kastor, use the array form <code>db.$transaction([a, b])</code>, which runs as one D1 batch." },
+    { "q": "Does Cloudflare D1 support transactions?", "a": "D1 runs batches atomically: every statement in a batch succeeds or the batch rolls back. It does not offer interactive transactions that stay open across awaits. With kastor, use the array form <code>db.$transaction([a, b])</code>, which runs as one D1 batch. The callback form throws <code>UNSUPPORTED</code> unless you create the adapter with <code>d1(env.DB, { transactions: 'sequential' })</code>, which runs the callback without atomicity." },
     { "q": "Should I create the kastor client per request in a Worker?", "a": "Yes. The D1 binding arrives on <code>env</code> in each <code>fetch</code> call, so build the client there with <code>d1(env.DB)</code>. Creating it only wraps the binding and opens no connection, so it is cheap." },
     { "q": "How do I run migrations on Cloudflare D1?", "a": "Generate the SQL with <code>npx kastor migrate dev</code> against a local SQLite file, copy the file into the wrangler migrations folder, then run <code>wrangler d1 migrations apply</code> with <code>--local</code> or <code>--remote</code>." },
     { "q": "Can I develop against D1 locally?", "a": "Yes. <code>wrangler dev</code> runs your Worker with a local D1 database stored on disk, and <code>wrangler d1 migrations apply --local</code> prepares its schema. Add <code>--remote</code> only when you want to hit the real database." },
@@ -84,17 +84,18 @@ export default {
 </section>
 <section id="transactions"><h2>Transactions on D1: prefer the array form</h2>
 <p>D1 does not support interactive transactions. A Worker cannot open a transaction, await a query, inspect the result in JavaScript and then commit later. What D1 offers instead is <em>batch</em>: a list of statements sent together and executed as one transaction, so either all of them apply or none do.</p>
-<p>kastor maps the array form of <code>$transaction</code> onto D1 batch. On D1, design every atomic unit as a known list of queries and use that form. Do not build D1 code around the callback form, because D1 has no way to hold a transaction open between awaits.</p>
+<p>kastor maps the array form of <code>$transaction</code> onto one D1 batch when every query in the array compiles to a single statement. On D1, design every atomic unit as a known list of queries and use that form. Batchable queries are the reads (<code>findMany</code>, <code>findFirst</code>, <code>findUnique</code>, <code>count</code>, <code>aggregate</code>, <code>groupBy</code>, includes allowed), <code>create</code> without nested writes or included relations, <code>createMany</code>, <code>updateMany</code>, <code>deleteMany</code>, <code>upsert</code> and, on soft delete tables, <code>restore</code> and <code>hardDeleteMany</code>. <code>update</code>, <code>delete</code> and the <code>OrThrow</code> finders are not batchable, because they must fail with <code>NOT_FOUND</code> and a batch cannot roll back after that check; nested writes, <code>findPage</code>, <code>createManyAndReturn</code> and <code>cursor</code> reads are not either. Use <code>updateMany</code> and <code>deleteMany</code> with the unique where inside a batch.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/publish.ts">
 // inside fetch, after const db = createDb(env.DB)
 const postId = crypto.randomUUID()
 
 await db.$transaction([
   db.posts.create({ data: { id: postId, title: 'Launch notes', authorId: 7, published: true } }),
-  db.users.update({ where: { id: 7 }, data: { role: 'admin' } }),
+  db.users.updateMany({ where: { id: 7 }, data: { role: 'admin' } }),
   db.posts.updateMany({ where: { authorId: 7, published: false }, data: { published: true } }),
 ])
 </pre>
+<p>If any query in the array is not batchable, the whole array falls back to a regular transaction, and that is what D1 cannot do. The callback form, <code>db.$transaction(async (tx) =&gt; ...)</code>, throws <code>UNSUPPORTED</code> with a hint by default, and so does anything kastor runs inside a transaction for you, such as a <code>create</code> with nested writes. If your code tolerates partial writes, <code>d1(env.DB, { transactions: 'sequential' })</code> runs those callbacks statement by statement with no atomicity at all; treat it as an explicit trade-off, not a default.</p>
 <p>Since statements in a batch cannot read each other's results, generate keys in code before the batch. Here <code>crypto.randomUUID()</code> fills a <code>t.uuid()</code> primary key, so later statements could reference the new post without a round trip. When a step truly depends on data read earlier, read first, then send the writes as one batch with conditions in their <code>where</code> clauses so they stay correct if the data changed in between.</p>
 </section>
 <section id="migrations"><h2>Migrations: generate with kastor, apply with wrangler</h2>
@@ -117,7 +118,7 @@ cp kastor/migrations/*_add_posts/migration.sql migrations/0002_add_posts.sql
 npx wrangler d1 migrations apply app-db --local
 npx wrangler d1 migrations apply app-db --remote
 </pre>
-<p>Pick one tool to own the applied history. Wrangler records applied files in its own table, while kastor records them in <code>_kastor_migrations</code>. If both apply files to the same D1 database, each thinks the other's migrations are pending. For D1, wrangler is the practical choice, because it reaches remote databases from your terminal and CI with your Cloudflare credentials. Read every generated file before applying it remotely, and see the <a href="database-migrations-explained.html">migrations guide</a> for rename handling and review tips.</p>
+<p>Pick one tool to own the applied history. Wrangler records applied files in its own table, while kastor records them in <code>_kastor_migrations</code>. If both apply files to the same D1 database, each thinks the other's migrations are pending. For D1, wrangler is the practical choice, because it reaches remote databases from your terminal and CI with your Cloudflare credentials. There is a second option for local work: <code>npx kastor init --db d1</code> scaffolds a config whose adapter calls wrangler's <code>getPlatformProxy()</code> and passes the local <code>DB</code> binding to <code>d1()</code>, so kastor commands such as <code>db push</code> and <code>studio</code> run against the same local database <code>wrangler dev</code> uses. D1 has no transactions for DDL either, so kastor applies migration statements there one by one. Read every generated file before applying it remotely, and see the <a href="database-migrations-explained.html">migrations guide</a> for rename handling and review tips.</p>
 </section>
 <section id="local-dev"><h2>Local development with wrangler dev</h2>
 <p><code>npx wrangler dev</code> runs your Worker locally with a local D1 database stored on disk under the <code>.wrangler</code> folder. Apply migrations with <code>--local</code> first, and load test data with <code>npx wrangler d1 execute app-db --local --file=./seed.sql</code>. Your laptop never touches production data, and you can delete the folder to start over. Pass <code>--remote</code> to wrangler commands only when you deliberately want the real database.</p>
@@ -128,7 +129,8 @@ npx wrangler d1 migrations apply app-db --remote
 <p>D1 has limits that ordinary SQLite does not. Cloudflare publishes the current numbers in the D1 documentation, and they change over time, so check them there. Qualitatively:</p>
 <ul>
 <li><strong>Database size</strong> is capped per database. D1 is designed for many smaller databases, for example one per tenant, rather than one huge one.</li>
-<li><strong>Bound parameters per statement</strong> are limited, more tightly than in local SQLite. Large <code>createMany</code> calls and long <code>in</code> lists are worth testing against D1, and splitting very large imports into several batches is a safe habit.</li>
+<li><strong>Bound parameters per statement</strong> are capped at 100, far below local SQLite. The D1 dialect knows this: it splits <code>createMany</code> rows and long <code>in</code> lists into chunks that fit, so a large import becomes several statements. Splitting very large imports into several batches yourself is still a safe habit.</li>
+<li><strong>Integers come back as doubles.</strong> D1 returns every number as a JavaScript double, so the dialect reads <code>t.bigint()</code> columns as text and returns them as <code>bigint</code>, and values past 2^53 keep every digit.</li>
 <li><strong>Queries run one at a time</strong> per database. Short indexed queries keep throughput high; a slow full scan delays every request behind it. Declare indexes with <code>index()</code> in the table options.</li>
 <li><strong>Query duration and batch size</strong> are bounded, and Workers have their own CPU time limits. Paginate with <code>findPage</code> instead of loading whole tables.</li>
 </ul>

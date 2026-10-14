@@ -13,8 +13,8 @@
     { "q": "What is a database migration in simple terms?", "a": "It is a file of SQL statements that changes the structure of a database, such as creating a table or adding a column. Migrations are applied in order and recorded in a bookkeeping table, so every environment ends up with the same schema." },
     { "q": "Should I commit migration files to git?", "a": "Yes. The folder under <code>kastor/migrations</code> is the history of your schema and must be reviewed and committed like any other code. Production applies exactly those files with <code>npx kastor migrate deploy</code>." },
     { "q": "What is the difference between db push and migrate dev?", "a": "<code>db push</code> syncs the live database to your TypeScript schema without writing a migration file, which is handy while prototyping. <code>migrate dev</code> writes a reviewable SQL file and applies it, which is what you want once the schema matters to anyone else." },
-    { "q": "How do I rename a column without losing data?", "a": "Rename the property in your schema and run <code>npx kastor migrate dev</code>. kastor notices that one column disappeared and a compatible one appeared, and asks whether it was a rename instead of silently dropping the old column. If you only want a nicer name in code, use <code>.map('old_name')</code> and no migration is needed." },
-    { "q": "Can I edit a generated migration SQL file?", "a": "Yes, before it is applied anywhere else. The files are plain SQL, so you can add a backfill <code>UPDATE</code>, split a step, or add an index. Once a migration has been applied to a shared database, leave it alone and write a new one." }
+    { "q": "How do I rename a column without losing data?", "a": "Rename the property in your schema and run <code>npx kastor migrate dev</code>. kastor notices that one column disappeared and a compatible one appeared, and asks whether it was a rename instead of silently dropping the old column. In a non interactive shell, pass the answer as a flag, such as <code>--rename users.name:fullName</code>. If you only want a nicer name in code, use <code>.map('old_name')</code> and no migration is needed." },
+    { "q": "Can I edit a generated migration SQL file?", "a": "Yes, before it is applied. Run <code>npx kastor migrate dev --create-only</code> to write the file without applying it, add a backfill <code>UPDATE</code> or an index, then run <code>migrate dev</code> again to apply it. Once a migration has been applied, its checksum is recorded, so leave it alone and write a new one." }
   ],
   "related": ["database-seeding-typescript", "nextjs-postgres-orm", "typescript-orm"]
 }
@@ -45,7 +45,7 @@ export default defineConfig({
 <p>The day to day loop:</p>
 <ol>
 <li><strong>Change the schema</strong> in <code>src/db/schema.ts</code>. Types update as you type, there is no generate step.</li>
-<li><strong>Run <code>migrate dev</code></strong> with a descriptive name. kastor diffs the TypeScript schema against your local database, writes <code>kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql</code> and applies it.</li>
+<li><strong>Run <code>migrate dev</code></strong> with a descriptive name (leave out <code>--name</code> and it suggests one). kastor first applies any pending migrations, for example from a teammate's branch, then diffs the TypeScript schema against your local database, writes <code>kastor/migrations/&lt;timestamp&gt;_&lt;name&gt;/migration.sql</code> and applies it. With <code>--create-only</code> it stops after writing the file.</li>
 <li><strong>Read the SQL and commit it</strong> together with the schema change, in the same pull request, so reviewers see both.</li>
 <li><strong>Run <code>migrate deploy</code></strong> in CI or on release. It applies pending migrations in order and never generates anything new.</li>
 </ol>
@@ -55,27 +55,39 @@ git add src/db/schema.ts kastor/migrations
 npx kastor migrate status
 npx kastor migrate deploy
 </pre>
-<p><code>migrate status</code> tells you which migrations are applied and which are pending for the database in <code>DATABASE_URL</code>.</p>
+<p><code>migrate status</code> lists every migration as applied, pending or modified for the database your config connects to, flags applied migrations whose folder is missing, and warns when the schema has changes no migration covers yet. It exits with code 1 when anything is pending, modified or missing, and <code>--json</code> prints the same report for scripts.</p>
 <div class="callout"><p>Only run <code>migrate dev</code> against a development database. It is the command that creates new files and may ask questions. Shared environments get <code>migrate deploy</code>, which only applies what is already committed.</p></div>
 </section>
 <section id="migration-files"><h2>Readable SQL files and the migrations table</h2>
-<p>Each migration is a folder with a single <code>migration.sql</code> inside. It is ordinary SQL for your database, so you can read it in review and run it in your head:</p>
+<p>Each migration is a folder named <code>&lt;timestamp&gt;_&lt;name&gt;</code>, with the timestamp in UTC, and a single <code>migration.sql</code> inside. It is ordinary SQL for your database with a commented header that lists the changes, so you can read it in review and run it in your head:</p>
 <pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261013120000_add_posts/migration.sql">
+-- Migration 20261013120000_add_posts
+-- Written by kastor 0.1.0 for postgres on 2026-10-13 12:00:00 UTC.
+-- Applied by `kastor migrate deploy`. Edit it before it is applied if you need to;
+-- after that, the checksum in _kastor_migrations must keep matching.
+--
+-- Changes:
+--   + Create table posts
+
+-- Create table posts
 CREATE TABLE "posts" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id" uuid DEFAULT gen_random_uuid() NOT NULL,
   "title" varchar(200) NOT NULL,
   "body" text,
-  "published" boolean NOT NULL DEFAULT false,
-  "authorId" integer NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE
+  "published" boolean DEFAULT false NOT NULL,
+  "authorId" integer NOT NULL,
+  CONSTRAINT "posts_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "posts_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
-
 CREATE INDEX "posts_authorId_idx" ON "posts" ("authorId");
 </pre>
-<p>Because the file is plain SQL, you are allowed to edit it before it leaves your machine. Keep the file and the TypeScript schema consistent: if you add something by hand that the schema does not know about, the next diff may try to remove it.</p>
-<p>To know what has been applied, kastor keeps a bookkeeping table named <code>_kastor_migrations</code> in each database. Every row records the migration folder name, a checksum of its <code>migration.sql</code> and when it was applied. <code>migrate deploy</code> compares the folders on disk with those rows and runs only what is missing. The checksum is why you should treat a migration as frozen once a shared database has applied it: fix mistakes with a new migration instead of rewriting history.</p>
+<p>Next to the folders, <code>migration_lock.toml</code> records which database the files were written for. Commit it too: <code>migrate dev</code> and <code>migrate deploy</code> refuse to run these files against a different kind of database.</p>
+<p>Because the file is plain SQL, you are allowed to edit it before it is applied. Plain <code>migrate dev</code> applies the file right away, so when you know you want to edit, run it with <code>--create-only</code>, change the SQL, then run <code>migrate dev</code> again: it applies pending files before diffing. Keep the file and the TypeScript schema consistent: if you add something by hand that the schema does not know about, the next diff may try to remove it.</p>
+<p>To know what has been applied, kastor keeps a bookkeeping table named <code>_kastor_migrations</code> in each database. Every row records the migration folder name, a checksum of its <code>migration.sql</code> and when it was applied. <code>migrate deploy</code> compares the folders on disk with those rows and runs only what is missing. If an applied file has changed since, both <code>migrate dev</code> and <code>migrate deploy</code> stop with a <code>MIGRATION_DRIFT</code> error. That is why you should treat a migration as frozen once a database has applied it: fix mistakes with a new migration instead of rewriting history. On your own machine, <code>migrate reset</code> rebuilds the database from the files if you need a clean start.</p>
 </section>
 <section id="renames-and-destructive-changes"><h2>Renames and destructive changes</h2>
-<p>The riskiest diff is a rename. To a naive differ, renaming <code>name</code> to <code>fullName</code> looks like "drop column <code>name</code>, add column <code>fullName</code>", which deletes every value in that column. When <code>migrate dev</code> sees a column vanish and a compatible one appear in the same table, it asks whether you renamed it. Answer yes and the migration uses a rename statement, so the data stays.</p>
+<p>The riskiest diff is a rename. To a naive differ, renaming <code>name</code> to <code>fullName</code> looks like "drop column <code>name</code>, add column <code>fullName</code>", which deletes every value in that column. When <code>migrate dev</code> sees a column vanish and a compatible one appear in the same table, it asks whether you renamed it, and it does the same for tables. Pick "Renamed to fullName" and the migration uses <code>ALTER TABLE "users" RENAME COLUMN "name" TO "fullName"</code>, so the data stays. Without a terminal to ask in, it stops with an error unless you pass <code>--rename users.name:fullName</code> (or <code>--rename users:accounts</code> for a table).</p>
+<p>Changes that drop data for real, such as removing a column, get a second question: <code>migrate dev</code> and <code>db push</code> ask you to confirm before writing them, and refuse outside a terminal unless you pass <code>--accept-data-loss</code>. The header of the migration file marks those steps with <code>[data loss]</code>.</p>
 <p>If you only want a nicer property name in TypeScript, skip the migration entirely: keep the database column and map it with <code>.map('name')</code> on the new property.</p>
 <h3>Expand and contract</h3>
 <p>Some changes are destructive no matter what: dropping a column, making a column <code>NOT NULL</code>, shrinking a type, or splitting one column into two. During a deploy, old and new versions of your code run side by side for a while, so a single step change can break the version that is still serving traffic. The safe pattern is <strong>expand and contract</strong>:</p>
@@ -86,7 +98,12 @@ CREATE INDEX "posts_authorId_idx" ON "posts" ("authorId");
 <li><strong>Switch reads</strong> to the new column and deploy.</li>
 <li><strong>Contract.</strong> In a later migration, add the <code>NOT NULL</code> constraint and drop the old column.</li>
 </ol>
+<p>The backfill can live in the expand migration itself. Write it with <code>npx kastor migrate dev --create-only --name add_display_name</code>, add the <code>UPDATE</code> by hand, then apply it with <code>migrate dev</code>:</p>
 <pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261014090000_add_display_name/migration.sql">
+-- Migration 20261014090000_add_display_name
+-- (header lines trimmed)
+
+-- Add column users.displayName
 ALTER TABLE "users" ADD COLUMN "displayName" varchar(100);
 
 -- added by hand: backfill before the column becomes required
@@ -106,8 +123,8 @@ WHERE "displayName" IS NULL;
 <tr><td><code>migrate deploy</code></td><td>Applies committed migrations</td><td>CI, staging and production</td></tr>
 </tbody>
 </table>
-<p><code>db push</code> is fast because it skips the history. That is exactly why it does not belong on shared databases: nothing records what changed. A good habit is to push freely while an idea is taking shape, then reset your local database and create one clean migration with <code>migrate dev</code> once the schema settles.</p>
-<p><code>db pull</code> is the starting point for an existing project. It reads the live tables, columns, indexes and foreign keys and writes a schema file you can tidy up. From then on, every schema change goes through <code>migrate dev</code> like in any other project.</p>
+<p><code>db push</code> is fast because it skips the history. That is exactly why it does not belong on shared databases: nothing records what changed. A good habit is to push freely while an idea is taking shape, then create one clean migration once the schema settles. Because a pushed database already matches the schema, <code>migrate dev</code> would find nothing to write, so first run <code>migrate reset</code>, which asks for confirmation, drops every table, reapplies the committed migrations and runs the seed when one is configured, and then <code>migrate dev</code>.</p>
+<p><code>db pull</code> is the starting point for an existing project. It reads the live tables, columns, indexes and foreign keys and writes a schema file you can tidy up, with relations guessed from the foreign keys. It writes to the schema path of your config (or <code>--out</code>), and <code>--print</code> shows the result without writing anything. Running <code>migrate dev</code> right after a pull should report that the database is already in sync, so your migration history starts at that point, and from then on every schema change goes through <code>migrate dev</code> like in any other project.</p>
 </section>
 <section id="migrations-in-ci"><h2>Running migrations in CI</h2>
 <p>In CI you want two things: tests run against a schema built only from committed migrations, and production receives exactly those migrations. Both come down to <code>migrate deploy</code>.</p>
@@ -125,13 +142,14 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npx kastor migrate status
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npx kastor migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npx kastor migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 </pre>
+<p>The order matters: <code>migrate status</code> exits with code 1 while migrations are pending, so before the deploy it would fail the job on every release that brings a new migration. After the deploy it is a cheap check that nothing is pending, modified or missing.</p>
 <p>A few rules keep this boring, which is what you want:</p>
 <ul>
 <li>Run migrations as their own step <strong>before</strong> the new application version starts, and only once per deploy, not from every server instance on boot.</li>

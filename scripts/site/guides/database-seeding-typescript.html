@@ -13,7 +13,7 @@
     { "q": "How do I seed a database in TypeScript?", "a": "Write a seed file that exports <code>defineSeed(async (db) =&gt; { ... })</code>, point the <code>seed</code> option of <code>kastor.config.ts</code> at it, and run <code>npx kastor db seed</code>. The <code>db</code> argument is a fully typed client for your schema." },
     { "q": "How do I make a seed script idempotent?", "a": "Use <code>upsert</code> keyed on a unique column for fixed records, and guard bulk inserts with a <code>count</code> check. Running the seed twice then leaves the database in the same state instead of failing on unique constraints or duplicating rows." },
     { "q": "Should tests use the seed file or factories?", "a": "Use factories for tests. Each test should create exactly the rows it needs, so it does not break when someone changes the shared seed. Keep the seed file for local development and demos." },
-    { "q": "How do I reset the database between tests?", "a": "Locally, <code>npx kastor migrate reset</code> rebuilds the schema from your migrations, then <code>npx kastor db seed</code> fills it again. Inside a test suite, clearing tables in a setup hook is much faster than rebuilding the schema for each test." },
+    { "q": "How do I reset the database between tests?", "a": "Locally, <code>npx kastor migrate reset</code> drops every table, rebuilds the schema from your migrations and runs the configured seed again. Inside a test suite, clearing tables in a setup hook is much faster than rebuilding the schema for each test." },
     { "q": "How do I seed related rows like users with posts?", "a": "Use a nested write: <code>db.users.create</code> with <code>posts: { create: [...] }</code> creates the user and its posts together. To attach a row to an existing parent, use <code>connect: { id }</code> on the relation." }
   ],
   "related": ["database-migrations-explained", "typescript-orm", "avoid-n-plus-1-queries"]
@@ -30,11 +30,12 @@
 <p>The common thread is repeatability. A seed you can only run once on an empty database will break the first time someone runs it twice, so this guide treats idempotency as a requirement, not a bonus.</p>
 </section>
 <section id="seed-file"><h2>A typed seed file with defineSeed</h2>
-<p>kastor seeds are plain TypeScript. Point the <code>seed</code> option in <code>kastor.config.ts</code> at a file, for example <code>seed: './src/db/seed.ts'</code>, and export a function wrapped in <code>defineSeed</code>. The function receives a client typed from your schema, so every column name and value is checked by the compiler, exactly like application code.</p>
+<p>kastor seeds are plain TypeScript. Point the <code>seed</code> option in <code>kastor.config.ts</code> at a file, for example <code>seed: './src/db/seed.ts'</code>, and export a function wrapped in <code>defineSeed</code>. The CLI calls it with your client. Pass the client type as the type argument (export <code>type Db = typeof db</code> from your db module) and every column name and value is checked by the compiler, exactly like application code.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
 import { defineSeed } from 'kastor'
+import type { Db } from './index'
 
-export default defineSeed(async (db) =&gt; {
+export default defineSeed&lt;Db&gt;(async (db) =&gt; {
   // Fixed records: upsert keyed on a unique column, safe to run again
   const admin = await db.users.upsert({
     where: { email: 'admin@example.com' },
@@ -51,14 +52,13 @@ export default defineSeed(async (db) =&gt; {
   console.log(`seeded admin #${admin.id}`)
 })
 </pre>
-<p>Run it with the CLI. It loads your config, connects with the configured adapter and calls the function:</p>
+<p>Run it with the CLI. It loads your config, connects with the configured adapter, builds a client from the tables of your schema module and calls the default export with it. That client takes its relations from a <code>relations</code> export of the schema module, which is where <code>kastor init</code> and <code>db pull</code> put them, so keep them there if the seed uses nested writes or <code>include</code>:</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npx kastor migrate dev --name init
 npx kastor db seed
 npx kastor migrate reset
-npx kastor db seed
 </pre>
-<p>The last two lines are the "start over" routine: <code>migrate reset</code> rebuilds the database from your migrations, and <code>db seed</code> fills it again. Because the schema comes from committed migrations, everyone on the team gets the same starting point.</p>
+<p>The last line is the "start over" routine: <code>migrate reset</code> asks for confirmation, drops every table, rebuilds the database from your migrations and then runs the seed from the config, so there is no need to call <code>db seed</code> after it. Pass <code>--skip-seed</code> when you want empty tables, and <code>--force</code> to skip the question in scripts. Because the schema comes from committed migrations, everyone on the team gets the same starting point.</p>
 </section>
 <section id="idempotent-seeds"><h2>Idempotent seeds with upsert</h2>
 <p>An idempotent seed produces the same result whether it runs once or ten times. That property makes it safe to run after every pull, in a post-deploy step for preview environments, or in a CI job that may retry.</p>
@@ -71,7 +71,7 @@ npx kastor db seed
 </ul>
 </section>
 <section id="bulk-and-relations"><h2>Bulk inserts and related rows</h2>
-<p>For volume, <code>createMany</code> inserts many rows in one statement instead of one round trip per row. Combine it with <strong>deterministic data</strong>: fixed dates and a seeded random generator, so every run and every machine produces identical rows. That turns "the bug only shows up with my seed" into something anyone can reproduce.</p>
+<p>For volume, <code>createMany</code> inserts many rows in as few statements as the database allows instead of one round trip per row, and resolves to <code>{ count }</code>. Combine it with <strong>deterministic data</strong>: fixed dates and a seeded random generator, so every run and every machine produces identical rows. That turns "the bug only shows up with my seed" into something anyone can reproduce.</p>
 <pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
 // Small seeded PRNG (mulberry32): same seed, same sequence, every run
 function seeded(seed: number) {
@@ -138,23 +138,29 @@ await db.posts.create({
 </section>
 <section id="factories"><h2>Factories for tests</h2>
 <p>Tests should not depend on the shared seed. If a test assumes "there are 200 members" and someone changes the seed to 50, an unrelated test fails. Instead, each test creates exactly the rows it asserts on. Factories make that cheap.</p>
-<p>A factory pairs a table with a build function. The function receives a sequence number <code>i</code> and returns insert data, so every row is unique (no email collisions) and predictable (user 3 is always <code>user3@example.com</code>). The return value is checked against the table's insert type.</p>
+<p>A factory pairs a model of your client with a defaults function. The function receives a context with a sequence number <code>seq</code> (1, 2, 3 and so on) and returns create data, so every row is unique (no email collisions) and predictable (user 3 is always <code>user3@example.com</code>). The return value is checked against the model's create type.</p>
 <pre data-kind="editor" data-lang="ts" data-title="test/factories.ts">
 import { factory } from 'kastor'
-import { users } from '../src/db/schema'
+import { db } from '../src/db'
 
-export const userFactory = factory(users, (i) =&gt; ({
-  email: `user${i}@example.com`,
-  name: `User ${i}`,
+export const userFactory = factory(db.users, ({ seq }) =&gt; ({
+  email: `user${seq}@example.com`,
+  name: `User ${seq}`,
 }))
 
-export const adminFactory = factory(users, (i) =&gt; ({
-  email: `admin${i}@example.com`,
-  name: `Admin ${i}`,
+export const adminFactory = factory(db.users, ({ seq }) =&gt; ({
+  email: `admin${seq}@example.com`,
+  name: `Admin ${seq}`,
   role: 'admin' as const,
 }))
+
+// in a test
+const ada = await userFactory.create({ name: 'Ada' })   // one row, with overrides
+const crowd = await userFactory.createMany(10)          // ten rows
+const draft = userFactory.build()                       // data only, nothing saved
+userFactory.reset()                                     // seq starts at 1 again
 </pre>
-<p>Define one factory per shape you test often, rather than one giant factory with flags. The <a href="api.html">API reference</a> lists the methods a factory exposes for building rows and inserting them.</p>
+<p>Define one factory per shape you test often, rather than one giant factory with flags. <code>buildMany(count)</code> returns data for several rows without saving them, handy for a <code>createMany</code> bulk insert, and both <code>createMany</code> and <code>buildMany</code> accept overrides as an object or as a function of the index.</p>
 <h3>Resetting between tests</h3>
 <p>Rebuilding the schema with <code>migrate reset</code> for every test is far too slow. Run migrations once per test run, then empty the tables in a setup hook. On PostgreSQL a single <code>TRUNCATE</code> does it:</p>
 <pre data-kind="editor" data-lang="ts" data-title="test/setup.ts">

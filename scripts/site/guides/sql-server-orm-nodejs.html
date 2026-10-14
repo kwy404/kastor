@@ -14,13 +14,13 @@
     { "q": "How do I fix the self signed certificate error with mssql?", "a": "A local SQL Server container presents a self signed certificate. Set <code>trustServerCertificate: true</code> for local development only, and keep it false in production, where the server should present a certificate from a trusted authority." },
     { "q": "Does kastor work with Azure SQL Database?", "a": "Yes. Point the pool at <code>yourserver.database.windows.net</code>, keep <code>encrypt: true</code>, and allow your client IP in the server firewall. Authentication options such as Microsoft Entra ID come from the mssql driver configuration." },
     { "q": "Can I use kastor with an existing SQL Server database?", "a": "Yes. Run <code>npx kastor db pull</code> to introspect the live database into a TypeScript schema file, review it, and use <code>migrate dev</code> for changes from then on. See <a href=\"database-migrations-explained.html\">database migrations explained</a> for the full workflow." },
-    { "q": "How does kastor paginate on SQL Server?", "a": "Offset pagination compiles to <code>OFFSET ... FETCH NEXT</code>, which SQL Server only allows with an ORDER BY, so always pass <code>orderBy</code> with <code>skip</code>. For large tables, <code>findPage</code> gives cursor pagination that stays fast deep into the result set." }
+    { "q": "How does kastor paginate on SQL Server?", "a": "<code>take</code> alone compiles to <code>TOP (n)</code>, and <code>skip</code> compiles to <code>OFFSET ... FETCH NEXT</code>, which SQL Server only allows with an ORDER BY. Without <code>orderBy</code> kastor adds a placeholder order so the statement runs, but the row order is then not stable, so pass <code>orderBy</code> with <code>skip</code>. For large tables, <code>findPage</code> gives cursor pagination that stays fast deep into the result set." }
   ],
   "related": ["database-migrations-explained", "multi-database-apps", "avoid-n-plus-1-queries"]
 }
 -->
 <section id="setup"><h2>Install the mssql driver and open a pool</h2>
-<p>kastor ships no database drivers. For SQL Server you install the <code>mssql</code> package, which is the common Node.js client built on tedious and needs no native compilation. You create a <code>ConnectionPool</code>, connect it, and pass it to the <code>mssql</code> adapter from <code>kastor/mssql</code>. Types, queries and migrations then come from your TypeScript schema. There is no generate step and no engine binary to deploy.</p>
+<p>kastor ships no database drivers. For SQL Server 2017 or newer and Azure SQL you install the <code>mssql</code> package, which is the common Node.js client built on tedious and needs no native compilation. You create a <code>ConnectionPool</code>, connect it (the adapter also connects it on first use if you have not), and pass it to the <code>mssql</code> adapter from <code>kastor/mssql</code>. Types, queries and migrations then come from your TypeScript schema. There is no generate step and no engine binary to deploy.</p>
 <p>For local work, the official SQL Server container image is the fastest way to get a server. It listens on port 1433 and refuses to start with a weak <code>sa</code> password, because SQL Server enforces a password complexity policy.</p>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npm install kastor mssql
@@ -77,17 +77,18 @@ export const db = kastor({
 <thead><tr><th>Concern</th><th>Common elsewhere</th><th>On SQL Server</th></tr></thead>
 <tbody>
 <tr><td>Rows back from a write</td><td>RETURNING</td><td>OUTPUT with INSERTED or DELETED columns</td></tr>
-<tr><td>Offset pagination</td><td>LIMIT and OFFSET</td><td>OFFSET ... ROWS FETCH NEXT ... ROWS ONLY</td></tr>
-<tr><td>Upsert</td><td>ON CONFLICT</td><td>MERGE</td></tr>
+<tr><td>Limit and offset</td><td>LIMIT and OFFSET</td><td>TOP (n) without skip, OFFSET ... ROWS FETCH NEXT ... ROWS ONLY with skip</td></tr>
+<tr><td>Upsert</td><td>ON CONFLICT</td><td>MERGE ... WITH (HOLDLOCK)</td></tr>
 <tr><td>Nested includes</td><td>JSON aggregation</td><td>FOR JSON PATH subqueries</td></tr>
 <tr><td>Identifier quoting</td><td>Double quotes or backticks</td><td>Square brackets</td></tr>
 <tr><td>Strings</td><td>varchar or text</td><td>nvarchar, so Unicode is stored as written</td></tr>
 </tbody>
 </table>
-<p>A few consequences are worth knowing. OFFSET FETCH is only valid with an ORDER BY, and pages without a stable order are unreliable on any database, so always pass <code>orderBy</code> with <code>skip</code>. For deep pagination, use <code>findPage</code>, which pages by cursor instead of skipping rows.</p>
+<p>A few consequences are worth knowing. OFFSET FETCH is only valid with an ORDER BY. When you pass <code>skip</code> without <code>orderBy</code>, kastor adds <code>ORDER BY (SELECT NULL)</code> so the statement runs, but that order is not stable, and pages without a stable order are unreliable on any database, so always pass <code>orderBy</code> with <code>skip</code>. For deep pagination, use <code>findPage</code>, which pages by cursor instead of skipping rows.</p>
 <p>Because includes use FOR JSON PATH, a <code>findMany</code> call with nested <code>include</code> options runs as one statement per root call, not one per row. Open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
 <p>Bracket quoting means table and column names that are reserved words in T-SQL, like <code>user</code> or <code>order</code>, work without renaming. Strings default to nvarchar, which avoids implicit conversions when the driver sends Unicode parameters. If a column only holds ASCII codes and you want varchar, set <code>.nativeType('varchar(64)')</code> on it.</p>
-<p>Two SQL Server rules apply to any client. SQL Server rejects OUTPUT without INTO on a table that has enabled triggers, so check trigger heavy legacy tables before writing to them. And MERGE alone does not prevent two concurrent upserts of the same key from racing, so keep a unique index on the key and retry on <code>UNIQUE_VIOLATION</code>.</p>
+<p>The default collations ignore case, so <code>equals</code> on a string column matches regardless of case on SQL Server. <code>contains</code>, <code>startsWith</code> and <code>endsWith</code> are exact, because kastor compares them with a binary collation and escapes the <code>[</code> wildcard; add <code>mode: 'insensitive'</code> to lower both sides. Decimals are read as text so no digits are lost, and datetimes are sent as text so DATETIME2 keeps milliseconds exactly. Unique indexes on nullable columns are filtered with <code>WHERE col IS NOT NULL</code>, so several rows may hold NULL, as on other databases.</p>
+<p>Some SQL Server rules apply to any client. kastor writes rows back with OUTPUT and no INTO, and SQL Server rejects that on a table with enabled triggers, so check trigger heavy legacy tables before writing to them through the ORM. SQL Server also refuses cascading foreign keys that point to their own table or that would give a row two cascade paths; kastor writes those keys with NO ACTION, so deleting such a parent fails with <code>FOREIGN_KEY_VIOLATION</code> while children exist. Upserts use MERGE with a HOLDLOCK hint, which serializes concurrent upserts of the same key; keep a unique index on the key anyway, since it is what the database enforces.</p>
 </section>
 <section id="migrations"><h2>Migrations and db pull for existing databases</h2>
 <p>The config file tells the CLI where your schema lives and how to reach the database. The adapter is a function, so the CLI creates and connects the pool only when it needs it.</p>
@@ -129,7 +130,7 @@ await db.$transaction([
 <li><strong>Self signed certificate</strong> on connect: local server with <code>trustServerCertificate</code> left false. Set it to true for local development only.</li>
 <li><strong>Login failed for user</strong>: wrong credentials, or SQL authentication is disabled on the instance. Containers enable it; some managed installs only allow Windows or Entra authentication.</li>
 <li><strong>Connection timeout</strong>: TCP/IP is disabled, the port is not 1433, or a named instance needs its port set explicitly. Run <code>npx kastor doctor</code> to check the config and the connection.</li>
-<li><strong>Errors 2627 and 2601</strong> (duplicate key) arrive as <code>UNIQUE_VIOLATION</code>, error 547 as <code>FOREIGN_KEY_VIOLATION</code>, and error 515 as <code>NOT_NULL_VIOLATION</code>.</li>
+<li><strong>Errors 2627 and 2601</strong> (duplicate key) arrive as <code>UNIQUE_VIOLATION</code>, error 547 as <code>FOREIGN_KEY_VIOLATION</code> (or <code>CHECK_VIOLATION</code> when a check constraint failed), and error 515 as <code>NOT_NULL_VIOLATION</code>.</li>
 </ul>
 <pre data-kind="editor" data-lang="ts" data-title="src/signup.ts">
 import { isKastorError } from 'kastor'

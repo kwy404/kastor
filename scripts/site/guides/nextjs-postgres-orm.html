@@ -24,9 +24,9 @@
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npm install kastor pg server-only
 npm install -D @types/pg
-npx kastor init
+npx kastor init --db postgres
 </pre>
-<p><code>server-only</code> is a small package from the Next.js ecosystem that makes the build fail if a module marked with it ends up in a client bundle. It is the cheapest insurance against leaking your database module, and we will use it below. If you have not set up the framework side yet, the <a href="frameworks.html#nextjs">Next.js setup notes</a> cover project layout.</p>
+<p><code>init --db postgres</code> writes <code>kastor.config.ts</code>, a starter <code>src/db/schema.ts</code> with <code>users</code> and <code>posts</code>, a <code>src/db/seed.ts</code> and a <code>.env</code> with <code>DATABASE_URL</code>, and adds <code>.env</code> to <code>.gitignore</code>. <code>server-only</code> is a small package from the Next.js ecosystem that makes the build fail if a module marked with it ends up in a client bundle. It is the cheapest insurance against leaking your database module, and we will use it below. If you have not set up the framework side yet, the <a href="frameworks.html#nextjs">Next.js setup notes</a> cover project layout.</p>
 </section>
 <section id="db-module"><h2>One db module, reused across hot reloads</h2>
 <p>In development, Next.js re-evaluates modules every time you save a file. If your database module creates a new <code>pg.Pool</code> at the top level, every reload opens a fresh pool while the old ones keep their connections until they time out. After a few minutes of editing you hit the server's connection limit.</p>
@@ -135,7 +135,7 @@ export async function GET(request: Request) {
 <p>The <code>runtime = 'nodejs'</code> line matters: <code>pg</code> opens TCP sockets, which the Node.js runtime supports. Keep database routes on it unless your driver is built for other runtimes.</p>
 </section>
 <section id="serverless-postgres"><h2>Serverless Postgres providers and connection pooling</h2>
-<p>Serverless deployments change the connection math. Each function instance has its own pool, and a traffic spike can start dozens of instances. Ten connections per instance times fifty instances is more than many Postgres plans allow. Three habits keep you safe:</p>
+<p>Serverless deployments change the connection math. Each function instance has its own pool, and a traffic spike can start dozens of instances. Ten connections per instance times fifty instances is more than many Postgres plans allow. Four habits keep you safe:</p>
 <ul>
 <li><strong>Use the provider's pooled connection string</strong> for the app. Supabase offers a pooler connection string next to the direct one, and Neon offers a pooled host. A pooler multiplexes many client connections onto a few server connections.</li>
 <li><strong>Keep <code>max</code> small</strong> in serverless, often between 1 and 5 per instance, since one instance rarely handles many requests at once.</li>
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
 </section>
 <section id="env-and-migrations"><h2>Environment variables and migrations on deploy</h2>
 <p>Put connection strings in <code>.env.local</code> for development and in your host's environment settings for production. Never prefix them with <code>NEXT_PUBLIC_</code>: that prefix inlines the value into browser bundles.</p>
-<p>Next.js loads <code>.env.local</code> for the app, but the kastor CLI runs outside Next.js. The simplest way to give the CLI the same variables is <code>loadEnvConfig</code> from <code>@next/env</code>, which ships with Next.js, at the top of your config. The config below also prefers a direct URL for migrations when one is set:</p>
+<p>Next.js loads <code>.env.local</code> for the app, but the kastor CLI runs outside Next.js. On its own, the CLI reads only a <code>.env</code> file next to <code>kastor.config.ts</code> (the one <code>kastor init</code> writes), and never overrides variables that are already set. The simplest way to give the CLI the same variables is <code>loadEnvConfig</code> from <code>@next/env</code>, which ships with Next.js, at the top of your config. Because the CLI loads <code>.env</code> before it runs the config, a variable defined in both files keeps the <code>.env</code> value for the CLI, so define each connection string in only one of them. The config below also prefers a direct URL for migrations when one is set:</p>
 <pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
 import { loadEnvConfig } from '@next/env'
 import { defineConfig } from 'kastor'

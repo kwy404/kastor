@@ -13,7 +13,7 @@
   "faq": [
     { "q": "O que é o problema N+1 em banco de dados?", "a": "É quando o código faz uma consulta para buscar uma lista de N registros e depois mais uma consulta para cada registro, para carregar dados relacionados. O total é N+1 idas ao banco, e o tempo cresce junto com o tamanho da lista." },
     { "q": "Como saber se minha aplicação tem consultas N+1?", "a": "Ative o log de consultas passando <code>log: true</code> ao criar o cliente com <code>kastor()</code> e carregue a página. Se você vir a mesma instrução repetida dezenas de vezes mudando só o parâmetro, é N+1. Contar consultas por requisição em testes também ajuda." },
-    { "q": "O include do kastor pode gerar N+1?", "a": "Não. Nos bancos com agregação JSON, os includes aninhados são carregados em uma única consulta por chamada raiz. Nos outros, o kastor faz uma consulta extra por nível de include usando listas <code>IN</code>, então o número de consultas é fixo e não depende de quantas linhas voltam." },
+    { "q": "O include do kastor pode gerar N+1?", "a": "Não. Em todos os adaptadores SQL, os includes aninhados são carregados em uma única consulta por chamada raiz, montada com agregação JSON. No MongoDB, eles viram estágios <code>$lookup</code> de uma única agregação. Nos dois casos o número de consultas é fixo e não depende de quantas linhas voltam." },
     { "q": "Como contar registros relacionados sem carregar todos?", "a": "Use <code>_count</code> dentro de <code>include</code> ou <code>select</code>, por exemplo <code>include: { _count: { select: { posts: true } } }</code>. O banco devolve só o número, sem trazer as linhas para a memória." },
     { "q": "Usar SQL puro resolve o problema N+1?", "a": "Só se a consulta for escrita para buscar tudo de uma vez. Um <code>db.$sql</code> dentro de um laço continua sendo N+1. A correção está no formato do acesso, não na ferramenta: busque em lote e agrupe na memória." }
   ],
@@ -57,7 +57,7 @@ export const db = kastor({
   log: process.env.NODE_ENV !== 'production',
 })
 </pre>
-<p>Agora carregue a página suspeita e leia o terminal. O sinal de N+1 é inconfundível: a mesma instrução repetida muitas vezes seguidas, mudando apenas o valor do parâmetro. Se uma lista de 20 itens gera 21 linhas de log, você encontrou o culpado.</p>
+<p>Em vez de <code>true</code>, a opção <code>log</code> também aceita uma função, que recebe <code>{ sql, params, durationMs, error }</code> para cada instrução. Com ela, um teste pode contar as consultas de uma requisição. Agora carregue a página suspeita e leia o terminal. O sinal de N+1 é inconfundível: a mesma instrução repetida muitas vezes seguidas, mudando apenas o valor do parâmetro. Se uma lista de 20 itens gera 21 linhas de log, você encontrou o culpado.</p>
 <p>Algumas dicas para não deixar passar:</p>
 <ul>
 <li>Teste com volumes realistas. Com dois registros no seed, um N+1 gera só três consultas e passa despercebido. Use <code>factory</code> e <code>db seed</code> para criar algumas centenas de linhas.</li>
@@ -83,7 +83,7 @@ const feed = await db.posts.findMany({
 // feed[0].author.name is typed, no extra query happened
 </pre>
 <p>Nos bancos com agregação JSON (PostgreSQL, CockroachDB, MySQL, MariaDB, a família SQLite, SQL Server e Oracle), o kastor monta uma única consulta por chamada raiz. Os dados relacionados voltam agregados em JSON e são convertidos para os tipos certos, como <code>Date</code> para colunas datetime. Isso vale para includes aninhados também: autores com posts com comentários continuam sendo uma ida ao banco.</p>
-<p>Quando o banco não oferece agregação JSON, o kastor usa uma consulta extra por nível de include, com uma lista <code>IN</code> contendo as chaves do nível anterior. Um include de dois níveis vira três consultas, sejam 10 ou 10 mil linhas. O número de consultas é fixo, nunca proporcional aos dados. No MongoDB, o mesmo include vira um pipeline de agregação com <code>$lookup</code>.</p>
+<p>No MongoDB, cada leitura é uma única chamada <code>aggregate</code>, e cada include, com seu próprio <code>where</code>, <code>orderBy</code>, <code>take</code> e includes aninhados, vira um estágio <code>$lookup</code> dentro dela. O compilador SQL compartilhado também conhece uma segunda estratégia, para bancos sem agregação JSON: uma consulta extra por nível de include, com uma lista <code>IN</code> contendo as chaves do nível anterior, em que um include de dois níveis vira três consultas, sejam 10 ou 10 mil linhas. Todos os adaptadores SQL do kastor usam agregação JSON hoje, então esse caminho só aparece em dialetos próprios. Em qualquer caso, o número de consultas é fixo, nunca proporcional aos dados.</p>
 <p>Uma consulta maior não é automaticamente uma consulta lenta. O banco planeja a junção uma vez e percorre os dados relacionados usando índices. Por isso, garanta que toda chave estrangeira usada em includes tenha índice, como o <code>index(p.authorId)</code> declarado nas opções da tabela <code>posts</code>. Sem ele, cada busca de relação pode virar uma leitura completa da tabela, e o ganho de eliminar o N+1 diminui bastante.</p>
 </section>
 <section id="lista-in"><h2>Quando os IDs vêm de fora: lista IN manual</h2>
@@ -128,7 +128,7 @@ const authors = await db.users.findMany({
 <h3>select para colunas</h3>
 <p>Um <code>include</code> sem <code>select</code> traz todas as colunas da tabela relacionada, inclusive campos <code>text</code> grandes. Dentro do include, use <code>select</code> para listar só o que a interface mostra. O tipo do resultado encolhe junto, então o compilador avisa se algum componente dependia de um campo que você removeu.</p>
 <h3>take dentro do include</h3>
-<p>Relações para muitos podem crescer sem limite. Um autor ativo pode ter milhares de posts. Cada include aceita seu próprio <code>where</code>, <code>orderBy</code>, <code>take</code> e <code>skip</code>, como no exemplo acima, que traz só os três posts publicados mais recentes. Para listas paginadas na raiz, prefira <code>findPage</code>, que faz paginação por cursor.</p>
+<p>Relações para muitos podem crescer sem limite. Um autor ativo pode ter milhares de posts. Cada include aceita seu próprio <code>where</code>, <code>orderBy</code>, <code>take</code> e <code>skip</code>, como no exemplo acima, que traz só os três posts publicados mais recentes. Para listas paginadas na raiz, prefira <code>findPage</code>, que faz paginação por cursor: passe o tamanho da página em <code>first</code> e o <code>pageInfo.endCursor</code> da página anterior em <code>after</code>, e o resultado chega como <code>items</code> mais <code>pageInfo</code>.</p>
 </section>
 <section id="checklist"><h2>Checklist para revisão de código</h2>
 <p>Ao revisar um pull request que mexe com acesso a dados, procure estes sinais:</p>

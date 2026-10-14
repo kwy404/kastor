@@ -163,7 +163,7 @@ export function newestFirst(column: (typeof sortable)[number], limit: number) {
 }
 </pre>
 <p>Three helpers cover the rest. <code>sql.ident</code> quotes a table or column name, for dynamic sorting with an allowlist as above. <code>sql.join</code> combines a list of fragments. <code>sql.raw</code> inserts text without parameters: use it only for constant strings you wrote yourself, never for anything that came from a request. If you can see user input flowing into <code>sql.raw</code>, treat it as a security bug.</p>
-<div class="callout"><p>Not sure what a query compiles to? Call <code>.toSQL()</code> on it to get the statements and parameters without running them, or open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p></div>
+<div class="callout"><p>Not sure what an object API query compiles to? Call <code>.toSQL()</code> on it to get the statements and parameters without running them (a <code>db.$sql</code> query is already the SQL you wrote, so it has nothing to show there), or open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p></div>
 </section>
 <section id="checklist"><h2>A short checklist</h2>
 <ul>

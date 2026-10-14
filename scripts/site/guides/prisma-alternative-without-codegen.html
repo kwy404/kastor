@@ -35,7 +35,7 @@
 <p>What you give up is the dedicated schema language. Your models are TypeScript, so non TypeScript readers have to read code, and the schema file follows your formatter instead of its own.</p>
 </section>
 <section id="concept-map"><h2>Familiar concepts, side by side</h2>
-<p>kastor's query API is intentionally familiar, so most concepts map one to one. The main naming difference: the accessor is the key you give the table in the schema object, so <code>prisma.user</code> usually becomes <code>db.users</code>.</p>
+<p>kastor's query API is intentionally familiar, so most concepts map one to one. The main naming difference: the accessor is the key you give the table in the schema object, so <code>prisma.user</code> becomes <code>db.users</code> when you export the table as <code>users</code>. A schema written by <code>db pull</code> names each export after the database table in camelCase, so a Prisma table called <code>User</code> comes back as <code>user</code> until you rename it.</p>
 <table class="spec">
 <thead><tr><th>Prisma</th><th>kastor</th></tr></thead>
 <tbody>
@@ -45,7 +45,7 @@
 <tr><td><code>@relation(fields: [authorId], references: [id])</code></td><td><code>one(users, ...)</code> in <code>relations</code></td></tr>
 <tr><td><code>posts Post[]</code></td><td><code>many(posts)</code></td></tr>
 <tr><td><code>findMany</code>, <code>findUnique</code>, <code>include</code>, <code>select</code></td><td>Same names, same shape</td></tr>
-<tr><td><code>$transaction</code>, <code>$queryRaw</code></td><td><code>db.$transaction</code>, <code>db.$sql</code></td></tr>
+<tr><td><code>$transaction</code>, <code>$queryRaw</code>, <code>$executeRaw</code></td><td><code>db.$transaction</code>, <code>db.$sql</code>, <code>db.$execute</code></td></tr>
 <tr><td>Generated <code>User</code> type</td><td><code>InferSelect&lt;typeof users&gt;</code></td></tr>
 <tr><td><code>prisma migrate dev</code> / <code>deploy</code></td><td><code>npx kastor migrate dev</code> / <code>deploy</code></td></tr>
 <tr><td><code>prisma db pull</code>, <code>db push</code>, <code>db seed</code>, <code>studio</code></td><td><code>npx kastor db pull</code>, <code>db push</code>, <code>db seed</code>, <code>studio</code></td></tr>
@@ -119,15 +119,15 @@ export async function register(email: string) {
   }
 }
 </pre>
-<p>Two differences are worth knowing. Error codes are readable names such as <code>UNIQUE_VIOLATION</code> and <code>FOREIGN_KEY_VIOLATION</code> instead of numbered codes, and every error carries a <code>hint</code>. Nested includes load in one query per root call on databases with JSON aggregation; open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
+<p>Two differences are worth knowing. Error codes are readable names such as <code>UNIQUE_VIOLATION</code> and <code>FOREIGN_KEY_VIOLATION</code> instead of numbered codes, and every error carries a <code>hint</code>, with the original driver error kept as <code>cause</code>. Nested includes load in one query per root call on every SQL adapter, built with JSON aggregation, and in one aggregation on MongoDB; open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
 </section>
 <section id="migration-path"><h2>Moving an existing Prisma project</h2>
 <p>You do not need a big rewrite. The safest path keeps both ORMs running against the same database until the last query moves.</p>
 <ol>
 <li><strong>Install kastor and the driver</strong> next to Prisma, for example <code>npm install kastor pg</code>.</li>
-<li><strong>Run <code>npx kastor init</code></strong> to create <code>kastor.config.ts</code>, then point it at your database.</li>
-<li><strong>Run <code>npx kastor db pull</code></strong>. It introspects the live database (the tables Prisma created) and writes a TypeScript schema. If your models used <code>@map</code> or <code>@@map</code>, the database names are what you will see, so review the file and add relations.</li>
-<li><strong>Pick one owner for migrations.</strong> Keep running <code>prisma migrate</code> until the switch, and do not let both tools write migrations at the same time. Before handing over, run <code>npx kastor migrate dev</code> against a copy of the database: if the pulled schema matches, there should be nothing to change.</li>
+<li><strong>Run <code>npx kastor init</code></strong> to create <code>kastor.config.ts</code>, then set <code>DATABASE_URL</code> in the <code>.env</code> it writes. It also writes a starter schema at <code>src/db/schema.ts</code>, which the next step replaces.</li>
+<li><strong>Run <code>npx kastor db pull</code></strong>. It introspects the live database (the tables Prisma created) and writes a TypeScript schema to the schema path of the config, asking before it overwrites the starter file. The file exports every table plus <code>schema</code> and <code>relations</code>, with relations guessed from the foreign keys. If your models used <code>@map</code> or <code>@@map</code>, the database names are what you will see, so review the names and the relations.</li>
+<li><strong>Pick one owner for migrations.</strong> Keep running <code>prisma migrate</code> until the switch, and do not let both tools write migrations at the same time. Before handing over, run <code>npx kastor migrate dev</code> against a copy of the database: if the pulled schema matches, it reports that the database is already in sync and writes no file.</li>
 <li><strong>Move queries module by module.</strong> Start with read paths, then writes. Tests that already cover a module tell you when it is done.</li>
 <li><strong>Remove Prisma</strong> once nothing imports it, along with <code>prisma generate</code> in CI and postinstall.</li>
 </ol>
