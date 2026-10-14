@@ -53,9 +53,9 @@ differently.
 MongoDB does not enforce foreign keys. kastor reads them from your schema:
 
 - On delete, kastor applies each foreign key's `onDelete` itself: `cascade` deletes the documents that point to the deleted ones (recursively, self references included), `set null` and `set default` update them, `restrict` and `no action` refuse the delete with `FOREIGN_KEY_VIOLATION` while such documents exist. When the server supports transactions this all runs in one transaction.
-- Inserts and updates do not check that the referenced document exists. A post can point to an author that does not exist.
+- Before an insert, and before an update that sets a reference, kastor checks that the referenced document exists (one query per foreign key) and fails with `FOREIGN_KEY_VIOLATION` otherwise. Outside a transaction a concurrent delete can still slip between the check and the write.
 - `onUpdate` is not emulated (keys stored as `_id` never change).
-- Documents written by other programs bypass all of this.
+- Documents written by other programs, or by raw commands, bypass all of this.
 
 ## Transactions
 

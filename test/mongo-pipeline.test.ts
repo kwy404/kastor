@@ -238,6 +238,19 @@ describe('mongodb read pipelines', () => {
       { $project: { _id: 0, authorId: '$_id.g0', n: '$__ag0' } },
     ]);
   });
+
+  it('treats an empty having column as count(*)', () => {
+    const p = groupByPipeline(model, {
+      kind: 'groupBy',
+      table: 'posts',
+      by: sel('authorId'),
+      aggregates: [],
+      having: { kind: 'compare', column: '', op: 'gt', value: 1, aggregate: 'count' },
+      orderBy: [],
+    });
+    expect(p.pipeline[0]).toEqual({ $group: { _id: { g0: { $ifNull: ['$authorId', null] } }, __ag0: { $sum: 1 } } });
+    expect(p.pipeline[1]).toEqual({ $match: { __ag0: { $gt: 1 } } });
+  });
 });
 
 describe('mongodb writes', () => {

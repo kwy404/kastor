@@ -243,7 +243,7 @@ function havingAggregates(where: WhereIR | undefined, out: Array<{ fn: Aggregate
       break;
     case 'compare':
     case 'in':
-      if (where.aggregate) out.push({ fn: where.aggregate, column: where.column ?? null });
+      if (where.aggregate) out.push({ fn: where.aggregate, column: where.column || null });
       break;
     default:
       break;
@@ -312,7 +312,7 @@ export function groupByPipeline(model: Model, q: GroupByQueryIR): Pipeline {
       table: q.table,
       counter,
       field: (column, aggregate) => {
-        if (aggregate) return ensure(aggregate, column ?? null);
+        if (aggregate) return ensure(aggregate, column || null);
         const p = byPath.get(column);
         if (!p) throw mongoError('INVALID_ARGUMENT', `having filters on "${column}", which is not in by.`, 'Add the column to by, or filter on an aggregate of it.');
         return p;

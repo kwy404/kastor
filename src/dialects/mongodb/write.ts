@@ -7,8 +7,8 @@
  * that point to it (recursively), `set null` and `set default` update them,
  * `restrict` and `no action` refuse the delete with FOREIGN_KEY_VIOLATION
  * while such rows exist. All of it runs in one transaction when the server
- * supports transactions. Inserts and updates do not check that referenced
- * rows exist.
+ * supports transactions. Before inserts and updates that set a reference,
+ * kastor checks that the referenced row exists (one query per foreign key).
  */
 import type { Document, Filter } from 'mongodb';
 import { errors } from '../../core/errors';
@@ -132,6 +132,7 @@ function pick(model: Model, table: string, doc: Doc, returning: SelectColumnIR[]
 export async function create(model: Model, q: CreateQueryIR, exec: MongoExecutor): Promise<Row> {
   const info = tableInfo(model, q.table);
   const [doc] = await buildDocs(model, info, [q.data], exec);
+  await checkReferences(model, info, [doc as Doc], exec);
   await exec.db.collection(q.table).insertOne(doc as Document, opts(exec));
   return pick(model, q.table, doc as Doc, q.returning);
 }
@@ -198,9 +199,69 @@ export async function createMany(model: Model, q: CreateManyQueryIR, exec: Mongo
   if (q.data.length === 0) return q.returning ? [] : { count: 0 };
   let docs = await buildDocs(model, info, q.data, exec);
   if (q.skipDuplicates) docs = await withoutDuplicates(info, docs, exec);
+  await checkReferences(model, info, docs, exec);
   if (docs.length > 0) await exec.db.collection(q.table).insertMany(docs as Document[], { ordered: true, ...opts(exec) });
   if (q.returning) return docs.map((d) => pick(model, q.table, d, q.returning as SelectColumnIR[]));
   return { count: docs.length };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Foreign key checks                                                         */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The server does not know foreign keys, so kastor checks them before a write:
+ * every non null reference in `docs` must match a row of the referenced table
+ * (or a document of the same batch, for self references). One query per
+ * foreign key.
+ */
+async function checkReferences(model: Model, info: TableInfo, docs: Doc[], exec: MongoExecutor): Promise<void> {
+  for (const fk of info.table.foreignKeys) {
+    const target = model.tables.get(fk.refTable);
+    if (!target) continue;
+    const fields = fk.columns.map((c) => info.columns.get(c)?.field ?? c);
+    const refFields = fk.refColumns.map((c) => target.columns.get(c)?.field ?? c);
+    const wanted = new Map<string, unknown[]>();
+    for (const doc of docs) {
+      if (!fields.every((f) => f in doc)) continue;
+      const values = fields.map((f) => doc[f]);
+      if (values.some((v) => v === null || v === undefined)) continue;
+      wanted.set(keyOf(Object.fromEntries(fields.map((f, i) => [f, values[i]])), fields) as string, values);
+    }
+    if (wanted.size === 0) continue;
+    if (fk.refTable === info.table.name) {
+      for (const doc of docs) {
+        const k = keyOf(Object.fromEntries(refFields.map((f, i) => [fields[i]!, doc[f]])), fields);
+        if (k !== null) wanted.delete(k);
+      }
+      if (wanted.size === 0) continue;
+    }
+    const lists = [...wanted.values()];
+    const filter: Doc =
+      refFields.length === 1 ? { [refFields[0]!]: { $in: lists.map((v) => v[0]) } } : { $or: lists.map((v) => Object.fromEntries(refFields.map((f, i) => [f, v[i]]))) };
+    const projection = Object.fromEntries(refFields.map((f) => [f, 1]));
+    const found = await exec.db.collection(fk.refTable).find(filter, { projection, ...opts(exec) }).toArray();
+    for (const row of found) {
+      const k = keyOf(Object.fromEntries(refFields.map((f, i) => [fields[i]!, (row as Doc)[f]])), fields);
+      if (k !== null) wanted.delete(k);
+    }
+    if (wanted.size > 0) {
+      throw errors.foreignKeyViolation(fk.name, undefined, { table: info.table.name, references: fk.refTable, dialect: 'mongodb' });
+    }
+  }
+}
+
+/** The references an update sets: FK columns assigned with `set`, as document fields. */
+function updatedReferences(info: TableInfo, data: Record<string, UpdateValueIR>): Doc[] {
+  const doc: Doc = {};
+  for (const fk of info.table.foreignKeys) {
+    if (!fk.columns.every((c) => data[c]?.op === 'set')) continue;
+    for (const c of fk.columns) {
+      const col = info.columns.get(c);
+      doc[col?.field ?? c] = encodeValue((data[c] as { value: unknown }).value, col);
+    }
+  }
+  return Object.keys(doc).length > 0 ? [doc] : [];
 }
 
 /* ------------------------------------------------------------------------ */
@@ -256,6 +317,7 @@ export function buildUpdate(model: Model, table: string, data: Record<string, Up
 export async function update(model: Model, q: UpdateQueryIR, exec: MongoExecutor): Promise<Row | null> {
   const filter = await writeFilter(model, q.table, q.where, exec);
   const pipeline = buildUpdate(model, q.table, q.data);
+  await checkReferences(model, tableInfo(model, q.table), updatedReferences(tableInfo(model, q.table), q.data), exec);
   const coll = exec.db.collection(q.table);
   let doc: Document | null;
   if (pipeline.length === 0) {
@@ -270,6 +332,7 @@ export async function update(model: Model, q: UpdateQueryIR, exec: MongoExecutor
 export async function updateMany(model: Model, q: UpdateManyQueryIR, exec: MongoExecutor): Promise<{ count: number } | Row[]> {
   const filter = await writeFilter(model, q.table, q.where, exec);
   const pipeline = buildUpdate(model, q.table, q.data);
+  await checkReferences(model, tableInfo(model, q.table), updatedReferences(tableInfo(model, q.table), q.data), exec);
   const coll = exec.db.collection(q.table);
   if (!q.returning) {
     if (pipeline.length === 0) return { count: await coll.countDocuments(filter, opts(exec)) };
@@ -304,9 +367,11 @@ export async function upsert(model: Model, q: UpsertQueryIR, exec: MongoExecutor
     const res = await coll.findOneAndUpdate(filter, pipeline as Document[], { returnDocument: 'after', includeResultMetadata: true, ...opts(exec) });
     return res.value;
   };
+  await checkReferences(model, info, updatedReferences(info, q.update), exec);
   const existing = await tryUpdate();
   if (existing) return pick(model, q.table, existing as Doc, q.returning);
   const [doc] = await buildDocs(model, info, [{ ...q.conflict, ...q.create }], exec);
+  await checkReferences(model, info, [doc as Doc], exec);
   try {
     await coll.insertOne(doc as Document, opts(exec));
     return pick(model, q.table, doc as Doc, q.returning);
