@@ -41,7 +41,7 @@
   --ed-gutter: #a0a6ae;
   --font-head: "Space Grotesk", var(--font-sans);
   --font-tech: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
-  --wrap: 78rem;
+  --wrap: 82rem;
   --top: 3.9rem;
   --background: var(--paper);
   --foreground: var(--ink);
@@ -340,7 +340,7 @@ p code, li code, td code, .lead code, summary code { font-size: .86em; padding: 
 .dots i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
 .dots i:nth-child(2) { background: #febc2e; }
 .dots i:nth-child(3) { background: #28c840; }
-.browser-body img { display: block; width: 100%; height: auto; }
+.browser-body img { width: 100%; height: auto; vertical-align: top; }
 .st { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); min-height: 19rem; font-size: .8rem; }
 @media (min-width: 640px) { .st { grid-template-columns: 9rem minmax(0, 1fr) 11rem; } }
 .st-side { padding: .8rem .6rem; border-right: 1px solid var(--rule); background: var(--paper-3); display: grid; align-content: start; gap: .15rem; }
@@ -405,7 +405,7 @@ p code, li code, td code, .lead code, summary code { font-size: .86em; padding: 
 @media (min-width: 960px) { .faq-in { grid-template-columns: 22rem minmax(0, 1fr); } }
 .faq-kas { width: 160px; height: auto; margin-top: 1rem; }
 .q { border-bottom: 1px solid var(--rule); }
-.q summary { font-weight: 600; font-family: var(--font-head); font-size: 1.05rem; }
+.q summary { font-weight: 600; font-family: var(--font-head); font-size: 1.05rem; text-align: left; justify-content: flex-start; }
 .q-no { display: inline-block; min-width: 2.2rem; font: 600 .78rem/1 var(--font-tech); color: var(--line); }
 .q .collapse-content p { color: var(--ink-2); line-height: 1.7; margin-top: 0; }
 
@@ -430,7 +430,8 @@ p code, li code, td code, .lead code, summary code { font-size: .86em; padding: 
 .foot-more li { display: grid; }
 .foot-more small { color: var(--ink-3); font-size: .76rem; }
 .foot-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem 2rem; margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px dashed var(--line-soft); font-size: .85rem; color: var(--ink-2); }
-.foot-bottom p { margin: 0; display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.foot-bottom p { margin: 0; }
+.foot-bottom p:first-child { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .foot-ic { display: inline-grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 6px; color: var(--ink-2); }
 .foot-ic:hover { background: var(--muted); color: var(--ink); }
 
@@ -535,3 +536,4 @@ p code, li code, td code, .lead code, summary code { font-size: .86em; padding: 
 .v-copied { color: var(--ok) !important; border-color: var(--ok) !important; }
 .v-copied span::after { content: " \2713"; }
 .studio-tabs { display: flex; gap: .4rem; margin-bottom: .7rem; }
+@media (max-width: 959px) { .faq-kas { display: none; } }

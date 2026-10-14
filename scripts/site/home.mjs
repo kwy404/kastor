@@ -335,7 +335,7 @@ function compare() {
 function guidesTeaser(guides) {
   const en = guides.filter((g) => g.meta.lang === 'en');
   const cards = en
-    .slice(0, 6)
+    .slice(0, 8)
     .map((g, i) => `<a href="${g.meta.slug}.html" class="g-card"><span class="g-no">GUIDE ${String(i + 1).padStart(2, '0')}</span><strong>${esc(g.meta.h1)}</strong><span>${esc(g.meta.description)}</span><span class="g-meta">${esc(g.meta.readTime)}${ui('arrow')}</span></a>`)
     .join('');
   return `<section id="guides" class="sec" aria-labelledby="guides-title">

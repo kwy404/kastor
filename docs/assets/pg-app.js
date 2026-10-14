@@ -493,7 +493,8 @@ export function mount(root) {
           typeOut.innerHTML = esc(`// The type checker stopped: ${m.error}`);
           return;
         }
-        typeOut.innerHTML = highlightTs(`type Result = ${m.type}`).trimEnd();
+        const mongoNote = /\bt\.(id|bigId)\(\)/.test(edSchema.value) ? `\n\n// On MongoDB, id keys and the columns that reference them are strings\n// (ObjectId), unless you pass mongodb(db, { ids: 'int' }).` : '';
+        typeOut.innerHTML = highlightTs(`type Result = ${m.type}${mongoNote}`).trimEnd();
         diag.hidden = !m.diags.length;
         diag.innerHTML = m.diags.map((d) => `<p><b>${esc(d.file)}:${d.line}:${d.col}</b>${esc(d.text)}</p>`).join('');
         edSchema.setErrors(m.diags.filter((d) => d.editor === 'schema'));
