@@ -6,9 +6,9 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { mascot, mascotHead } from './art/mascot.mjs';
-import { dam, THEMES, wordmark } from './art/scene.mjs';
+import { litMark, logo } from './art/brand.mjs';
 import { DATABASES, dbSymbol } from './art/icons.mjs';
+import { illustration } from './art/illustrations.mjs';
 
 const BROWSERS = [
   process.env.KASTOR_BROWSER,
@@ -20,71 +20,70 @@ const BROWSERS = [
 ].filter(Boolean);
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;700&display=block">';
+const FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=block">';
 
 function base(w, h, body, extra = '') {
-  const t = THEMES.dark;
   return `<!doctype html><html><head><meta charset="utf-8">${FONTS}<style>
 *{box-sizing:border-box}html,body{margin:0;width:${w}px;height:${h}px;overflow:hidden}
-body{background:${t.bg};color:${t.ink};font-family:'Space Grotesk','Segoe UI',sans-serif;position:relative}
-.grid{position:absolute;inset:0;background-image:linear-gradient(${t.grid2} 1.4px,transparent 1.4px),linear-gradient(90deg,${t.grid2} 1.4px,transparent 1.4px),linear-gradient(${t.grid} 1px,transparent 1px),linear-gradient(90deg,${t.grid} 1px,transparent 1px);background-size:100px 100px,100px 100px,20px 20px,20px 20px;background-position:-1px -1px}
-.frame{position:absolute;inset:18px;border:2px solid rgba(207,224,255,.45)}
-.frame:after{content:'';position:absolute;inset:6px;border:1px solid rgba(207,224,255,.2)}
-.c{position:absolute;width:30px;height:30px;border-color:#8fb2ff;border-style:solid}
-.c1{left:12px;top:12px;border-width:5px 0 0 5px}.c2{right:12px;top:12px;border-width:5px 5px 0 0}.c3{right:12px;bottom:12px;border-width:0 5px 5px 0}.c4{left:12px;bottom:12px;border-width:0 0 5px 5px}
-.mono{font-family:'JetBrains Mono',Consolas,monospace}
-.tb{position:absolute;right:18px;bottom:18px;display:grid;grid-template-columns:auto auto;border-left:2px solid rgba(207,224,255,.45);border-top:2px solid rgba(207,224,255,.45);font:500 13px 'JetBrains Mono',monospace;color:#a9bde6}
-.tb span{padding:7px 14px;border-right:1px solid rgba(207,224,255,.25);border-bottom:1px solid rgba(207,224,255,.25)}
-.tb b{color:#eef3ff;font-weight:700}
-.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 8px;border:1.5px solid #8fb2ff;border-radius:99px;background:#10295e;font:600 17px 'Space Grotesk',sans-serif;color:#eef3ff}
-.chip svg{width:26px;height:26px}
+body{background:#0a0a0a;color:#ededed;font-family:Geist,'Segoe UI',sans-serif;position:relative;-webkit-font-smoothing:antialiased;
+  --lm-hi:#6b6b6b;--lm-mid:#262626;--lm-lo:#0c0c0c;--lm-side:#1a1a1a;--lm-grain:#fff;--lm-grainOp:.06;--lm-rim:#ffc27a;--lm-rimOp:.7;--lm-edge:#000;--lm-edgeOp:.5;--lm-halo:.6;
+  --il-card:#111;--il-line:#2b2b2b;--il-dim:#4d4d4d;--il-ink:#ededed}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:56px 56px;background-position:-1px -1px;-webkit-mask-image:radial-gradient(ellipse 70% 80% at 30% 50%,#000 20%,transparent 75%)}
+.glow{position:absolute;border-radius:50%;background:radial-gradient(closest-side,rgba(240,138,60,.38),rgba(240,138,60,0));filter:blur(10px)}
+.mono{font-family:'Geist Mono',Consolas,monospace}
+.brand{display:flex;align-items:center;gap:12px;font:700 30px Geist,sans-serif;letter-spacing:-.04em;color:#ededed}
+.brand svg{width:34px;height:34px;color:#ededed}
+.chip{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px 0 11px;border:1px solid #262626;border-radius:99px;background:#111;font:500 16px Geist,sans-serif;color:#a1a1a1}
+.chip svg{width:20px;height:20px}
+.acc{background:linear-gradient(90deg,#ffb547,#d4622b);-webkit-background-clip:text;background-clip:text;color:transparent}
+.rule{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent)}
 ${extra}
-</style></head><body><div class="grid"></div><div class="frame"></div><i class="c c1"></i><i class="c c2"></i><i class="c c3"></i><i class="c c4"></i>${body}</body></html>`;
+</style></head><body><div class="grid"></div>${body}</body></html>`;
 }
 
 function chips(list) {
-  return list
-    .map((d) => `<span class="chip"><svg viewBox="0 0 48 48">${dbSymbol(d, '#0a1d45')}</svg>${esc(d.name)}</span>`)
-    .join('');
+  return list.map((d) => `<span class="chip"><svg viewBox="0 0 24 24">${dbSymbol(d, '#a1a1a1')}</svg>${esc(d.name)}</span>`).join('');
 }
 
 /** The large brand card used for the GitHub social preview and docs/og.png. */
 export function brandCard(w, h) {
-  const t = THEMES.dark;
-  const scale = h / 640;
+  const k = h / 630;
   const shown = DATABASES.filter((d) => ['postgres', 'mysql', 'sqlite', 'mssql', 'oracle', 'mongodb'].includes(d.id));
   return base(
     w,
     h,
-    `<div style="position:absolute;left:${56 * scale}px;top:${70 * scale}px;width:${420 * scale}px;height:${420 * scale}px">${mascot({ dark: true }).replace('width="512" height="512"', 'width="100%" height="100%"')}</div>
-<div style="position:absolute;left:${500 * scale}px;top:${92 * scale}px;right:60px">
-  <div class="mono" style="font-size:${17 * scale}px;color:#8fb2ff;letter-spacing:.12em;margin-bottom:${18 * scale}px">SHEET 01 &nbsp;/&nbsp; THE DATA LAYER</div>
-  <svg viewBox="-16 -166 642 186" style="width:${470 * scale}px;display:block">${wordmark('#eef3ff', 26)}</svg>
-  <div style="font-size:${40 * scale}px;font-weight:700;line-height:1.15;margin-top:${26 * scale}px;max-width:${700 * scale}px">The TypeScript ORM for almost every database</div>
-  <div style="font-size:${21 * scale}px;color:#a9bde6;margin-top:${14 * scale}px;max-width:${660 * scale}px;line-height:1.4">Schema in plain TypeScript, types inferred as you type. No generate step. Nested includes in one query.</div>
-  <div style="display:flex;flex-wrap:wrap;gap:${9 * scale}px;margin-top:${26 * scale}px;max-width:${580 * scale}px">${chips(shown)}<span class="chip" style="padding-left:14px">+4 more</span></div>
+    `<div class="glow" style="left:${-40 * k}px;top:${40 * k}px;width:${640 * k}px;height:${560 * k}px"></div>
+<div style="position:absolute;left:${10 * k}px;top:${92 * k}px;width:${560 * k}px;height:${448 * k}px">${litMark({ vars: true, id: 'og-k' }).replace('width="600" height="480"', 'width="100%" height="100%"')}</div>
+<div style="position:absolute;left:${560 * k}px;top:${92 * k}px;right:${56 * k}px">
+  <div class="brand">${logo({ size: 34, id: 'og-logo' })}kastor<span class="mono" style="font-size:15px;font-weight:500;color:#737373;letter-spacing:0;margin-left:6px;border:1px solid #262626;border-radius:99px;padding:3px 10px">0.1.0</span></div>
+  <div style="font-size:${62 * k}px;font-weight:700;line-height:1.02;letter-spacing:-.045em;margin-top:${34 * k}px">The TypeScript ORM for <span class="acc">every database</span>.</div>
+  <div style="font-size:${23 * k}px;color:#a1a1a1;margin-top:${22 * k}px;line-height:1.45;letter-spacing:-.01em;max-width:${560 * k}px">Schema in plain TypeScript, types as you type. No generate step. Nested includes in one query.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:${30 * k}px;max-width:${600 * k}px">${chips(shown)}<span class="chip" style="padding-left:15px">+4 more</span></div>
 </div>
-${w >= 1280 ? `<svg style="position:absolute;right:${30 * scale}px;bottom:${86 * scale}px;width:${210 * scale}px;height:${170 * scale}px" viewBox="0 0 210 170">${dam({ w: 210, h: 170, n: 5, t, dims: false })}</svg>` : ""}
-<div class="tb"><span>PROJECT</span><span><b>kastor 0.1.0</b></span><span>DRAWN BY</span><span><b>kwy404</b></span></div>`,
+<div class="mono" style="position:absolute;left:${560 * k}px;bottom:${40 * k}px;font-size:15px;color:#737373">kwy404.github.io/kastor</div>`,
   );
 }
+
+const SECTION = { migrate: ['MIGRATE', 'migrate'], frameworks: ['FRAMEWORKS', 'frameworks'] };
 
 /** One Open Graph image per guide. */
 export function guideCard(meta, w = 1200, h = 630) {
   const pt = meta.lang === 'pt-BR';
+  const [label, kind] = SECTION[meta.section] || [pt ? 'GUIA' : 'GUIDE', 'guide'];
   const len = meta.h1.length;
-  const size = len > 70 ? 54 : len > 50 ? 62 : 70;
+  const size = len > 70 ? 46 : len > 50 ? 54 : 62;
   return base(
     w,
     h,
-    `<div style="position:absolute;left:72px;top:70px;right:330px">
-  <div class="mono" style="font-size:18px;color:#ffc21a;letter-spacing:.14em">${pt ? 'GUIA' : 'GUIDE'} &nbsp;/&nbsp; ${esc(meta.crumb.toUpperCase())}</div>
-  <div style="font-size:${size}px;font-weight:700;line-height:1.08;margin-top:26px;letter-spacing:-.01em">${esc(meta.h1)}</div>
-  <div style="height:3px;width:120px;background:#ffc21a;margin-top:30px"></div>
-  <div style="font-size:24px;color:#a9bde6;margin-top:24px;display:flex;align-items:center;gap:14px"><svg viewBox="-16 -166 642 186" style="width:150px">${wordmark('#eef3ff', 30)}</svg><span class="mono" style="font-size:19px">kwy404.github.io/kastor</span></div>
+    `<div class="glow" style="right:-60px;top:110px;width:620px;height:460px"></div>
+<div style="position:absolute;left:68px;top:60px" class="brand">${logo({ size: 34, id: 'og-logo' })}kastor</div>
+<div style="position:absolute;left:68px;top:168px;width:560px">
+  <div class="mono" style="font-size:16px;letter-spacing:.14em;color:#a1a1a1"><span class="acc" style="font-weight:600">${label}</span>&nbsp;&nbsp;/&nbsp;&nbsp;${esc(meta.crumb.toUpperCase())}</div>
+  <div style="font-size:${size}px;font-weight:700;line-height:1.04;margin-top:24px;letter-spacing:-.045em">${esc(meta.h1)}</div>
 </div>
-<div style="position:absolute;right:56px;top:96px;width:290px;height:290px">${mascotHead({ dark: true }).replace('width="320" height="320"', 'width="100%" height="100%"')}</div>
-<div class="tb"><span>SHEET</span><span><b>${esc(meta.slug)}</b></span><span>${pt ? 'LEITURA' : 'READ'}</span><span><b>${esc(meta.readTime)}</b></span></div>`,
+<div style="position:absolute;right:56px;top:150px;width:470px;height:294px;border-radius:18px;border:1px solid #222;background:#0d0d0d;overflow:hidden;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)">${illustration(kind, { id: 'og-il' }).replace('width="320" height="200"', 'width="100%" height="100%"')}</div>
+<div class="rule" style="bottom:96px"></div>
+<div class="mono" style="position:absolute;left:68px;bottom:42px;font-size:16px;color:#737373;display:flex;gap:28px"><span>kwy404.github.io/kastor</span><span>${esc(meta.readTime)}</span></div>`,
   );
 }
 

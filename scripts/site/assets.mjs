@@ -2,13 +2,15 @@
 // Everything is drawn in code (scripts/site/art) so the files stay in sync.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { favicon, mascot, mascotHead } from './art/mascot.mjs';
-import { DATABASES, FEATURE_ICONS, dbIconSvg, featureIconSvg } from './art/icons.mjs';
-import { banner } from './art/scene.mjs';
+import { mascot, mascotHead } from './art/mascot.mjs';
+import { favicon, logoFile } from './art/brand.mjs';
+import { banner } from './art/banner.mjs';
+import { DATABASES, FEATURE_ICONS, RUNTIMES, dbIconSvg, featureIconSvg, runtimeSymbol } from './art/icons.mjs';
+import { illustrationFile } from './art/illustrations.mjs';
 
 export const ICON_THEMES = {
-  light: { ink: '#13254d', accent: '#ffc21a', blue: '#2a63e6', soft: '#ffe7a3', text: '#13254d' },
-  dark: { ink: '#e3ecff', accent: '#ffc21a', blue: '#5b8cff', soft: '#2a5299', text: '#e3ecff' },
+  light: { ink: '#171717', accent: '#d4622b', text: '#171717' },
+  dark: { ink: '#ededed', accent: '#ffb547', text: '#ededed' },
 };
 
 /** Writes every SVG asset under `root` and returns the list of written paths. */
@@ -25,11 +27,15 @@ export function writeAssets(root) {
   put('assets/mascot-head.svg', mascotHead());
   put('assets/mascot-head-dark.svg', mascotHead({ dark: true }));
   put('assets/favicon.svg', favicon());
+  put('assets/logo.svg', logoFile('light'));
+  put('assets/logo-dark.svg', logoFile('dark'));
   put('assets/banner.svg', banner('light'));
   put('assets/banner-dark.svg', banner('dark'));
   for (const [mode, theme] of Object.entries(ICON_THEMES)) {
     for (const name of Object.keys(FEATURE_ICONS)) put(`assets/icons/${mode}/${name}.svg`, featureIconSvg(name, theme));
     for (const db of DATABASES) put(`assets/icons/${mode}/db-${db.id}.svg`, dbIconSvg(db, theme));
+    for (const rt of RUNTIMES) put(`assets/icons/${mode}/rt-${rt.id}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" role="img" aria-label="${rt.name}">${runtimeSymbol(rt, theme.ink)}</svg>`);
+    for (const kind of ['guide', 'migrate', 'frameworks', 'reference', 'hub']) put(`assets/illustrations/${mode}/${kind}.svg`, illustrationFile(kind, mode));
   }
   // The site serves its own copies so it works without the repo around it.
   for (const f of ['mascot.svg', 'mascot-dark.svg', 'mascot-head.svg', 'mascot-head-dark.svg', 'banner.svg', 'banner-dark.svg']) {
