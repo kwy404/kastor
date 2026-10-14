@@ -9,6 +9,7 @@ import {
   orderTables,
   RenameError,
   schemasMatch,
+  storesForeignKeys,
 } from '../src/migrate/diff';
 import { applyOp, describeOp, isDestructive, isWidening, type MigrationOp } from '../src/migrate/ops';
 
@@ -383,6 +384,17 @@ describe('diffSchemas: indexes and foreign keys', () => {
     target.columns[1] = col('email', 'string', { length: 320 });
     const { ops } = diffSchemas(schema(users()), schema(target), { dialect });
     expect(kinds(ops)).toEqual(['dropIndex', 'alterColumn', 'createIndex']);
+  });
+
+  it('ignores foreign keys on databases that do not keep them', () => {
+    const noFks = { name: 'mongodb' as const, features: { namedEnums: false } as never, ddl: () => [] };
+    expect(storesForeignKeys(noFks)).toBe(false);
+    expect(storesForeignKeys(undefined)).toBe(true);
+    expect(storesForeignKeys({ ...noFks, ddl: () => { throw new Error('x'); } })).toBe(true);
+    const live = posts();
+    live.foreignKeys = [];
+    expect(diffSchemas(schema(users(), live), schema(users(), posts()), { dialect: noFks }).ops).toEqual([]);
+    expect(kinds(diffSchemas(schema(users(), live), schema(users(), posts())).ops)).toEqual(['addForeignKey']);
   });
 
   it('warns when the primary key changes', () => {

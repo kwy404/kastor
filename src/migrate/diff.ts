@@ -351,6 +351,23 @@ function enumUsers(schema: SchemaIR, name: string): Array<{ table: string; colum
   return out;
 }
 
+/**
+ * False for databases that do not keep foreign keys (MongoDB emulates them
+ * from the schema): their `addForeignKey` DDL is empty, so the live schema
+ * never shows foreign keys and comparing them would always differ.
+ */
+export function storesForeignKeys(dialect: DialectLike | undefined): boolean {
+  if (!dialect) return true;
+  const parent: TableIR = { name: 'p', columns: [{ name: 'id', type: 'int', nullable: false }], primaryKey: ['id'], indexes: [], foreignKeys: [] };
+  const foreignKey: ForeignKeyIR = { name: 'c_p_fkey', columns: ['p_id'], refTable: 'p', refColumns: ['id'], onDelete: 'no action', onUpdate: 'no action' };
+  const child: TableIR = { name: 'c', columns: [{ name: 'id', type: 'int', nullable: false }, { name: 'p_id', type: 'int', nullable: false }], primaryKey: ['id'], indexes: [], foreignKeys: [foreignKey] };
+  try {
+    return dialect.ddl({ kind: 'addForeignKey', table: 'c', foreignKey }, { tables: [parent, child] }).length > 0;
+  } catch {
+    return true;
+  }
+}
+
 /* ------------------------------------------------------------------------ */
 /* Diff                                                                      */
 /* ------------------------------------------------------------------------ */
@@ -368,6 +385,7 @@ const fkFullKey = (f: ForeignKeyIR): string => `${fkKey(f)}:${action(f.onDelete)
 export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOptions = {}): DiffResult {
   const dialect = options.dialect;
   const namedEnums = options.namedEnums ?? dialect?.features.namedEnums ?? false;
+  const fksStored = storesForeignKeys(dialect);
   const renames = options.renames ?? [];
   const warnings: DiffWarning[] = [];
 
@@ -514,11 +532,11 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
     // Foreign keys.
     const touches = (fk: ForeignKeyIR, table: string): boolean =>
       fk.columns.some((c) => typeChanged.has(c)) || (fk.refTable === table && fk.refColumns.some((c) => typeChanged.has(c)));
-    for (const fk of old.foreignKeys) {
+    for (const fk of fksStored ? old.foreignKeys : []) {
       const match = t.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, fk, x, target)));
       if (!match || touches(fk, t.name)) ops.dropFks.push({ kind: 'dropForeignKey', table: t.name, foreignKey: fk });
     }
-    for (const fk of t.foreignKeys) {
+    for (const fk of fksStored ? t.foreignKeys : []) {
       const match = old.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, x, fk, target)));
       if (!match || touches(match, t.name)) ops.addFks.push({ kind: 'addForeignKey', table: t.name, foreignKey: fk });
     }
@@ -544,7 +562,7 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
   }
 
   // Foreign keys on other tables that point at a column whose type changes.
-  for (const t of target.tables) {
+  for (const t of fksStored ? target.tables : []) {
     const old = liveByName.get(t.name);
     if (!old) continue;
     for (const fk of old.foreignKeys) {

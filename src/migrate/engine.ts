@@ -109,8 +109,13 @@ function checkModified(st: MigrationStatus, dev: boolean): void {
 /* Apply                                                                     */
 /* ------------------------------------------------------------------------ */
 
-export function statementsOf(dialect: Pick<Dialect, 'splitScript'>, sql: string): string[] {
-  return dialect.splitScript ? dialect.splitScript(sql) : splitStatements(sql);
+/**
+ * Statements of a migration file. SQL files are written by `renderMigration`,
+ * so the shared splitter (which understands its block markers) reads them;
+ * databases without SQL bring their own `splitScript`.
+ */
+export function statementsOf(dialect: Pick<Dialect, 'name' | 'splitScript'>, sql: string): string[] {
+  return dialect.name === 'mongodb' && dialect.splitScript ? dialect.splitScript(sql) : splitStatements(sql);
 }
 
 /** Runs one migration file and records it, inside a transaction where DDL is transactional. */
@@ -358,6 +363,16 @@ export async function dropEverything(adapter: Adapter): Promise<PlannedStep[]> {
   const { ops } = diffSchemas(live, { tables: [] }, { dialect: adapter.dialect });
   const steps = planStatements(adapter.dialect, live, ops);
   await runScript(adapter, steps.flatMap((s) => s.statements), 'reset');
+  // Some dialects hide the bookkeeping table from introspection: make sure it
+  // exists, then drop it, so the history starts over too.
+  if (!live.tables.some((t) => isMigrationsTable(t.name))) {
+    const { dialect, executor } = adapter;
+    await dialect.migrationTable.ensure(executor);
+    const op: MigrationOp = { kind: 'dropTable', table: MIGRATIONS_TABLE };
+    const drop = dialect.ddl(op as unknown as MigrationOpLike, { tables: [] });
+    await runStatements(executor, drop, 'reset');
+    steps.push({ op, statements: drop });
+  }
   return steps;
 }
 

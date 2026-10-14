@@ -15,6 +15,7 @@ export {
   orderTables,
   RenameError,
   schemasMatch,
+  storesForeignKeys,
   type DiffOptions,
   type DiffResult,
   type DiffWarning,

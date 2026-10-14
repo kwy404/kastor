@@ -100,7 +100,7 @@ export const DATABASES: DatabaseTemplate[] = [
 
 export function configTemplate(db: DatabaseTemplate): string {
   return `${db.imports.join('\n')}
-import { defineConfig } from 'kastor/migrate';
+import { defineConfig } from 'kastor';
 
 export default defineConfig({
   schema: './src/db/schema.ts',

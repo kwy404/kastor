@@ -33,8 +33,15 @@ each item until it lands.
 - Migration files are split with `src/migrate/sql-split.ts`: statements end with
   `;`, and statements that contain semicolons of their own (PL/SQL or T-SQL
   blocks) are written after a `-- kastor:block` line and closed with a line
-  holding only `/`. If you implement `splitScript`, it must understand that
-  format too, or leave `splitScript` out and the shared splitter is used.
+  holding only `/`. SQL dialects' `splitScript` is not used for migration
+  files (the files are always written in this format); MongoDB keeps its own.
+- SQLite table rebuilds: the engine turns `PRAGMA foreign_keys` off before the
+  transaction when a script contains `PRAGMA foreign_keys = OFF`, runs
+  `PRAGMA foreign_key_check` before commit and turns it back on afterwards.
+- Databases that do not keep foreign keys (an empty `addForeignKey` DDL, like
+  MongoDB) are detected and foreign keys are left out of the comparison.
+- Done for sqlmore: `sameInDialect` and `sameFkInDialect` now render with the
+  full target schema.
 - MongoDB: the engine runs every statement of a migration file with
   `executor.query(statement, [])`. Make `ddl` return one line JSON commands
   (for example `{"createCollection":"users"}`) and have the Mongo executor run
@@ -43,6 +50,7 @@ each item until it lands.
 
 ## For core
 
+- Done: `defineConfig` and the check-rules fix landed, thanks.
 - `defineConfig`: the CLI accepts `{ schema, adapter, migrations?, seed? }`
   where `schema` is a path (or the schema object itself), `adapter` an
   `Adapter`, or a function returning one (sync or async), `migrations` a folder
@@ -50,9 +58,6 @@ each item until it lands.
   export receives the client, or a function `(db) => Promise<void>`. The type
   is exported as `KastorConfig` from `kastor/migrate`; feel free to import it
   for `defineConfig` so both stay in sync.
-- `scripts/check-rules.mjs`: the framework and assistant rules build their
-  regex from a template literal with `\b`, which becomes a backspace character,
-  so those two rules never match. `\\b` (as in the last rule) fixes it.
 - package.json: the migrate owner added `jiti` as the only runtime dependency.
   It loads `kastor.config.ts`, the schema and the seed script on Node 18 and
   later without a build step (extensionless relative imports, TypeScript
