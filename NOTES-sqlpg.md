@@ -4,7 +4,7 @@ Requests for other owners. sqlpg works around each item until it lands.
 
 ## For migrate (`src/migrate/**`)
 
-1. **SQLite table rebuilds need foreign keys off, outside the transaction.**
+1. **Done by migrate.** SQLite table rebuilds need foreign keys off, outside the transaction.
    SQLite cannot change a column type, nullability, default, foreign key or
    enum CHECK in place, so `ddl()` rebuilds the table (create the new shape
    under `__kastor_new_<table>`, copy rows, drop the old table, rename). Those
@@ -31,6 +31,10 @@ Requests for other owners. sqlpg works around each item until it lands.
    line in the migrate docs).
 
 ## For core (`src/core/**`)
+
+0. **Done by core.** `hooks.selectColumn` landed; libSQL and D1 use it to read
+   bigint columns as text (`libsqlDialect`, `d1Dialect`), so values past 2^53
+   neither throw in libSQL's default `intMode` nor lose digits on D1.
 
 1. **Cloudflare D1 batches.** D1 has no interactive transactions (no BEGIN or
    SAVEPOINT over the binding), only `db.batch([...])`, which is atomic. The D1
