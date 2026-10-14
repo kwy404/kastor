@@ -533,11 +533,11 @@ export function diffSchemas(current: SchemaIR, target: SchemaIR, options: DiffOp
     const touches = (fk: ForeignKeyIR, table: string): boolean =>
       fk.columns.some((c) => typeChanged.has(c)) || (fk.refTable === table && fk.refColumns.some((c) => typeChanged.has(c)));
     for (const fk of fksStored ? old.foreignKeys : []) {
-      const match = t.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, fk, x, target)));
+      const match = t.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, t, fk, x, target)));
       if (!match || touches(fk, t.name)) ops.dropFks.push({ kind: 'dropForeignKey', table: t.name, foreignKey: fk });
     }
     for (const fk of fksStored ? t.foreignKeys : []) {
-      const match = old.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, old, x, fk, target)));
+      const match = old.foreignKeys.find((x) => fkFullKey(x) === fkFullKey(fk) || (fkKey(x) === fkKey(fk) && sameFkInDialect(dialect, t, x, fk, target)));
       if (!match || touches(match, t.name)) ops.addFks.push({ kind: 'addForeignKey', table: t.name, foreignKey: fk });
     }
 

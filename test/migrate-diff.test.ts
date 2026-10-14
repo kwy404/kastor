@@ -386,6 +386,28 @@ describe('diffSchemas: indexes and foreign keys', () => {
     expect(kinds(ops)).toEqual(['dropIndex', 'alterColumn', 'createIndex']);
   });
 
+  it('gives the dialect the whole target schema when comparing foreign keys', () => {
+    // Like SQL Server: a second cascade path to the same table is created as NO ACTION.
+    const seen: string[][] = [];
+    const dialect = {
+      name: 'mssql' as const,
+      features: { namedEnums: false } as never,
+      ddl: (op: { kind: string; table?: string; foreignKey?: { refTable: string; onDelete: string } }, s: SchemaIR) => {
+        if (op.kind !== 'addForeignKey' || !op.foreignKey) return [];
+        if (op.table === 'comments') seen.push(s.tables.map((x) => x.name));
+        const otherCascade = s.tables.some((x) => x.name !== op.table && x.foreignKeys.some((f) => f.refTable === op.foreignKey!.refTable && f.onDelete === 'cascade'));
+        return [`FK ${op.foreignKey.refTable} ${otherCascade ? 'no action' : op.foreignKey.onDelete}`];
+      },
+    };
+    const comments = tbl('comments', [id(), col('author_id', 'int')], { foreignKeys: [fk('comments', 'author_id', 'users', { onDelete: 'cascade' })] });
+    const target = schema(users(), posts(), comments);
+    const live = schema(users(), posts(), { ...comments, foreignKeys: [fk('comments', 'author_id', 'users', { onDelete: 'no action' })] });
+    expect(diffSchemas(live, target, { dialect }).ops).toEqual([]);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((names) => names.length === 3)).toBe(true);
+    expect(kinds(diffSchemas(live, target).ops)).toEqual(['dropForeignKey', 'addForeignKey']);
+  });
+
   it('ignores foreign keys on databases that do not keep them', () => {
     const noFks = { name: 'mongodb' as const, features: { namedEnums: false } as never, ddl: () => [] };
     expect(storesForeignKeys(noFks)).toBe(false);
