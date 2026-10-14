@@ -15,8 +15,8 @@ import { syncExecutor } from './dialects/sqlite/executor-sync';
 
 export interface SqliteOptions {
   /**
-   * Turn on foreign key enforcement (`PRAGMA foreign_keys = ON`), which SQLite
-   * leaves off by default. Default `true`.
+   * Foreign key enforcement (`PRAGMA foreign_keys`). SQLite itself leaves it
+   * off unless the build says otherwise; kastor turns it on. Default `true`.
    */
   foreignKeys?: boolean;
 }
@@ -24,7 +24,7 @@ export interface SqliteOptions {
 /** Adapter for a better-sqlite3 Database, a node:sqlite DatabaseSync or a bun:sqlite Database. */
 export function sqlite(db: SyncSqliteDriver, options: SqliteOptions = {}): Adapter {
   const connection = syncConnection(db);
-  if (options.foreignKeys !== false) connection.execute('PRAGMA foreign_keys = ON', []);
+  connection.execute(`PRAGMA foreign_keys = ${options.foreignKeys === false ? 'OFF' : 'ON'}`, []);
   return { dialect: sqliteDialect, executor: syncExecutor(connection) };
 }
 
