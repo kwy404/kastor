@@ -78,14 +78,7 @@ each item until it lands.
   ignores the history tables of other tools (`_prisma_migrations`,
   `knex_migrations`, `SequelizeMeta`, `schema_migrations`, ...; see
   `FOREIGN_HISTORY_TABLES` in `engine.ts`), so kastor never drops them.
-- For core, two gaps the importer reports as warnings:
-  1. Composite foreign keys: `.references()` covers one column, so a Prisma
-     relation with `fields: [a, b]` keeps its `one()` relation but the schema
-     cannot declare the constraint, and `migrate dev` would drop it. A table
-     option such as `foreignKeys: (c) => [foreignKey([c.a, c.b], () => [t.x, t.y], { onDelete })]`
-     would close this.
-  2. The side of a one-to-one relation without the foreign key can only be
-     written `one(target)`, which is ambiguous when two tables are linked more
-     than once or for self relations. A way to name the owning relation (for
-     example `one(target, { from: 'pinnedBy' })`) would let the importer emit
-     it instead of a comment.
+- Done by core: composite foreign keys (`foreignKeys` table option), named
+  back sides (`one(target, { from })`) and `.updatedAt()`. The importer emits
+  them, `db pull` writes composite keys with `foreignKey()`, and the diff
+  compares foreign keys by their ordered column lists.

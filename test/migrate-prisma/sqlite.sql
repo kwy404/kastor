@@ -5,7 +5,9 @@ CREATE TABLE "User" (
     "name" TEXT,
     "role" TEXT NOT NULL DEFAULT 'USER',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL
+    "updated_at" DATETIME NOT NULL,
+    "bestFriendId" INTEGER,
+    CONSTRAINT "User_bestFriendId_fkey" FOREIGN KEY ("bestFriendId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -87,6 +89,17 @@ CREATE TABLE "order_items" (
 );
 
 -- CreateTable
+CREATE TABLE "Review" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "orderId" INTEGER NOT NULL,
+    "productId" TEXT NOT NULL,
+    "rating" INTEGER NOT NULL,
+    "body" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Review_orderId_productId_fkey" FOREIGN KEY ("orderId", "productId") REFERENCES "order_items" ("orderId", "productId") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
 CREATE TABLE "_Follows" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -112,6 +125,9 @@ CREATE TABLE "_CategoryToPost" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_bestFriendId_key" ON "User"("bestFriendId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
@@ -142,6 +158,9 @@ CREATE UNIQUE INDEX "Order_number_key" ON "Order"("number");
 
 -- CreateIndex
 CREATE INDEX "Order_userId_status_idx" ON "Order"("userId", "status");
+
+-- CreateIndex
+CREATE INDEX "Review_orderId_productId_idx" ON "Review"("orderId", "productId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "_Follows_AB_unique" ON "_Follows"("A", "B");

@@ -12,6 +12,7 @@ CREATE TABLE "User" (
     "role" "Role" NOT NULL DEFAULT 'USER',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "bestFriendId" INTEGER,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -100,6 +101,18 @@ CREATE TABLE "order_items" (
 );
 
 -- CreateTable
+CREATE TABLE "Review" (
+    "id" SERIAL NOT NULL,
+    "orderId" INTEGER NOT NULL,
+    "productId" TEXT NOT NULL,
+    "rating" INTEGER NOT NULL,
+    "body" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Review_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_Follows" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -125,6 +138,9 @@ CREATE TABLE "_CategoryToPost" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_bestFriendId_key" ON "User"("bestFriendId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
@@ -157,6 +173,9 @@ CREATE UNIQUE INDEX "Order_number_key" ON "Order"("number");
 CREATE INDEX "Order_userId_status_idx" ON "Order"("userId", "status");
 
 -- CreateIndex
+CREATE INDEX "Review_orderId_productId_idx" ON "Review"("orderId", "productId");
+
+-- CreateIndex
 CREATE INDEX "_Follows_B_index" ON "_Follows"("B");
 
 -- CreateIndex
@@ -164,6 +183,9 @@ CREATE INDEX "_PostToTag_B_index" ON "_PostToTag"("B");
 
 -- CreateIndex
 CREATE INDEX "_CategoryToPost_B_index" ON "_CategoryToPost"("B");
+
+-- AddForeignKey
+ALTER TABLE "User" ADD CONSTRAINT "User_bestFriendId_fkey" FOREIGN KEY ("bestFriendId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Profile" ADD CONSTRAINT "Profile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -185,6 +207,9 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_orderId_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_productId_fkey" FOREIGN KEY ("productId") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Review" ADD CONSTRAINT "Review_orderId_productId_fkey" FOREIGN KEY ("orderId", "productId") REFERENCES "order_items"("orderId", "productId") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_Follows" ADD CONSTRAINT "_Follows_A_fkey" FOREIGN KEY ("A") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

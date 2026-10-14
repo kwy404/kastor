@@ -204,7 +204,10 @@ for (const target of targets) {
       for (const statement of splitStatements(sql)) await conn.adapter.executor.query(statement, []);
       await conn.adapter.executor.query(target.prismaTable, []);
       await conn.adapter.executor.query(
-        `INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES ('0b9a6f8e-2f5e-4b7c-9d43-6c1f0e2a7d11', 'abc', ${target.provider === 'sqlite' ? "'2024-01-01 00:00:00'" : "'2024-01-01 00:00:00'"}, '${PRISMA_FOLDER}', 1)`,
+        // On SQLite, Prisma stores these timestamps as Unix milliseconds.
+        target.provider === 'sqlite'
+          ? `INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count, started_at) VALUES ('0b9a6f8e-2f5e-4b7c-9d43-6c1f0e2a7d11', 'abc', ${Date.UTC(2024, 0, 1)}, '${PRISMA_FOLDER}', 1, ${Date.UTC(2024, 0, 1) - 40})`
+          : `INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES ('0b9a6f8e-2f5e-4b7c-9d43-6c1f0e2a7d11', 'abc', '2024-01-01 00:00:00', '${PRISMA_FOLDER}', 1)`,
         [],
       );
       mkdirSync(join(dir, 'prisma', 'migrations', PRISMA_FOLDER), { recursive: true });
@@ -233,9 +236,10 @@ for (const target of targets) {
       const r = await run(dir, ['import', 'prisma', '--schema', 'prisma/schema.prisma', '--out', 'src/db/schema.ts']);
       expect(r.err).toBe('');
       expect(r.code).toBe(0);
-      expect(r.out).toContain('Wrote src/db/schema.ts: 8 models, 3 join tables, 2 enums');
+      expect(r.out).toContain('Wrote src/db/schema.ts: 9 models, 3 join tables, 2 enums');
       expect(r.out).toContain('kastor migrate baseline --from-prisma prisma/migrations');
-      expect(r.out).toContain('@updatedAt');
+      // Only SQLite keeps a warning (how Prisma stores dates there).
+      expect(r.out.includes('Not mapped exactly (')).toBe(target.provider === 'sqlite');
       const file = join(dir, 'src', 'db', 'schema.ts');
       // The test project has no node_modules/kastor: point the import at the sources.
       writeFileSync(file, readFileSync(file, 'utf8').replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
@@ -260,6 +264,7 @@ for (const target of targets) {
       const st = await status(conn.adapter, join(dir, 'kastor', 'migrations'));
       expect(st.applied.map((a) => a.id)).toEqual([folders[0]]);
       expect(st.history.map((a) => a.id)).toEqual([`prisma/${PRISMA_FOLDER}`]);
+      expect(st.history[0]!.appliedAt.toISOString()).toBe('2024-01-01T00:00:00.000Z');
       expect(st.pending).toEqual([]);
       expect(st.missing).toEqual([]);
       // Nothing in the database changed, and Prisma's own table is still there.
@@ -307,6 +312,17 @@ for (const target of targets) {
       expect(Array.from(ada.profile.avatar)).toEqual([1, 2, 3]);
       const bob = await db.user.create({ data: { email: 'bob@acme.com', name: 'Bob' } });
       expect(bob.role).toBe('USER');
+
+      // @updatedAt: set on create, moved forward on every update.
+      await new Promise((r) => setTimeout(r, 20));
+      const renamed = await db.user.update({ where: { id: bob.id }, data: { name: 'Bobby' } });
+      expect(renamed.updatedAt.getTime()).toBeGreaterThan(bob.updatedAt.getTime());
+
+      // One-to-one self relation, read from both sides ({ from } on the side without the key).
+      await db.user.update({ where: { id: bob.id }, data: { bestFriendId: ada.id } });
+      const pair = await db.user.findUnique({ where: { id: ada.id }, include: { bestFriendOf: true, bestFriend: true } });
+      expect(pair.bestFriendOf.email).toBe('bob@acme.com');
+      expect(pair.bestFriend).toBeNull();
 
       // Self relation many-to-many (_Follows).
       await db.user.update({ where: { id: bob.id }, data: { following: { connect: [{ id: ada.id }, { id: legacy.id }] } } });
@@ -381,6 +397,13 @@ for (const target of targets) {
       expect((await db.order.findUnique({ where: { id: order.id } })).status).toBe('canceled');
       const item = await db.orderItem.findUnique({ where: { orderId: order.id, productId: pen.id } });
       expect(item.quantity).toBe(2);
+      // Composite foreign key from Review to OrderItem, both directions.
+      const review = await db.review.create({ data: { orderId: order.id, productId: pen.id, rating: 4 }, include: { item: true } });
+      expect(review.item.unitPrice).toMatch(/^2\.50*$/);
+      const withReviews = await db.orderItem.findFirst({ where: { reviews: { some: { rating: { gte: 4 } } } }, include: { reviews: true } });
+      expect(withReviews.productId).toBe(pen.id);
+      expect(withReviews.reviews.map((x: { rating: number }) => x.rating)).toEqual([4]);
+      await expect(db.review.create({ data: { orderId: order.id, productId: 'nope', rating: 1 } })).rejects.toMatchObject({ code: 'FOREIGN_KEY_VIOLATION' });
       const sum = await db.orderItem.aggregate({ _sum: { quantity: true }, where: { orderId: order.id } });
       expect(Number(sum._sum.quantity)).toBe(3);
       const byStatus = await db.order.groupBy({ by: ['status'], _count: { _all: true } });
@@ -392,6 +415,7 @@ for (const target of targets) {
       await expect(db.user.delete({ where: { id: ada.id } })).rejects.toMatchObject({ code: 'FOREIGN_KEY_VIOLATION' });
       await db.order.delete({ where: { id: order.id } });
       expect(await db.orderItem.count({ where: { orderId: order.id } })).toBe(0);
+      expect(await db.review.count()).toBe(0);
       await db.category.delete({ where: { id: root.id } });
       expect((await db.category.findUnique({ where: { id: child.id } })).parentId).toBeNull();
 
@@ -403,6 +427,19 @@ for (const target of targets) {
         }),
       ).rejects.toThrow('stop');
       expect(await db.tag.count({ where: { name: 'temp' } })).toBe(0);
+    });
+
+    it('db pull writes a schema with the same tables, composite foreign key included', async () => {
+      const r = await run(dir, ['db', 'pull', '--print']);
+      expect(r.err).toBe('');
+      expect(r.out).toContain('foreignKey([c.orderId, c.productId]');
+      const file = join(dir, 'pulled.ts');
+      writeFileSync(file, r.out.replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
+      const pulled = await importModule(file);
+      const { toSchemaIR } = await import('../src/core/schema-ir');
+      const ir = toSchemaIR(pulled.schema as Record<string, unknown>);
+      const pullDiff = diffSchemas(await introspect(conn.adapter), ir, { dialect: conn.adapter.dialect }).ops;
+      expect(pullDiff.map((o) => JSON.stringify(o))).toEqual([]);
     });
 
     it('migrate deploy rebuilds the same schema on an empty database from the baseline', async () => {

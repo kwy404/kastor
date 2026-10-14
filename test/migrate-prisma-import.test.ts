@@ -25,11 +25,13 @@ async function evaluate(r: PrismaImportResult): Promise<Record<string, unknown>>
   const file = join(tmp, `schema${counter++}.ts`);
   writeFileSync(file, r.code.replace(/from 'kastor'/g, `from '${posix(join(root, 'src/index'))}'`));
   const mod = await importModule(file);
-  expect(toSchemaIR(mod.schema as Record<string, unknown>)).toEqual(r.schemaIR);
-  const db = kastor({ adapter: sqlite(new Database(':memory:')), schema: mod.schema as never, relations: mod.relations as never }) as unknown as Record<string, { findMany(a: unknown): { toSQL(): unknown } }>;
+  // Loaded through jiti, like the CLI loads schemas: another module copy than this test's kastor.
+  const schema = mod.schema as Record<string, unknown>;
+  expect(toSchemaIR(schema)).toEqual(r.schemaIR);
+  const db = kastor({ adapter: sqlite(new Database(':memory:')), schema: schema as never, relations: mod.relations as never }) as unknown as Record<string, { findMany(a: unknown): { toSQL(): unknown } }>;
   // Building a query with every relation included resolves all of them.
-  for (const [key] of Object.entries(mod.schema as object)) {
-    const rels = typeof mod.relations === 'function' ? ((mod.relations as (s: unknown) => Record<string, Record<string, unknown>>)(mod.schema)[key] ?? {}) : {};
+  for (const [key] of Object.entries(schema)) {
+    const rels = typeof mod.relations === 'function' ? ((mod.relations as (s: unknown) => Record<string, Record<string, unknown>>)(schema)[key] ?? {}) : {};
     const include = Object.fromEntries(Object.keys(rels).map((k) => [k, true]));
     expect(() => db[key]!.findMany({ include }).toSQL()).not.toThrow();
   }
@@ -152,13 +154,17 @@ describe('prismaToKastor', { timeout: 120000 }, () => {
     const r = convert(source);
     expect(r.database).toBe('postgres');
     expect(r.urlEnv).toBe('DATABASE_URL');
-    expect(r.stats).toEqual({ models: 8, enums: 2, joinTables: 3, relations: 20 });
+    expect(r.stats).toEqual({ models: 9, enums: 2, joinTables: 3, relations: 24 });
     expect(r.code).toContain("export const Role = ['USER', 'EDITOR', 'ADMIN'] as const;");
     expect(r.code).toContain("export const OrderStatus = ['PENDING', 'PAID', 'SHIPPED', 'canceled'] as const;");
     expect(line(r, 'role')).toBe("role: t.enum(Role, 'Role').default('USER'),");
     expect(line(r, 'status')).toBe("status: t.enum(OrderStatus, 'order_status').default('PENDING'),");
     expect(line(r, 'createdAt')).toBe("createdAt: t.datetime().nativeType('timestamp(3)').defaultNow().map('created_at'),");
-    expect(line(r, 'updatedAt')).toBe("updatedAt: t.datetime().nativeType('timestamp(3)').default(() => new Date()).map('updated_at'),");
+    expect(line(r, 'updatedAt')).toBe("updatedAt: t.datetime().nativeType('timestamp(3)').updatedAt().map('updated_at'),");
+    expect(r.code).toContain("bestFriendOf: one(user, { from: 'bestFriend' }),");
+    expect(r.code).toContain("foreignKeys: (c) => [foreignKey([c.orderId, c.productId], () => [orderItem.orderId, orderItem.productId], { onDelete: 'cascade', onUpdate: 'cascade' })],");
+    expect(r.code).toContain("reviews: many(review, { fields: ['orderId', 'productId'], references: ['orderId', 'productId'] }),");
+    expect(r.warnings.map((w) => w.message).join('\n')).not.toMatch(/updatedAt|composite|comment/);
     expect(line(r, 'views')).toBe('views: t.bigint().default(0n),');
     expect(line(r, 'total')).toBe("total: t.decimal(65, 30).default('0'),");
     expect(r.code).toContain("id: t.text().primaryKey().default(() => cuid()),");
@@ -339,15 +345,38 @@ model Post {
 }`);
     expect(r.code).toContain("written: many(post, { fields: ['id'], references: ['authorId'] }),");
     expect(r.code).toContain("edited: many(post, { fields: ['id'], references: ['editorId'] }),");
-    expect(r.code).toContain('    // pinned: one(post), (kastor cannot tell this relation apart yet)');
-    expect(r.code).toContain('    // mentee: one(user), (kastor cannot tell this relation apart yet)');
+    expect(r.code).toContain("pinned: one(post, { from: 'pinnedBy' }),");
+    expect(r.code).toContain("mentee: one(user, { from: 'mentor' }),");
+    expect(r.code).not.toContain('//     ');
     expect(r.code).toContain("mentor: one(user, { fields: ['mentorId'], references: ['id'] }),");
     expect(r.code).toContain("authorId: t.int().references(() => user.id, { onDelete: 'cascade', onUpdate: 'cascade', name: 'post_author_fk' }),");
     expect(r.code).toContain("editorId: t.int().nullable().references(() => user.id, { onDelete: 'set null' }),");
     expect(r.code).toContain("export const likes = table('_likes', {");
     expect(r.code).toContain("likes: many(post, { through: { table: likes, fields: ['B'], references: ['A'] } }),");
-    expect(messages(r, 'warn')).toContain('User.pinned is the side of a one-to-one relation without the foreign key');
-    expect(messages(r, 'warn')).toContain('self relation');
+    expect(messages(r, 'warn')).toBe('');
+    await evaluate(r);
+  });
+
+  it('keeps a second relation on the same column as its own foreign key', async () => {
+    const r = convert(`${ds('postgresql')}
+model Shop {
+  id       Int     @id
+  ownerId  Int
+  owner    User    @relation("owner", fields: [ownerId], references: [id])
+  manager  User    @relation("manager", fields: [ownerId], references: [id], map: "shop_manager_fkey")
+  clash    User    @relation("clash", fields: [ownerId], references: [id])
+  touched  Int     @updatedAt
+}
+model User {
+  id      Int    @id
+  owned   Shop[] @relation("owner")
+  managed Shop[] @relation("manager")
+  clashes Shop[] @relation("clash")
+}`);
+    expect(r.code).toContain("ownerId: t.int().references(() => user.id, { onDelete: 'restrict', onUpdate: 'cascade' }),");
+    expect(r.code).toContain("foreignKeys: (c) => [foreignKey([c.ownerId], () => [user.id], { onDelete: 'restrict', onUpdate: 'cascade', name: 'shop_manager_fkey' })],");
+    expect(messages(r, 'warn')).toContain('would be named Shop_ownerId_fkey');
+    expect(messages(r, 'warn')).toContain('@updatedAt on a Int column');
     await evaluate(r);
   });
 
@@ -368,7 +397,7 @@ model Apple {
     expect(r.code).toContain("zebras: many(zebra, { through: { table: appleToZebra, fields: ['A'], references: ['B'] } }),");
   });
 
-  it('reports composite foreign keys and keeps the relation', async () => {
+  it('declares composite foreign keys with foreignKey()', async () => {
     const r = convert(`${ds('postgresql')}
 model Tenant {
   id    Int
@@ -385,8 +414,11 @@ model User {
     expect(r.code).toContain("tenant: one(tenant, { fields: ['tenantId', 'tenantSlug'], references: ['id', 'slug'] }),");
     expect(r.code).toContain("users: many(user, { fields: ['id', 'slug'], references: ['tenantId', 'tenantSlug'] }),");
     expect(r.code).toContain('tenantId: t.int(),');
-    expect(messages(r, 'warn')).toContain('composite foreign key (tenantId, tenantSlug)');
-    expect(messages(r, 'warn')).toContain('--create-only');
+    expect(r.code).toContain("foreignKeys: (c) => [foreignKey([c.tenantId, c.tenantSlug], () => [tenant.id, tenant.slug], { onDelete: 'restrict', onUpdate: 'cascade' })],");
+    expect(r.schemaIR.tables.find((x) => x.name === 'User')!.foreignKeys).toEqual([
+      { name: 'User_tenantId_tenantSlug_fkey', columns: ['tenantId', 'tenantSlug'], refTable: 'Tenant', refColumns: ['id', 'slug'], onDelete: 'restrict', onUpdate: 'cascade' },
+    ]);
+    expect(messages(r, 'warn')).toBe('');
     await evaluate(r);
   });
 
@@ -411,7 +443,7 @@ model Profile {
     expect(r.code).not.toContain('.references(');
     expect(r.relationMode).toBe('prisma');
     expect(r.code).toContain("posts: many(post, { fields: ['id'], references: ['authorId'] }),");
-    expect(r.code).toContain('// profile: one(profile)');
+    expect(r.code).toContain("profile: one(profile, { from: 'user' }),");
     expect(messages(r, 'warn')).toContain('relationMode = "prisma"');
     await evaluate(r);
   });

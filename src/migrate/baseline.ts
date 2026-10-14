@@ -75,32 +75,59 @@ export function readPrismaMigrations(dir: string): PrismaMigrationFolder[] {
   return out;
 }
 
-interface PrismaRow {
-  finishedAt?: Date;
+export interface PrismaMigrationRow {
+  name: string;
+  /** `finished_at` is set: the migration ran to the end. */
+  finished: boolean;
+  /** `rolled_back_at` is set. */
   rolledBack: boolean;
+  /** When it finished, when the value can be read as a date. */
+  finishedAt?: Date;
 }
 
-/** Prisma keeps dates as Date objects, text, or (on SQLite) Unix milliseconds. */
-function toDate(value: unknown): Date | undefined {
-  if (value === null || value === undefined || value === '') return undefined;
-  if (value instanceof Date) return value;
-  if (typeof value === 'number' || typeof value === 'bigint' || /^\d+$/.test(String(value))) return new Date(Number(value));
-  const text = String(value);
-  const date = new Date(/^\d{4}-\d{2}-\d{2} \d/.test(text) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(text) ? `${text.replace(' ', 'T')}Z` : text);
-  return Number.isNaN(date.getTime()) ? new Date(0) : date;
+/**
+ * Reads a date the way drivers hand back Prisma's timestamps: a Date, text
+ * (`2024-01-01 00:00:00`, ISO 8601), or Unix milliseconds as a number, bigint
+ * or digit string (Prisma's default on SQLite). Undefined when unreadable.
+ */
+export function prismaDate(value: unknown): Date | undefined {
+  if (value === null || value === undefined) return undefined;
+  let date: Date;
+  if (value instanceof Date) date = value;
+  else if (typeof value === 'number' || typeof value === 'bigint') date = new Date(Number(value));
+  else {
+    const text = String(value).trim();
+    if (/^-?\d+(\.\d+)?$/.test(text)) date = new Date(Number(text));
+    else date = new Date(/^\d{4}-\d{2}-\d{2}[ T]\d/.test(text) && !/([zZ]|[+-]\d{2}:?\d{2})$/.test(text) ? `${text.replace(' ', 'T')}Z` : text);
+  }
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/** One row of `_prisma_migrations`. Any non-null `finished_at` or `rolled_back_at` counts, whatever its form. */
+export function readPrismaMigrationRow(row: Record<string, unknown>): PrismaMigrationRow {
+  const get = (key: string): unknown => (key in row ? row[key] : row[key.toUpperCase()]);
+  const finished = get('finished_at');
+  const rolledBack = get('rolled_back_at');
+  const finishedAt = prismaDate(finished);
+  return {
+    name: String(get('migration_name')),
+    finished: finished !== null && finished !== undefined,
+    rolledBack: rolledBack !== null && rolledBack !== undefined,
+    ...(finishedAt ? { finishedAt } : {}),
+  };
 }
 
 /** Rows of `_prisma_migrations`, or undefined when the table cannot be read. */
-async function prismaApplied(adapter: Adapter): Promise<Map<string, PrismaRow> | undefined> {
+async function prismaApplied(adapter: Adapter): Promise<Map<string, PrismaMigrationRow> | undefined> {
   if (adapter.dialect.name === 'mongodb') return undefined;
   try {
     const res = await adapter.executor.query('SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations', []);
-    const map = new Map<string, PrismaRow>();
-    for (const row of res.rows) {
-      const get = (key: string): unknown => row[key] ?? row[key.toUpperCase()];
-      const finished = get('finished_at');
-      const finishedAt = toDate(finished);
-      map.set(String(get('migration_name')), { ...(finishedAt ? { finishedAt } : {}), rolledBack: get('rolled_back_at') !== null && get('rolled_back_at') !== undefined });
+    const map = new Map<string, PrismaMigrationRow>();
+    for (const raw of res.rows) {
+      const row = readPrismaMigrationRow(raw);
+      // A migration Prisma retried keeps the old failed row next to the new one: the finished one wins.
+      const known = map.get(row.name);
+      if (!known || (row.finished && !row.rolledBack)) map.set(row.name, row);
     }
     return map;
   } catch {
@@ -185,7 +212,7 @@ async function recordPrismaHistory(adapter: Adapter, folder: string, notes: stri
       out.push({ folder: f.folder, id, state: 'not applied' });
       continue;
     }
-    if (applied && row && !row.finishedAt) {
+    if (applied && row && !row.finished) {
       out.push({ folder: f.folder, id, state: 'failed' });
       continue;
     }

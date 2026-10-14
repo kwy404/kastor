@@ -78,7 +78,7 @@ export {
   type KastorConfig,
   type LoadedConfig,
 } from './config';
-export { baseline, BASELINE_MARKER, readPrismaMigrations, type BaselineOptions, type BaselineResult, type HistoryEntry, type PrismaMigrationFolder } from './baseline';
+export { baseline, BASELINE_MARKER, prismaDate, readPrismaMigrationRow, readPrismaMigrations, type BaselineOptions, type BaselineResult, type HistoryEntry, type PrismaMigrationFolder, type PrismaMigrationRow } from './baseline';
 export {
   parsePrismaSchema,
   prismaToKastor,

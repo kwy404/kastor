@@ -39,6 +39,10 @@ model User {
   orders    Order[]
   followers User[]   @relation("Follows")
   following User[]   @relation("Follows")
+  /// One-to-one self relation: kastor names the owning side with { from }.
+  bestFriend   User? @relation("BestFriend", fields: [bestFriendId], references: [id])
+  bestFriendId Int?  @unique
+  bestFriendOf User? @relation("BestFriend")
 }
 
 model Profile {
@@ -128,7 +132,21 @@ model OrderItem {
   productId String
   quantity  Int     @default(1)
   unitPrice Decimal @map("unit_price")
+  reviews   Review[]
 
   @@id([orderId, productId])
   @@map("order_items")
+}
+
+/// A review of one order line: a composite foreign key to OrderItem.
+model Review {
+  id        Int       @id @default(autoincrement())
+  orderId   Int
+  productId String
+  rating    Int
+  body      String?
+  item      OrderItem @relation(fields: [orderId, productId], references: [orderId, productId], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([orderId, productId])
 }

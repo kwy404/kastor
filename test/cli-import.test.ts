@@ -69,7 +69,7 @@ describe('kastor import prisma', { timeout: 120000 }, () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain('Prisma schema  prisma/schema.prisma');
     expect(r.out).toContain('sqlite (kastor/sqlite)');
-    expect(r.out).toContain('Wrote src/db/schema.ts: 8 models, 3 join tables, 2 enums, 20 relation fields.');
+    expect(r.out).toContain('Wrote src/db/schema.ts: 9 models, 3 join tables, 2 enums, 24 relation fields.');
     expect(r.out).toContain('Wrote kastor.config.ts for sqlite, reading APP_DB.');
     expect(r.out).toContain('Not mapped exactly (1)');
     expect(r.out).toContain('Unix milliseconds');

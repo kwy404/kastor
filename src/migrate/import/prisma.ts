@@ -90,6 +90,8 @@ interface ColumnSpec {
   defaultExpr?: string;
   /** `.default(() => <expr>)` source text, for defaults Prisma Client generates. */
   jsDefault?: string;
+  /** `.updatedAt()`: the client sets it on every write. */
+  updatedAt?: boolean;
   /** `t.json<T>()` or `.$type<T>()`. */
   tsType?: string;
   /** Identifier of the enum values constant, for `t.enum(Role, 'Role')`. */
@@ -108,9 +110,17 @@ interface IndexSpec {
 interface RelationSpec {
   name: string;
   expr: string;
-  /** Written as a comment because kastor cannot resolve it yet. */
-  commented?: string;
   doc?: string;
+}
+
+/** A foreign key declared with the `foreignKeys` table option (several columns). */
+interface CompositeFkSpec {
+  keys: string[];
+  table: TableSpec;
+  refKeys: string[];
+  onDelete: ReferentialAction;
+  onUpdate: ReferentialAction;
+  name?: string;
 }
 
 interface TableSpec {
@@ -119,6 +129,7 @@ interface TableSpec {
   columns: ColumnSpec[];
   compositePk?: string[];
   indexes: IndexSpec[];
+  foreignKeys: CompositeFkSpec[];
   relations: RelationSpec[];
   doc?: string;
   /** Prisma model name; undefined for implicit join tables. */
@@ -320,7 +331,7 @@ class Importer {
     if (findAttribute(m.attributes, 'schema')) {
       this.warn('warn', m.name, `${m.name} lives in the database schema "${stringValue(argument(findAttribute(m.attributes, 'schema'), 'name', 0)) ?? '?'}".`, 'kastor uses the default schema of the connection; set search_path on the connection to reach it.');
     }
-    this.tables.set(m.name, { name, ident: this.ident(m.name, 'Table'), columns: [], indexes: [], relations: [], ...(m.doc ? { doc: m.doc } : {}), model: m.name });
+    this.tables.set(m.name, { name, ident: this.ident(m.name, 'Table'), columns: [], indexes: [], foreignKeys: [], relations: [], ...(m.doc ? { doc: m.doc } : {}), model: m.name });
   }
 
   private addColumns(m: PrismaModel): void {
@@ -388,8 +399,8 @@ class Importer {
 
     this.defaults(m, where, f, col);
     if (findAttribute(f.attributes, 'updatedAt')) {
-      if (!col.jsDefault && !ir.default) col.jsDefault = 'new Date()';
-      this.noteOnce('updatedAt', 'info', where, '@updatedAt is set by Prisma Client; kastor fills it on create only.', 'Pass the field (for example updatedAt: new Date()) in update calls.');
+      if (ir.type === 'datetime' || ir.type === 'date' || ir.type === 'time') col.updatedAt = true;
+      else this.warn('warn', where, `@updatedAt on a ${f.type} column has no kastor equivalent; it was left out.`);
     }
     const unique = findAttribute(f.attributes, 'unique');
     if (unique && !col.primaryKey) {
@@ -703,29 +714,21 @@ class Importer {
         spec.relations.push({ name: f.name, expr: `many(${target.ident}, { fields: [${fieldKeys.map(q).join(', ')}], references: [${refKeys.map(q).join(', ')}] })`, ...(doc ? { doc } : {}) });
         continue;
       }
-      // The side of a one-to-one relation without the foreign key.
-      const expr = `one(${target.ident})`;
-      if (this.resolvableBackSide(m.name, f.type)) spec.relations.push({ name: f.name, expr, ...(doc ? { doc } : {}) });
-      else {
-        spec.relations.push({ name: f.name, expr, commented: 'kastor cannot tell this relation apart yet', ...(doc ? { doc } : {}) });
-        this.warn(
-          'warn',
-          where,
-          `${where} is the side of a one-to-one relation without the foreign key, and ${m.name === f.type ? 'it is a self relation' : `${m.name} and ${f.type} are linked more than once`}${this.relationMode === 'prisma' && this.flavor !== 'mongodb' ? ' (or the schema has no foreign keys)' : ''}; it is written as a comment.`,
-          `Read it from the other side (${f.type}.${other.name}) for now.`,
-        );
-      }
+      // The side of a one-to-one relation without the foreign key: plain
+      // one(target) when one foreign key links the tables, otherwise named
+      // after the owning relation on the other side.
+      const expr = this.resolvableBackSide(m.name, f.type) ? `one(${target.ident})` : `one(${target.ident}, { from: ${q(other.name)} })`;
+      spec.relations.push({ name: f.name, expr, ...(doc ? { doc } : {}) });
     }
   }
 
-  /** `one(target)` without fields works when exactly one foreign key links the two tables, from the target. */
+  /** `one(target)` without options works when exactly one foreign key links the two tables, from the target. */
   private resolvableBackSide(source: string, target: string): boolean {
     if (source === target) return false;
     const s = this.tables.get(source)!;
     const tt = this.tables.get(target)!;
-    const own = s.columns.filter((c) => c.ref?.table === tt).length;
-    const back = tt.columns.filter((c) => c.ref?.table === s).length;
-    return own === 0 && back === 1;
+    const count = (from: TableSpec, to: TableSpec): number => from.columns.filter((c) => c.ref?.table === to).length + from.foreignKeys.filter((fk) => fk.table === to).length;
+    return count(s, tt) === 0 && count(tt, s) === 1;
   }
 
   private foreignKey(m: PrismaModel, f: PrismaField, spec: TableSpec, target: TableSpec, info: ReturnType<Importer['relationInfo']>, where: string): void {
@@ -743,34 +746,30 @@ class Importer {
     if (onDeleteName && !onDelete) this.warn('warn', where, `Unknown onDelete action ${valueText(onDeleteName)}.`);
     if (onUpdateName && !onUpdate) this.warn('warn', where, `Unknown onUpdate action ${valueText(onUpdateName)}.`);
     if (this.relationMode === 'prisma' && this.flavor !== 'mongodb') return;
-    if (fields.length > 1) {
-      this.warn(
-        'warn',
-        where,
-        `${where} uses a composite foreign key (${fields.join(', ')}). The relation works, but .references() covers one column, so the schema does not declare the constraint.`,
-        'Until composite foreign keys land, migrate dev proposes to drop that constraint: run kastor migrate dev --create-only and delete the DROP statement before applying.',
-      );
-      return;
-    }
-    const column = spec.columns.find((c) => c.key === fields[0]);
-    const refColumn = target.columns.find((c) => c.key === references[0]);
-    if (!column || !refColumn) {
-      this.warn('warn', where, `@relation on ${where} names a field that is not a column (${!column ? fields[0] : references[0]}); the foreign key was left out.`);
-      return;
-    }
-    if (column.ref) {
-      this.warn('warn', where, `${m.name}.${column.key} is the foreign key of two relations; kastor declares one constraint per column, so only the first is kept.`);
+    const columns = fields.map((k) => spec.columns.find((c) => c.key === k));
+    const refColumns = references.map((k) => target.columns.find((c) => c.key === k));
+    const missing = [...fields.filter((_, i) => !columns[i]), ...references.filter((_, i) => !refColumns[i])];
+    if (missing.length) {
+      this.warn('warn', where, `@relation on ${where} names a field that is not a column (${missing.join(', ')}); the foreign key was left out.`);
       return;
     }
     const map = stringValue(argument(attr, 'map'));
-    const defaultName = constraintName(spec.name, column.ir.name, 'fkey');
-    column.ref = {
-      table: target,
-      columnKey: refColumn.key,
-      onDelete: onDelete ?? (optional ? 'set null' : 'restrict'),
-      onUpdate: onUpdate ?? 'cascade',
-      ...(map && map !== defaultName ? { name: map } : {}),
-    };
+    const defaultName = constraintName(spec.name, ...columns.map((c) => c!.ir.name), 'fkey');
+    const actions = { onDelete: onDelete ?? (optional ? 'set null' : 'restrict'), onUpdate: onUpdate ?? 'cascade' } as const;
+    const name = map && map !== defaultName ? { name: map } : {};
+    const column = columns[0]!;
+    if (columns.length === 1 && !column.ref) {
+      column.ref = { table: target, columnKey: refColumns[0]!.key, ...actions, ...name };
+      return;
+    }
+    // Several columns, or a column that already holds the key of another relation: the foreignKeys table option.
+    const nameOf = (keys: string[], custom?: string): string => custom ?? constraintName(spec.name, ...keys.map((k) => spec.columns.find((c) => c.key === k)!.ir.name), 'fkey');
+    const taken = new Set([...spec.columns.filter((c) => c.ref).map((c) => c.ref!.name ?? nameOf([c.key])), ...spec.foreignKeys.map((fk) => nameOf(fk.keys, fk.name))]);
+    if (taken.has(map ?? defaultName)) {
+      this.warn('warn', where, `The foreign key of ${where} would be named ${map ?? defaultName}, like another one on ${spec.name}; it was left out.`, 'Give it its own name with @relation(map: "...").');
+      return;
+    }
+    spec.foreignKeys.push({ keys: fields, table: target, refKeys: references, ...actions, ...name });
   }
 
   private manyToMany(m: PrismaModel, f: PrismaField, other: PrismaField, relationName: string | undefined, spec: TableSpec, target: TableSpec, where: string): void {
@@ -831,6 +830,7 @@ class Importer {
       ident: this.ident(name.replace(/^_+/, ''), 'Join'),
       columns: [keyColumn('A', pa, a), keyColumn('B', pb, b)],
       indexes: [],
+      foreignKeys: [],
       relations: [],
       doc: `Join table of the implicit many-to-many relation between ${a.model} and ${b.model}, named the way Prisma names it.`,
     };
@@ -917,6 +917,17 @@ class Importer {
         onUpdate: c.ref.onUpdate,
       });
     }
+    for (const fk of spec.foreignKeys) {
+      const cols = fk.keys.map((k) => spec.columns.find((c) => c.key === k)!.ir.name);
+      foreignKeys.push({
+        name: fk.name ?? constraintName(spec.name, ...cols, 'fkey'),
+        columns: cols,
+        refTable: fk.table.name,
+        refColumns: fk.refKeys.map((k) => fk.table.columns.find((c) => c.key === k)!.ir.name),
+        onDelete: fk.onDelete,
+        onUpdate: fk.onUpdate,
+      });
+    }
     return { name: spec.name, columns, primaryKey, indexes, foreignKeys };
   }
 
@@ -970,6 +981,20 @@ class Importer {
         });
         tableOpts.push(`indexes: (c) => [${items.join(', ')}]`);
       }
+      if (spec.foreignKeys.length) {
+        imports.add('foreignKey');
+        const items = spec.foreignKeys.map((fk) => {
+          const later = (position.get(fk.table.name) ?? 0) >= (position.get(spec.name) ?? 0);
+          if (later) anyColumn = true;
+          const opts: string[] = [];
+          if (fk.onDelete !== 'no action') opts.push(`onDelete: ${q(fk.onDelete)}`);
+          if (fk.onUpdate !== 'no action') opts.push(`onUpdate: ${q(fk.onUpdate)}`);
+          if (fk.name) opts.push(`name: ${q(fk.name)}`);
+          const targets = `[${fk.refKeys.map((k) => `${fk.table.ident}.${k}`).join(', ')}]`;
+          return `foreignKey([${fk.keys.map((k) => `c.${k}`).join(', ')}], ${later ? '(): AnyColumn[]' : '()'} => ${targets}${opts.length ? `, { ${opts.join(', ')} }` : ''})`;
+        });
+        tableOpts.push(`foreignKeys: (c) => [${items.join(', ')}]`);
+      }
       const doc = spec.doc ? `${jsDoc(spec.doc, '').join('\n')}\n` : '';
       const head = `${doc}export const ${spec.ident} = table(${q(spec.name)}, {\n${lines.join('\n')}\n}`;
       blocks.push(tableOpts.length ? `${head}, {\n  ${tableOpts.join(',\n  ')},\n});` : `${head});`);
@@ -982,10 +1007,6 @@ class Importer {
       const lines: string[] = [];
       for (const r of spec.relations) {
         if (r.doc) lines.push(...jsDoc(r.doc, '    '));
-        if (r.commented) {
-          lines.push(`    // ${r.name}: ${r.expr}, (${r.commented})`);
-          continue;
-        }
         for (const m of r.expr.matchAll(/\b(one|many)\(/g)) imports.add(m[1]!);
         for (const s of order) if (new RegExp(`\\b${s.ident}\\b`).test(r.expr)) used.add(s.ident);
         lines.push(`    ${r.name}: ${r.expr},`);
@@ -1001,7 +1022,7 @@ class Importer {
     ];
     const cryptoImports = [...(this.helpers.has('randomUUID') ? ['randomUUID'] : []), ...(['cuid', 'nanoid', 'ulid', 'uuidv7'].some((h) => this.helpers.has(h as never)) ? ['randomBytes'] : [])];
     if (cryptoImports.length) out.push(`import { ${cryptoImports.join(', ')} } from 'node:crypto';`);
-    const order2 = ['table', 't', 'index', 'uniqueIndex', 'one', 'many'];
+    const order2 = ['table', 't', 'index', 'uniqueIndex', 'foreignKey', 'one', 'many'];
     out.push(`import { ${[...imports].sort((a, b) => order2.indexOf(a) - order2.indexOf(b)).join(', ')} } from ${q(from)};`);
     if (anyColumn) out.push(`import type { AnyColumn } from ${q(from)};`);
     out.push('');
@@ -1071,6 +1092,7 @@ class Importer {
           break;
       }
     }
+    if (c.updatedAt) expr += '.updatedAt()';
     if (c.unique) expr += c.unique === true ? '.unique()' : `.unique(${q(c.unique)})`;
     return expr;
   }

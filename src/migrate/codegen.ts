@@ -100,13 +100,17 @@ export function generateSchema(schema: SchemaIR, options: CodegenOptions = {}): 
     const n = names.get(t.name)!;
     const singlePk = t.primaryKey.length === 1 ? t.primaryKey[0] : undefined;
     const lines: string[] = [];
+    // The first one column foreign key of a column goes on the column; the rest use the foreignKeys option.
+    const inlineFks = new Map<string, ForeignKeyIR>();
+    for (const f of t.foreignKeys) if (f.columns.length === 1 && !inlineFks.has(f.columns[0]!)) inlineFks.set(f.columns[0]!, f);
+    const inlined = new Set(inlineFks.values());
     for (const c of t.columns) {
       const key = n.keys.get(c.name)!;
       let expr = columnExpr(t, c, singlePk === c.name, options, notes);
       if (singlePk === c.name && !/^t\.(id|bigId)\(\)/.test(expr)) expr += '.primaryKey()';
       const uniq = t.indexes.find((i) => i.unique && i.columns.length === 1 && i.columns[0] === c.name);
       if (uniq && singlePk !== c.name) expr += uniq.name === constraintName(t.name, c.name, 'key') ? '.unique()' : `.unique(${q(uniq.name)})`;
-      const fk = t.foreignKeys.find((f) => f.columns.length === 1 && f.columns[0] === c.name);
+      const fk = inlineFks.get(c.name);
       if (fk) {
         const target = names.get(fk.refTable);
         const refKey = target?.keys.get(fk.refColumns[0]!);
@@ -136,8 +140,27 @@ export function generateSchema(schema: SchemaIR, options: CodegenOptions = {}): 
       });
       tableOpts.push(`indexes: (c) => [${items.join(', ')}]`);
     }
-    for (const fk of t.foreignKeys.filter((f) => f.columns.length > 1)) {
-      notes.push(`${t.name} has a composite foreign key ${fk.name} (${fk.columns.join(', ')}) to ${fk.refTable}; .references() covers one column, so add it with a raw migration.`);
+    const tableFks: string[] = [];
+    for (const fk of t.foreignKeys.filter((f) => !inlined.has(f))) {
+      const target = names.get(fk.refTable);
+      const refKeys = fk.refColumns.map((col) => target?.keys.get(col));
+      if (!target || refKeys.some((k) => !k)) {
+        notes.push(`${t.name} has a foreign key ${fk.name} to ${fk.refTable}, which was not found; the foreign key was left out.`);
+        continue;
+      }
+      const later = (position.get(fk.refTable) ?? 0) >= (position.get(t.name) ?? 0);
+      if (later) needsAnyColumn = true;
+      const opts: string[] = [];
+      if (fk.onDelete !== 'no action') opts.push(`onDelete: ${q(fk.onDelete)}`);
+      if (fk.onUpdate !== 'no action') opts.push(`onUpdate: ${q(fk.onUpdate)}`);
+      if (fk.name !== constraintName(t.name, ...fk.columns, 'fkey')) opts.push(`name: ${q(fk.name)}`);
+      const cols = fk.columns.map((col) => `c.${n.keys.get(col)}`).join(', ');
+      const targets = refKeys.map((k) => `${target.ident}.${k}`).join(', ');
+      tableFks.push(`foreignKey([${cols}], ${later ? '(): AnyColumn[]' : '()'} => [${targets}]${opts.length ? `, { ${opts.join(', ')} }` : ''})`);
+    }
+    if (tableFks.length) {
+      imports.add('foreignKey');
+      tableOpts.push(`foreignKeys: (c) => [${tableFks.join(', ')}]`);
     }
     const head = `export const ${n.ident} = table(${q(t.name)}, {\n${lines.join('\n')}\n}`;
     blocks.push(tableOpts.length ? `${head}, {\n  ${tableOpts.join(',\n  ')},\n});` : `${head});`);
@@ -166,7 +189,7 @@ export function generateSchema(schema: SchemaIR, options: CodegenOptions = {}): 
 }
 
 function importOrder(a: string, b: string): number {
-  const order = ['table', 't', 'index', 'uniqueIndex', 'one', 'many'];
+  const order = ['table', 't', 'index', 'uniqueIndex', 'foreignKey', 'one', 'many'];
   return order.indexOf(a) - order.indexOf(b);
 }
 
@@ -199,6 +222,13 @@ function columnExpr(t: TableIR, c: ColumnIR, isSinglePk: boolean, options: Codeg
   }
   let expr = base;
   if (c.nativeType && keepNativeType(t, c, options)) expr += `.nativeType(${q(c.nativeType)})`;
+  else if (c.type === 'decimal' && c.precision === undefined && !c.nativeType) {
+    // A decimal without precision (Prisma's DECIMAL on SQLite, a bare numeric on PostgreSQL):
+    // t.decimal() alone would mean decimal(10, 2).
+    const unbounded: Record<string, string> = { sqlite: 'DECIMAL', postgres: 'numeric', cockroach: 'numeric' };
+    const native = unbounded[options.dialect?.name ?? ''];
+    if (native) expr += `.nativeType(${q(native)})`;
+  }
   if (c.nullable) expr += '.nullable()';
   if (def && !defaultHandled) {
     switch (def.kind) {
@@ -284,6 +314,16 @@ function buildRelations(tables: TableIR[], names: Map<string, TableNames>): stri
       const manyBase = plural(singular(n.ident));
       const manyName = (counts.get(fk.refTable) ?? 0) > 1 || fk.refTable === t.name ? `${manyBase}By${oneName.charAt(0).toUpperCase()}${oneName.slice(1)}` : manyBase;
       add(fk.refTable, manyName, `many(${n.ident}, { fields: [${q(refKey)}], references: [${q(fieldKey)}] })`);
+    }
+    // Composite foreign keys: spelled out on both sides.
+    for (const fk of t.foreignKeys.filter((f) => f.columns.length > 1 && names.has(f.refTable))) {
+      const target = names.get(fk.refTable)!;
+      const fieldKeys = fk.columns.map((c) => n.keys.get(c)!);
+      const refKeys = fk.refColumns.map((c) => target.keys.get(c));
+      if (refKeys.some((k) => !k)) continue;
+      const list = (keys: Array<string | undefined>): string => keys.map((k) => q(k!)).join(', ');
+      add(t.name, singular(target.ident), `one(${target.ident}, { fields: [${list(fieldKeys)}], references: [${list(refKeys)}] })`);
+      add(fk.refTable, plural(singular(n.ident)), `many(${n.ident}, { fields: [${list(refKeys)}], references: [${list(fieldKeys)}] })`);
     }
     // Join table: exactly two foreign keys to two other tables, covered by the primary key.
     if (fks.length === 2 && fks[0]!.refTable !== fks[1]!.refTable && fks.every((f) => f.refTable !== t.name)) {
