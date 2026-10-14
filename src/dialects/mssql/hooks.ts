@@ -38,7 +38,14 @@ export function mssqlTextMatch(column: Sql, mode: TextMatchMode, _value: Sql, in
   return q`${column} COLLATE Latin1_General_100_BIN2 LIKE ${p(pattern)} ESCAPE '!'`;
 }
 
+/** tedious reads DECIMAL as a JS number; text keeps every digit. */
+export function mssqlSelectColumn(expr: Sql, column: ColumnIR): Sql {
+  if (column.type === 'decimal' && !column.nativeType) return q`CAST(${expr} AS NVARCHAR(80))`;
+  return expr;
+}
+
 export const mssqlHooks: SqlHooks = defineHooks({
+  selectColumn: mssqlSelectColumn,
   quoteIdent: quoteBracket,
   placeholder: placeholderAtP,
   paginate: offsetFetchTop,

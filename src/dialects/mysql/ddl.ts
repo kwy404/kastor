@@ -125,9 +125,15 @@ export function createTable(table: TableIR, flavor: MysqlFlavor): string[] {
   return statements;
 }
 
+/** True when an index (or the primary key) starts with `columns`, so InnoDB can use it for a foreign key. */
+export function hasUsableIndex(table: TableIR, columns: string[]): boolean {
+  const starts = (cols: string[]) => columns.every((c, i) => cols[i] === c);
+  return starts(table.primaryKey) || table.indexes.some((i) => starts(i.columns));
+}
+
 /** Migration DDL for MySQL and MariaDB. */
 export function mysqlDdl(flavor: MysqlFlavor): (op: MigrationOpLike, schema: SchemaIR) => string[] {
-  return (input) => {
+  return (input, schema) => {
     const op = input as unknown as MigrationOp;
     const t = (name: string) => quoteIdent(name);
     switch (op.kind) {
@@ -152,8 +158,15 @@ export function mysqlDdl(flavor: MysqlFlavor): (op: MigrationOpLike, schema: Sch
         return [`DROP INDEX ${t(op.index.name)} ON ${t(op.table)}`];
       case 'addForeignKey':
         return [`ALTER TABLE ${t(op.table)} ADD ${foreignKeyClause(op.foreignKey)}`];
-      case 'dropForeignKey':
-        return [`ALTER TABLE ${t(op.table)} DROP FOREIGN KEY ${t(op.foreignKey.name)}`];
+      case 'dropForeignKey': {
+        const statements = [`ALTER TABLE ${t(op.table)} DROP FOREIGN KEY ${t(op.foreignKey.name)}`];
+        // InnoDB created an index named after the key when no index could serve it; it outlives the key.
+        const table = schema.tables.find((x) => x.name === op.table);
+        if (table && !hasUsableIndex(table, op.foreignKey.columns) && !table.indexes.some((i) => i.name === op.foreignKey.name)) {
+          statements.push(`DROP INDEX ${t(op.foreignKey.name)} ON ${t(op.table)}`);
+        }
+        return statements;
+      }
       case 'createEnum':
       case 'dropEnum':
       case 'alterEnum':
