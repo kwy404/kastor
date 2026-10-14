@@ -681,13 +681,31 @@ export function runConformance(name: string, makeDb: () => Promise<ConformanceTa
       expect(made).toHaveLength(2);
       expect(await db.tags.count({ where: { name: { startsWith: 'tx-' } } })).toBe(2);
 
-      await expect(
-        db.$transaction(async (tx) => {
+      // The caller's own error comes back as the same instance, after the rollback.
+      const boom = new Error('boom');
+      const caught = await db
+        .$transaction(async (tx) => {
           await tx.tags.create({ data: { name: 'tx-rollback' } });
-          throw new Error('boom');
-        }),
-      ).rejects.toThrow('boom');
+          throw boom;
+        })
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(caught).toBe(boom);
       expect(await db.tags.count({ where: { name: 'tx-rollback' } })).toBe(0);
+      // A database error inside the callback keeps its KastorError code.
+      const dup = await db
+        .$transaction(async (tx) => {
+          await tx.tags.create({ data: { name: 'tx-dup' } });
+          await tx.tags.create({ data: { name: 'tx-dup' } });
+        })
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(isKastorError(dup, 'UNIQUE_VIOLATION')).toBe(true);
+      expect(await db.tags.count({ where: { name: 'tx-dup' } })).toBe(0);
 
       const [x, n] = await db.$transaction([db.tags.create({ data: { name: 'tx-batch' } }), db.tags.count({ where: { name: { startsWith: 'tx-' } } })]);
       expect(x.name).toBe('tx-batch');

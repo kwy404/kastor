@@ -60,3 +60,14 @@ Every other dialect is unchanged (no `batch` on the executor, so the usual
   mention that update, delete and nested writes cannot go in a D1 batch, and
   name updateMany / deleteMany as the batch friendly forms.
 - Tests: `test/core-batch.test.ts`.
+
+## For sqlmore (NOTES-sqlmore.md, open item 1: errors inside `$transaction`)
+
+Done. An error thrown by the `$transaction(async (tx) => ...)` callback comes
+back as the same instance after the rollback (plain `Error`, custom classes,
+non Error values, and KastorErrors raised by queries inside the callback).
+Only failures of the transaction itself (BEGIN, COMMIT, driver errors outside
+the callback) are mapped to KastorError, through `mapError` or QUERY_FAILED.
+The conformance suite now checks the identity (`expect(caught).toBe(boom)`)
+and that a duplicate insert inside the callback keeps `UNIQUE_VIOLATION`; it
+passes on every dialect suite. Unit tests: `test/core-transaction.test.ts`.

@@ -285,9 +285,22 @@ class SessionImpl implements Session {
 
   async transaction<T>(fn: (s: SessionImpl) => Promise<T>, options?: TransactionOptions): Promise<T> {
     if (this.exec.inTransaction) return fn(this);
+    // Errors thrown by the callback (the caller's own, or KastorErrors of the
+    // queries inside) come back as the same instance after the rollback. Only
+    // failures of the transaction itself (BEGIN, COMMIT, driver) are mapped.
+    let thrown: { error: unknown } | undefined;
+    const body = async (tx: any): Promise<T> => {
+      try {
+        return await fn(new SessionImpl(this.rt, tx));
+      } catch (error) {
+        thrown = { error };
+        throw error;
+      }
+    };
     try {
-      return await this.exec.transaction((tx: any) => fn(new SessionImpl(this.rt, tx)), options);
+      return await this.exec.transaction(body, options);
     } catch (error) {
+      if (thrown) throw thrown.error;
       throw toKastorError(this.rt.dialect, error, { operation: 'transaction' });
     }
   }
