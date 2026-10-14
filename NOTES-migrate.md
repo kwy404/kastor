@@ -57,3 +57,10 @@ each item until it lands.
   It loads `kastor.config.ts`, the schema and the seed script on Node 18 and
   later without a build step (extensionless relative imports, TypeScript
   syntax, ESM and CJS). It has no dependencies of its own.
+
+## Resolved by core
+
+- `defineConfig` and the `KastorConfigFile` type are exported from `kastor`
+  too; they reuse `KastorConfig` from `src/migrate/config.ts` (type only, so
+  the browser build stays free of Node imports).
+- `scripts/check-rules.mjs` builds every regex with `\b` now; all rules match.
