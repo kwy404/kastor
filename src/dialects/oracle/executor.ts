@@ -96,7 +96,7 @@ export function loadDriverTypes(): Promise<DriverTypes | undefined> {
 }
 
 /** Reads LOB handles into strings and Buffers so rows are plain data. */
-export async function materialize(rows: unknown[]): Promise<Record<string, unknown>[]> {
+export async function readLobs(rows: unknown[]): Promise<Record<string, unknown>[]> {
   const out: Record<string, unknown>[] = [];
   for (const row of rows as Record<string, unknown>[]) {
     const copy: Record<string, unknown> = {};
@@ -119,7 +119,7 @@ export async function outRows(outs: OracleOutBind[], outBinds: unknown[]): Promi
     outs.forEach((o, i) => (row[o.as] = columns[i]![r]));
     rows.push(row);
   }
-  return materialize(rows);
+  return readLobs(rows);
 }
 
 const isolationSql: Record<NonNullable<TransactionOptions['isolationLevel']>, string> = {
@@ -159,7 +159,7 @@ export function oracleExecutor(target: OraclePoolLike | OracleConnectionLike): E
       binds = params.map((v) => (v instanceof OracleOutBind ? { dir: BIND_OUT, ...types.outType(v.column) } : v));
     }
     const result = await conn.execute(sql, binds, options);
-    let rows = result.rows ? await materialize(result.rows) : [];
+    let rows = result.rows ? await readLobs(result.rows) : [];
     if (outs.length) rows = await outRows(outs, (result as { outBinds?: unknown[] }).outBinds ?? []);
     return result.rowsAffected === undefined ? { rows } : { rows, rowsAffected: result.rowsAffected };
   };
