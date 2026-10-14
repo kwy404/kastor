@@ -265,5 +265,8 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.71.2",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "jiti": "^2.7.0"
   }
 }
