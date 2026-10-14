@@ -181,7 +181,7 @@ export class SqlCompiler {
 
   aggregateExpr(fn: AggregateFn, column: string | null, scope: Scope): Sql {
     if (column === null) return text('COUNT(*)');
-    const col = this.ref(scope, column);
+    const col = this.cmpColumn(scope, column);
     return q`${fn.toUpperCase()}(${col})`;
   }
 

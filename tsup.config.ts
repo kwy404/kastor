@@ -55,7 +55,7 @@ export default defineConfig([
   {
     // Core only, no Node imports: lets the docs playground compile queries
     // to SQL in the browser.
-    entry: { 'kastor.browser': 'src/index.ts' },
+    entry: { 'kastor.browser': 'src/core/browser.ts' },
     format: ['esm'],
     target: 'es2020',
     platform: 'browser',
@@ -64,7 +64,7 @@ export default defineConfig([
   },
   {
     // Script tag build: exposes the core as the global `Kastor`.
-    entry: { kastor: 'src/index.ts' },
+    entry: { kastor: 'src/core/browser.ts' },
     format: ['iife'],
     globalName: 'Kastor',
     target: 'es2020',
