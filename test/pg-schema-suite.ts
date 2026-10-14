@@ -3,6 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Adapter, Executor, SchemaIR } from '../src/core/ir';
 import { applyMigrationOp, createSchema, dropSchema, normalizeSchema, roundTripSchema } from './pg-sqlite-shared';
 
+/** CockroachDB schema changes run as background jobs and take seconds each on a busy machine. */
+const SLOW = 600_000;
+
 /** Schema round trip and migration op suite for the pg family (Postgres, CockroachDB). */
 export function pgSchemaSuite(name: string, url: string | undefined, makeAdapter: (pool: pg.Pool) => Adapter): void {
 describe.skipIf(!url)(`${name} schema round trip`, () => {
@@ -27,7 +30,7 @@ describe.skipIf(!url)(`${name} schema round trip`, () => {
     const live = await dialect.introspect(exec);
     const only = roundTripSchema.tables.map((tbl) => tbl.name);
     expect(normalizeSchema(live, { enums: true, only })).toEqual(normalizeSchema(roundTripSchema, { enums: true }));
-  });
+  }, SLOW);
 
   it('applies every migration op and reads the result back', async () => {
     const { dialect } = adapter();
@@ -121,6 +124,6 @@ describe.skipIf(!url)(`${name} schema round trip`, () => {
       { email: 'a@x.io', name: 'Ann', age: '18', level: 3, bio: 'none' },
       { email: 'b@x.io', name: null, age: '18', level: 3, bio: 'none' },
     ]);
-  });
+  }, SLOW);
 });
 }
