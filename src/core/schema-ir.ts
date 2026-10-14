@@ -4,7 +4,7 @@
  */
 import { errors } from './errors';
 import type { ColumnIR, EnumIR, ForeignKeyIR, IndexIR, SchemaIR, TableIR } from './ir';
-import { ForeignKeyBuilder, isColumn, isTable, type AnyColumn, type AnyTable } from './schema';
+import { isColumn, isForeignKey, isTable, type AnyColumn, type AnyTable } from './schema';
 
 /** Postgres limits identifiers to 63 bytes; long generated names get a short hash suffix. */
 export function constraintName(...parts: string[]): string {
@@ -120,7 +120,7 @@ export function tableToIR(tbl: AnyTable): TableIR {
   }
 
   for (const fk of meta.options.foreignKeys?.(meta.columns) ?? []) {
-    if (!(fk instanceof ForeignKeyBuilder)) {
+    if (!isForeignKey(fk)) {
       throw errors.schema(`The foreignKeys option of table "${meta.name}" must return foreignKey(...) entries.`, 'Example: foreignKeys: (c) => [foreignKey([c.a, c.b], () => [other.x, other.y])].');
     }
     for (const c of fk.columns) checkOwnColumn(meta.name, c, 'foreignKeys');

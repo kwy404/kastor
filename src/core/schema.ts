@@ -292,8 +292,12 @@ export class IndexBuilder {
   }
 }
 
+const FOREIGN_KEY = Symbol.for('kastor.foreignKey');
+
 /** A foreign key over one or more columns, for the `foreignKeys` table option. */
 export class ForeignKeyBuilder {
+  readonly [FOREIGN_KEY] = true;
+
   constructor(
     readonly columns: readonly AnyColumn[],
     readonly targets: () => readonly AnyColumn[],
@@ -318,6 +322,11 @@ export class ForeignKeyBuilder {
  */
 export function foreignKey(columns: AnyColumn[], targets: () => AnyColumn[], options: ReferenceOptions = {}): ForeignKeyBuilder {
   return new ForeignKeyBuilder(columns, targets, options);
+}
+
+/** True for foreignKey() results, also across separately loaded copies of kastor. */
+export function isForeignKey(value: unknown): value is ForeignKeyBuilder {
+  return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[FOREIGN_KEY] === true;
 }
 
 export function index(...columns: AnyColumn[]): IndexBuilder {
