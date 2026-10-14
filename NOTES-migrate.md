@@ -62,3 +62,30 @@ each item until it lands.
   It loads `kastor.config.ts`, the schema and the seed script on Node 18 and
   later without a build step (extensionless relative imports, TypeScript
   syntax, ESM and CJS). It has no dependencies of its own.
+
+## Moving existing projects: `kastor import prisma` and `kastor migrate baseline`
+
+- `kastor import prisma [--schema prisma/schema.prisma] [--out src/db/schema.ts] [--config]`
+  (`src/migrate/import/prisma.ts`, pure `prismaToKastor(source)`) and
+  `kastor migrate baseline [--name init] [--from-prisma prisma/migrations]`
+  (`src/migrate/baseline.ts`). `--config` is a switch for `import prisma`
+  only; commands can now override an option with `optionOverrides` in
+  `src/cli/args.ts`.
+- Prisma migrations recorded by `--from-prisma` live in `_kastor_migrations`
+  under `prisma/<folder>`; `status()` returns them as `history`, never as
+  `missing`.
+- `introspect()` (and so `migrate dev`, `db push`, `db pull`, drift) now
+  ignores the history tables of other tools (`_prisma_migrations`,
+  `knex_migrations`, `SequelizeMeta`, `schema_migrations`, ...; see
+  `FOREIGN_HISTORY_TABLES` in `engine.ts`), so kastor never drops them.
+- For core, two gaps the importer reports as warnings:
+  1. Composite foreign keys: `.references()` covers one column, so a Prisma
+     relation with `fields: [a, b]` keeps its `one()` relation but the schema
+     cannot declare the constraint, and `migrate dev` would drop it. A table
+     option such as `foreignKeys: (c) => [foreignKey([c.a, c.b], () => [t.x, t.y], { onDelete })]`
+     would close this.
+  2. The side of a one-to-one relation without the foreign key can only be
+     written `one(target)`, which is ambiguous when two tables are linked more
+     than once or for self relations. A way to name the owning relation (for
+     example `one(target, { from: 'pinnedBy' })`) would let the importer emit
+     it instead of a comment.

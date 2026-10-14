@@ -1,0 +1,134 @@
+// Blog and shop schema used by the kastor import tests. The SQL files next to
+// it are what `prisma migrate dev` writes for it on each database.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  EDITOR
+  ADMIN
+}
+
+/// Where an order is in its life.
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  CANCELLED @map("canceled")
+
+  @@map("order_status")
+}
+
+/// A person who writes posts and places orders.
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  profile   Profile?
+  posts     Post[]
+  orders    Order[]
+  followers User[]   @relation("Follows")
+  following User[]   @relation("Follows")
+}
+
+model Profile {
+  id       Int     @id @default(autoincrement())
+  bio      String?
+  avatar   Bytes?
+  settings Json?
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   Int     @unique
+}
+
+model Post {
+  id         Int        @id @default(autoincrement())
+  title      String
+  slug       String     @unique
+  content    String?
+  published  Boolean    @default(false)
+  views      BigInt     @default(0)
+  /// The writer.
+  author     User       @relation(fields: [authorId], references: [id])
+  authorId   Int
+  tags       Tag[]
+  categories Category[]
+  createdAt  DateTime   @default(now())
+
+  @@index([authorId])
+  @@index([published, createdAt])
+  @@map("posts")
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  posts    Post[]
+  products Product[]
+
+  @@unique([parentId, name])
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  sku         String      @unique
+  name        String
+  description String?
+  price       Decimal
+  stock       Int         @default(0)
+  weightKg    Float?
+  attributes  Json?
+  active      Boolean     @default(true)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  categoryId  String?
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+
+  @@index([categoryId])
+  @@map("products")
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  number    BigInt      @unique
+  status    OrderStatus @default(PENDING)
+  total     Decimal     @default(0)
+  note      String?
+  user      User        @relation(fields: [userId], references: [id])
+  userId    Int
+  items     OrderItem[]
+  placedAt  DateTime    @default(now())
+  shippedAt DateTime?
+
+  @@index([userId, status])
+}
+
+model OrderItem {
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+  quantity  Int     @default(1)
+  unitPrice Decimal @map("unit_price")
+
+  @@id([orderId, productId])
+  @@map("order_items")
+}

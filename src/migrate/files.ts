@@ -97,6 +97,8 @@ export interface RenderInput {
   steps: Array<{ op: MigrationOp; statements: string[] }>;
   warnings?: DiffWarning[];
   date?: Date;
+  /** Extra comment lines for the header, without the leading `--`. */
+  note?: string[];
 }
 
 /** The migration.sql text: a header with a summary, then one commented block per op. */
@@ -108,6 +110,7 @@ export function renderMigration(input: RenderInput): string {
     '-- Applied by `kastor migrate deploy`. Edit it before it is applied if you need to;',
     '-- after that, the checksum in _kastor_migrations must keep matching.',
   ];
+  if (input.note?.length) lines.push('--', ...input.note.map((l) => (l ? `-- ${l}` : '--')));
   if (input.steps.length) {
     lines.push('--', '-- Changes:');
     for (const { op } of input.steps) lines.push(`--   ${symbolFor(op)} ${describeOp(op)}${isDestructive(op) ? '  [data loss]' : ''}`);

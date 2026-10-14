@@ -28,7 +28,11 @@ export {
   dev,
   drift,
   dropEverything,
+  FOREIGN_HISTORY_TABLES,
   introspect,
+  isBookkeepingTable,
+  isHistoryId,
+  PRISMA_HISTORY_PREFIX,
   MIGRATIONS_TABLE,
   planStatements,
   push,
@@ -74,3 +78,14 @@ export {
   type KastorConfig,
   type LoadedConfig,
 } from './config';
+export { baseline, BASELINE_MARKER, readPrismaMigrations, type BaselineOptions, type BaselineResult, type HistoryEntry, type PrismaMigrationFolder } from './baseline';
+export {
+  parsePrismaSchema,
+  prismaToKastor,
+  PrismaParseError,
+  type ImportDatabase,
+  type PrismaImportOptions,
+  type PrismaImportResult,
+  type PrismaImportWarning,
+  type PrismaSchema,
+} from './import/prisma';

@@ -28,11 +28,44 @@ export interface MigrationHooks {
 
 const isMigrationsTable = (name: string): boolean => name.toLowerCase() === MIGRATIONS_TABLE;
 
-/** The live schema without kastor's own bookkeeping table. */
+/**
+ * Bookkeeping tables of other migration tools. kastor never declares, diffs or
+ * drops them, so a project can move to kastor (or run both for a while)
+ * without losing the other tool's history. Generic names such as `migrations`
+ * (Laravel, TypeORM) are not listed because they could be real tables.
+ */
+export const FOREIGN_HISTORY_TABLES: readonly string[] = [
+  '_prisma_migrations',
+  '__drizzle_migrations',
+  'knex_migrations',
+  'knex_migrations_lock',
+  'sequelizemeta',
+  'schema_migrations',
+  'ar_internal_metadata',
+  'django_migrations',
+  '__efmigrationshistory',
+  'flyway_schema_history',
+  'databasechangelog',
+  'databasechangeloglock',
+];
+
+/** True for kastor's own table and the history tables of other tools. */
+export function isBookkeepingTable(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === MIGRATIONS_TABLE || FOREIGN_HISTORY_TABLES.includes(lower);
+}
+
+/** The live schema without kastor's own bookkeeping table and the history tables of other migration tools. */
 export async function introspect(adapter: Adapter): Promise<SchemaIR> {
   const schema = await adapter.dialect.introspect(adapter.executor);
-  return { ...schema, tables: schema.tables.filter((t) => !isMigrationsTable(t.name)) };
+  return { ...schema, tables: schema.tables.filter((t) => !isBookkeepingTable(t.name)) };
 }
+
+/** Prefix of the ids under which `migrate baseline --from-prisma` records Prisma migrations. */
+export const PRISMA_HISTORY_PREFIX = 'prisma/';
+
+/** Applied ids that record another tool's migrations: history, not kastor folders. */
+export const isHistoryId = (id: string): boolean => id.startsWith(PRISMA_HISTORY_PREFIX);
 
 export interface PlannedStep {
   op: MigrationOp;
@@ -64,6 +97,8 @@ export interface MigrationStatus {
   modified: Array<{ local: LocalMigration; applied: AppliedMigration }>;
   /** Applied migrations whose folder is gone. */
   missing: AppliedMigration[];
+  /** Migrations of another tool recorded as history by `migrate baseline --from-prisma`. */
+  history: AppliedMigration[];
   /** Dialect written in the lock file, if any. */
   lockDialect?: string;
 }
@@ -71,7 +106,8 @@ export interface MigrationStatus {
 export async function status(adapter: Adapter, dir: string): Promise<MigrationStatus> {
   const { dialect, executor } = adapter;
   await dialect.migrationTable.ensure(executor);
-  const applied = (await dialect.migrationTable.list(executor)).sort((a, b) => a.id.localeCompare(b.id));
+  const all = (await dialect.migrationTable.list(executor)).sort((a, b) => a.id.localeCompare(b.id));
+  const applied = all.filter((a) => !isHistoryId(a.id));
   const local = readMigrations(dir);
   const byId = new Map(applied.map((a) => [a.id, a]));
   const localIds = new Set(local.map((m) => m.id));
@@ -81,6 +117,7 @@ export async function status(adapter: Adapter, dir: string): Promise<MigrationSt
     pending: local.filter((m) => !byId.has(m.id)),
     modified: local.filter((m) => byId.has(m.id) && byId.get(m.id)!.checksum !== m.checksum).map((m) => ({ local: m, applied: byId.get(m.id)! })),
     missing: applied.filter((a) => !localIds.has(a.id)),
+    history: all.filter((a) => isHistoryId(a.id)),
     lockDialect: readLock(dir),
   };
 }

@@ -1,10 +1,12 @@
+import { resolve } from 'node:path';
 import { KastorError } from '../../core/errors';
 import type { Rename, RenameCandidate } from '../../migrate/diff';
+import { baseline } from '../../migrate/baseline';
 import { deploy, dev, drift, reset, status, type ChangeOptions, type MigrationHooks } from '../../migrate/engine';
 import { sanitizeName, suggestName } from '../../migrate/files';
 import { parseRenameFlags } from '../args';
 import { header, opt, projectSchema, rel, withProject, type CliContext } from '../context';
-import { printPlan, renameQuestion } from '../render';
+import { opLine, printPlan, renameQuestion } from '../render';
 import { runSeed } from './db';
 
 /** Rename answers from flags and, on a TTY, from questions. */
@@ -141,6 +143,7 @@ export async function migrateStatus(ctx: CliContext): Promise<number> {
             pending: st.pending.map((m) => m.id),
             modified: st.modified.map((m) => m.local.id),
             missing: st.missing.map((m) => m.id),
+            history: st.history.map((m) => m.id),
             drift: driftOps,
             upToDate,
           },
@@ -162,6 +165,7 @@ export async function migrateStatus(ctx: CliContext): Promise<number> {
       rows.push([m.id, state, a ? formatDate(a.appliedAt) : c.gray('-')]);
     }
     for (const m of st.missing) rows.push([m.id, c.red('missing'), formatDate(m.appliedAt)]);
+    if (st.history.length) rows.unshift([`${st.history.length} Prisma migration${st.history.length === 1 ? '' : 's'}`, c.gray('history'), formatDate(st.history.at(-1)!.appliedAt)]);
     if (rows.length) ui.table(['Migration', 'State', 'Applied at'], rows);
     else ui.line(`  ${c.gray('No migrations yet.')}`);
     ui.line();
@@ -172,6 +176,52 @@ export async function migrateStatus(ctx: CliContext): Promise<number> {
     if (driftError) ui.warn(`Could not compare with the schema: ${driftError}`);
     if (upToDate && !driftOps) ui.success('Database is up to date.');
     return upToDate ? 0 : 1;
+  });
+}
+
+export async function migrateBaseline(ctx: CliContext): Promise<number> {
+  return withProject(ctx, async (project) => {
+    header(ctx, 'migrate baseline', project);
+    const { ui } = ctx;
+    const { c } = ui;
+    const fromPrisma = opt.str(ctx, 'from-prisma');
+    const result = await ui.task(
+      'Reading the database',
+      () => baseline(project.adapter, project.loaded.migrationsDir, {
+        version: ctx.version,
+        ...(opt.str(ctx, 'name') ? { name: opt.str(ctx, 'name') } : {}),
+        ...(fromPrisma ? { fromPrisma: resolve(ctx.cwd, fromPrisma) } : {}),
+      }),
+      (r) => (r.kind === 'created' ? `Found ${r.schema.tables.length} table${r.schema.tables.length === 1 ? '' : 's'}` : 'Found the baseline in the migrations folder'),
+    );
+    if (result.history.length) {
+      const recorded = result.history.filter((h) => h.state === 'recorded').length;
+      const already = result.history.filter((h) => h.state === 'already recorded').length;
+      ui.success(`Recorded ${recorded} Prisma migration${recorded === 1 ? '' : 's'} as history${already ? ` (${already} already recorded)` : ''}. The files in ${rel(ctx, resolve(ctx.cwd, fromPrisma!))} were not touched.`);
+    }
+    if (result.kind === 'adopted') {
+      ui.success(`Marked ${c.bold(result.migration.id)} as applied without running it: this database already has those tables.`);
+    } else {
+      ui.success(`Wrote ${c.bold(rel(ctx, result.migration.file))} (${result.steps.length} step${result.steps.length === 1 ? '' : 's'}).`);
+      ui.success('Recorded it as applied without running it. Nothing in the database changed.');
+    }
+    for (const note of result.notes) ui.warn(note);
+    try {
+      const target = await projectSchema(project);
+      const d = await drift(project.adapter, target);
+      ui.line();
+      if (!d.ops.length) ui.success('The schema file matches the database: kastor migrate dev has nothing to do.');
+      else {
+        ui.warn(`The schema file differs from the database in ${d.ops.length} place${d.ops.length === 1 ? '' : 's'}; kastor migrate dev will write ${d.ops.length === 1 ? 'it' : 'them'} as the next migration:`);
+        for (const op of d.ops.slice(0, 12)) ui.line(opLine(ui, op));
+        if (d.ops.length > 12) ui.line(`  ${c.gray(`and ${d.ops.length - 12} more`)}`);
+      }
+    } catch (error) {
+      ui.line(`  ${c.gray(`Could not compare with the schema file: ${error instanceof Error ? error.message : String(error)}`)}`);
+    }
+    ui.line();
+    ui.box([`Commit ${rel(ctx, project.loaded.migrationsDir)} with your code.`, `Teammates run ${c.cyan('kastor migrate baseline')} once against their own database.`]);
+    return 0;
   });
 }
 

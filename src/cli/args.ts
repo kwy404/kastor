@@ -20,6 +20,8 @@ export interface CommandSpec {
   usage?: string
   options: string[]
   examples?: string[]
+  /** Options that mean something else for this command, e.g. `--config` as a switch for `import prisma`. */
+  optionOverrides?: Record<string, OptionSpec>
 }
 
 export const OPTIONS: Record<string, OptionSpec> = {
@@ -38,6 +40,8 @@ export const OPTIONS: Record<string, OptionSpec> = {
   print: { type: 'boolean', description: 'Print to stdout instead of writing a file' },
   db: { type: 'string', value: 'database', description: 'Database for init: postgres, cockroach, mysql, mariadb, sqlite, libsql, d1, mssql, oracle, mongodb' },
   json: { type: 'boolean', description: 'Machine readable output' },
+  schema: { type: 'string', alias: 's', value: 'path', description: 'Prisma schema file or folder (default: prisma/schema.prisma)' },
+  'from-prisma': { type: 'string', value: 'folder', description: 'Also record the Prisma migrations in this folder as applied history' },
   color: { type: 'boolean', description: 'Force colors on or off (--no-color); NO_COLOR is respected' },
   help: { type: 'boolean', alias: 'h', description: 'Show help' },
   version: { type: 'boolean', alias: 'v', description: 'Show the version' },
@@ -77,6 +81,13 @@ export const COMMANDS: CommandSpec[] = [
     options: [...COMMON, 'force', 'yes', 'skip-seed'],
   },
   {
+    name: 'migrate baseline',
+    summary: 'Record the schema of an existing database as the first migration, without running it',
+    usage: 'kastor migrate baseline [--name init] [--from-prisma prisma/migrations]',
+    options: [...COMMON, 'name', 'from-prisma'],
+    examples: ['kastor migrate baseline', 'kastor migrate baseline --name init --from-prisma prisma/migrations'],
+  },
+  {
     name: 'db push',
     summary: 'Make the database match the schema without migration files (prototyping)',
     options: [...COMMON, 'rename', 'accept-data-loss', 'yes'],
@@ -91,6 +102,17 @@ export const COMMANDS: CommandSpec[] = [
     name: 'db seed',
     summary: 'Run the seed script from the config',
     options: [...COMMON],
+  },
+  {
+    name: 'import prisma',
+    summary: 'Turn a Prisma schema into a kastor schema file for the same database',
+    usage: 'kastor import prisma [--schema prisma/schema.prisma] [--out src/db/schema.ts] [--config]',
+    options: ['schema', 'out', 'config', 'print', 'force', 'color', 'help'],
+    optionOverrides: {
+      config: { type: 'boolean', description: 'Also write kastor.config.ts for the datasource of the Prisma schema' },
+      out: { type: 'string', alias: 'o', value: 'path', description: 'Where to write the schema (default: src/db/schema.ts)' },
+    },
+    examples: ['kastor import prisma', 'kastor import prisma --schema prisma/schema.prisma --out src/db/schema.ts --config'],
   },
   {
     name: 'studio',
@@ -128,9 +150,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const words: string[] = [];
   const aliases = new Map<string, string>();
   for (const [name, spec] of Object.entries(OPTIONS)) if (spec.alias) aliases.set(spec.alias, name);
+  const overrides = findCommand(argv)?.optionOverrides ?? {};
+  const specOf = (name: string): OptionSpec | undefined => overrides[name] ?? OPTIONS[name];
 
   const setOption = (name: string, raw: string | undefined, negated: boolean, next: () => string | undefined): void => {
-    const spec = OPTIONS[name];
+    const spec = specOf(name);
     if (!spec) {
       const guess = suggest(name, Object.keys(OPTIONS));
       throw new ArgsError(`Unknown option --${name}.`, guess ? `Did you mean --${guess}?` : 'Run kastor --help to see every option.');
@@ -175,7 +199,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       let name = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
       const raw = eq === -1 ? undefined : arg.slice(eq + 1);
       let negated = false;
-      if (name.startsWith('no-') && !OPTIONS[name]) {
+      if (name.startsWith('no-') && !specOf(name)) {
         name = name.slice(3);
         negated = true;
       }
@@ -187,7 +211,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       for (let k = 0; k < letters.length; k++) {
         const name = aliases.get(letters[k]!);
         if (!name) throw new ArgsError(`Unknown option -${letters[k]}.`, 'Run kastor --help to see every option.');
-        const spec = OPTIONS[name]!;
+        const spec = specOf(name)!;
         if (spec.type !== 'boolean') {
           const rest = letters.slice(k + 1);
           setOption(name, rest || undefined, false, next);
@@ -213,6 +237,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return { command, words, positionals, options };
 }
 
+/** The command named by the words of `argv`, found before options are parsed (for per-command option types). */
+function findCommand(argv: string[]): CommandSpec | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i]!.startsWith('-')) continue;
+    let best: CommandSpec | undefined;
+    for (const spec of COMMANDS) {
+      const parts = spec.name.split(' ');
+      if (parts.every((p, k) => argv[i + k] === p) && (!best || parts.length > best.name.split(' ').length)) best = spec;
+    }
+    if (best) return best;
+  }
+  return undefined;
+}
+
 /** Resolves a parse into a command, with friendly errors for typos. */
 export function resolveCommand(parsed: ParsedArgs): CommandSpec | null {
   const { command, words, options } = parsed;
@@ -229,7 +267,7 @@ export function resolveCommand(parsed: ParsedArgs): CommandSpec | null {
   }
   if (!words.length) return null;
   const group = COMMANDS.filter((c) => c.name.split(' ')[0] === words[0]);
-  if (group.length > 1) {
+  if (group.some((c) => c.name.includes(' '))) {
     const sub = words[1];
     const names = group.map((c) => c.name.split(' ')[1]!);
     if (!sub) throw new ArgsError(`"kastor ${words[0]}" needs a subcommand: ${names.join(', ')}.`, `Example: kastor ${group[0]!.name}`);
@@ -309,7 +347,7 @@ export function renderHelp(command: CommandSpec | null, c: { bold(s: string): st
   }
   lines.push(`${c.bold(`kastor ${command.name}`)}  ${command.summary}`, '');
   lines.push(c.bold('Usage'), `  ${command.usage ?? `kastor ${command.name} [options]`}`, '', c.bold('Options'));
-  for (const name of command.options) lines.push(formatOption(name, c));
+  for (const name of command.options) lines.push(formatOption(name, c, command.optionOverrides?.[name]));
   if (command.examples?.length) {
     lines.push('', c.bold('Examples'));
     for (const e of command.examples) lines.push(`  ${c.gray('$')} ${e}`);
@@ -317,8 +355,8 @@ export function renderHelp(command: CommandSpec | null, c: { bold(s: string): st
   return lines.join('\n');
 }
 
-function formatOption(name: string, c: { cyan(s: string): string; gray(s: string): string }): string {
-  const spec = OPTIONS[name]!;
+function formatOption(name: string, c: { cyan(s: string): string; gray(s: string): string }, override?: OptionSpec): string {
+  const spec = override ?? OPTIONS[name]!;
   const flag = `${spec.alias ? `-${spec.alias}, ` : '    '}--${name}${spec.value ? ` <${spec.value}>` : ''}`;
   return `  ${c.cyan(flag.padEnd(30))}  ${spec.description}`;
 }

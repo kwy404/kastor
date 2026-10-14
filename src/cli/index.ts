@@ -8,7 +8,8 @@ import { ArgsError, parseArgs, renderHelp, resolveCommand } from './args';
 import { dbPull, dbPush, dbSeed } from './commands/db';
 import { doctor } from './commands/doctor';
 import { init } from './commands/init';
-import { migrateDeploy, migrateDev, migrateReset, migrateStatus } from './commands/migrate';
+import { importPrisma } from './commands/import';
+import { migrateBaseline, migrateDeploy, migrateDev, migrateReset, migrateStatus } from './commands/migrate';
 import { openBrowser, studio } from './commands/studio';
 import type { CliContext } from './context';
 import { TerminalPrompter, type Prompter } from './prompt';
@@ -23,6 +24,8 @@ const HANDLERS: Record<string, (ctx: CliContext) => Promise<number>> = {
   'migrate deploy': migrateDeploy,
   'migrate status': migrateStatus,
   'migrate reset': migrateReset,
+  'migrate baseline': migrateBaseline,
+  'import prisma': importPrisma,
   'db push': dbPush,
   'db pull': dbPull,
   'db seed': dbSeed,
