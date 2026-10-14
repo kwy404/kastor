@@ -237,11 +237,12 @@ p code, li code, td code, dd code, .lead code, summary code, h3 code, figcaption
 .entry:hover .entry-go { transform: translateX(3px); color: var(--acc-text); }
 
 /* The lit K on its stage */
-.stage { position: relative; height: clamp(300px, 46vw, 600px); margin-top: clamp(1rem, 3vw, 2.5rem); pointer-events: none; }
+.stage { position: relative; height: clamp(280px, 50vw, 600px); margin-top: clamp(1rem, 3vw, 2.5rem); pointer-events: none; }
 .stage-rays { position: absolute; left: 50%; top: -12%; width: min(1200px, 140vw); height: 120%; transform: translateX(-50%); background: conic-gradient(from 180deg at 50% 0%, transparent 155deg, color-mix(in oklab, var(--acc-2) 16%, transparent) 172deg, transparent 180deg, color-mix(in oklab, var(--acc-1) 12%, transparent) 188deg, transparent 205deg); -webkit-mask-image: linear-gradient(#000 20%, transparent 85%); mask-image: linear-gradient(#000 20%, transparent 85%); opacity: .9; }
 .stage-floor { position: absolute; left: -25%; right: -25%; bottom: 0; height: 46%; background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: 72px 72px; background-position: center top; transform: perspective(520px) rotateX(64deg); transform-origin: 50% 100%; -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 92%); mask-image: linear-gradient(to top, #000 0%, transparent 92%); }
 .stage-line { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--line-3) 30%, var(--line-3) 70%, transparent); }
-.stage-mark { position: absolute; left: 50%; bottom: 4%; width: min(620px, 92vw); transform: translateX(-50%); }
+.stage-mark { position: absolute; left: 50%; bottom: 4%; width: min(620px, 58vw); transform: translateX(-50%); }
+@media (max-width: 640px) { .stage { height: 72vw; } .stage-mark { width: 84vw; } }
 .lit-mark { display: block; width: 100%; height: auto; overflow: visible; }
 .stage-mark .lit-mark { filter: drop-shadow(0 40px 50px rgba(0, 0, 0, .35)); animation: mark-in 1.2s cubic-bezier(.2, .8, .2, 1) both, mark-float 9s ease-in-out 1.2s infinite; }
 .lm-glow { animation: glow-breathe 6s ease-in-out infinite; transform-origin: center; }
