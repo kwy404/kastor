@@ -4,9 +4,13 @@
  * back to a schema the diff engine sees as unchanged, and every migration op
  * must apply on the live database.
  */
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Adapter, Dialect, Executor, SchemaIR } from '../src/core/ir';
 import { diffSchemas } from '../src/migrate/diff';
+import { dev, status } from '../src/migrate/engine';
 import { applyOp, describeOp, type MigrationOp } from '../src/migrate/ops';
 import { roundTripSchema } from './pg-sqlite-shared';
 
@@ -133,6 +137,39 @@ export function sqlmoreSchemaSuite(target: SqlmoreTarget): void {
       expect(await drift(dialect, executor, schema)).toEqual([]);
       await apply({ kind: 'dropTable', table: 'rt_renamed' });
       expect(await drift(dialect, executor, schema)).toEqual([]);
+    });
+  });
+
+  describe.skipIf(!target.url)(`${target.name} migrate dev`, () => {
+    let adapter: Adapter;
+    let close: () => Promise<void>;
+    const dir = mkdtempSync(join(tmpdir(), `kastor-${target.name}-migrations-`));
+
+    beforeAll(async () => {
+      ({ adapter, close } = await target.connect(target.url!));
+      for (const name of [...roundTripSchema.tables].reverse().map((t) => t.name)) await target.dropTable(adapter.executor, name);
+      await target.dropTable(adapter.executor, '_kastor_migrations');
+    });
+
+    afterAll(async () => {
+      if (adapter) await close();
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('writes a migration file, applies it and finds nothing left to do', async () => {
+      // The database may hold tables of other suites; dev drops what the schema does not declare.
+      const first = await dev(adapter, roundTripSchema, dir, { version: '0.1.0', name: 'init', acceptDataLoss: true });
+      expect(first.kind).toBe('created');
+      if (first.kind !== 'created') return;
+      expect(first.applied).toBe(true);
+      const file = readFileSync(join(dir, first.migration.id, 'migration.sql'), 'utf8');
+      expect(file).toContain('rt_users');
+      const second = await dev(adapter, roundTripSchema, dir, { version: '0.1.0', acceptDataLoss: true });
+      expect(second.kind).toBe('in-sync');
+      const st = await status(adapter, dir);
+      expect(st.pending).toEqual([]);
+      expect(st.applied.map((m) => m.id)).toEqual([first.migration.id]);
+      expect(st.applied[0]!.appliedAt).toBeInstanceOf(Date);
     });
   });
 }

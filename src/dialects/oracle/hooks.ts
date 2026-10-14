@@ -119,7 +119,8 @@ export const oracleHooks: SqlHooks = defineHooks({
   nullsOrder: true,
   encode: oracleEncode,
   decode: oracleDecode,
-  insertDefaults: (table) => `INSERT INTO ${table} VALUES (DEFAULT)`,
+  // Oracle has no DEFAULT VALUES: naming one column with DEFAULT gives every column its default.
+  insertDefaults: (quoted, table) => `INSERT INTO ${quoted} (${quoteDouble(table.primaryKey[0] ?? table.columns[0]!.name)}) VALUES (DEFAULT)`,
   fromDual: ' FROM DUAL',
   mergeHint: '',
   mergeTerminator: '',

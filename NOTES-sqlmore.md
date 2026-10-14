@@ -5,21 +5,11 @@ Requests for other owners. sqlmore works around each item until it lands.
 ## For core (`src/core/sql/`)
 
 Done, thanks: `selectColumn`, `returning: 'into'` with `outParam`,
-`compareColumn`.
+`compareColumn` (also used for aggregates), `insertDefaults(quoted, table)`.
 
 Open:
 
-1. **Aggregates and GROUP BY on Oracle CLOB columns.** `aggregateExpr` and the
-   GROUP BY list use `ref`, not `cmpColumn`, so `_count: { body: true }`
-   (`COUNT("body")`) fails on Oracle with ORA-22849 when `body` is `text`
-   (CLOB). Please route the column of `count`, `min`, `max` (and the GROUP BY
-   expressions) through `compareColumn`. This is the only conformance test
-   that fails on Oracle (`aggregate: count, sum, avg, min, max`).
-2. **`insertDefaults` for Oracle** gets only the table name. Oracle has no
-   `DEFAULT VALUES`; sqlmore emits `INSERT INTO t VALUES (DEFAULT)`, which
-   only works for one column tables. Passing the `TableIR` as a second
-   argument would allow `INSERT INTO t ("id") VALUES (DEFAULT)`.
-3. **User errors inside `$transaction(fn)` get wrapped.** `throw new Error('boom')`
+1. **User errors inside `$transaction(fn)` get wrapped.** `throw new Error('boom')`
    in the callback comes back as `KastorError QUERY_FAILED: The database
    rejected the query: boom` (seen on MySQL). It would be clearer to rethrow
    errors that did not come from the driver unchanged.

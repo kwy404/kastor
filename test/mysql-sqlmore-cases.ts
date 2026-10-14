@@ -41,10 +41,16 @@ export const items = table('sm_items', {
   rank: t.int(),
 });
 
+export const counters = table('sm_counters', {
+  id: t.id(),
+  hits: t.int().default(0),
+  at: t.datetime().defaultNow(),
+});
+
 /** Accented, CJK and astral characters, written as code points to keep the source ASCII. */
 const UNICODE = String.fromCodePoint(0xe9, 0x4e2d, 0x1f600);
 
-const schema = { kinds, owners, items };
+const schema = { kinds, owners, items, counters };
 const relations = ({ owners, items }: typeof schema) => ({
   owners: { items: many(items) },
   items: { owner: one(owners, { fields: ['ownerId'], references: ['id'] }) },
@@ -115,6 +121,14 @@ export function sqlmoreCases(target: CasesTarget): void {
 
       const empty = await db.kinds.create({ data: { label: 'nulls' } });
       expect(empty).toMatchObject({ note: null, count: null, big: null, price: null, flag: false, at: null, day: null, clock: null, data: null, blob: null, token: null, mood: null });
+    });
+
+    it('inserts a row that only uses defaults', async () => {
+      const first = await db.counters.create({ data: {} });
+      const second = await db.counters.create({ data: {} });
+      expect(first.hits).toBe(0);
+      expect(first.at).toBeInstanceOf(Date);
+      expect(second.id).toBeGreaterThan(first.id);
     });
 
     it('filters on every type with the encoded values', async () => {

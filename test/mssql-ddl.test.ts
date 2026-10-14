@@ -129,6 +129,7 @@ describe('mssql introspection helpers', () => {
     expect(parseDefault("(N'it''s')", 'string')).toEqual({ kind: 'value', value: "it's" });
     expect(parseDefault('((1))', 'boolean')).toEqual({ kind: 'value', value: true });
     expect(parseDefault('((-1.5))', 'float')).toEqual({ kind: 'value', value: -1.5 });
+    expect(parseDefault('((9007199254740993.))', 'bigint')).toEqual({ kind: 'value', value: '9007199254740993' });
     expect(parseDefault("(N'{\"a\":1}')", 'json')).toEqual({ kind: 'value', value: { a: 1 } });
   });
 

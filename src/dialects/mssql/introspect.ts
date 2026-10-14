@@ -57,8 +57,9 @@ export function parseDefault(definition: string, type: NeutralType): ColumnDefau
   if (/^(newid|newsequentialid)\(\)$/.test(lowered)) return { kind: 'random' };
   const quoted = /^N?'((?:[^']|'')*)'$/.exec(s);
   if (quoted) return valueDefault(quoted[1]!.replace(/''/g, "'"), type);
-  const number = /^\(?(-?\d+(?:\.\d+)?)\)?$/.exec(s);
-  if (number) return valueDefault(number[1]!, type);
+  // Literals beyond INT range are stored as NUMERIC with a trailing dot: ((9007199254740993.))
+  const number = /^\(?(-?\d+(?:\.\d*)?)\)?$/.exec(s);
+  if (number) return valueDefault(number[1]!.replace(/\.$/, ''), type);
   if (/^0x[0-9a-f]*$/i.test(s)) return { kind: 'value', value: s };
   return { kind: 'sql', value: s };
 }
