@@ -89,7 +89,7 @@ describe('mongodb filters', () => {
     ]);
     const every = where({ kind: 'relation', relation: rel.userPosts, op: 'every', where: published });
     expect(every.match).toEqual({ __rf0: { $eq: [] } });
-    expect((every.stages[0] as { $lookup: { pipeline: unknown[] } }).$lookup.pipeline[1]).toEqual({ $match: { published: { $nin: [true, null] } } });
+    expect((every.stages[0] as { $lookup: { pipeline: unknown[] } }).$lookup.pipeline[1]).toEqual({ $match: { $nor: [{ published: { $eq: true } }] } });
     expect(where({ kind: 'relation', relation: rel.postAuthor, op: 'is', where: null }, 'posts').match).toEqual({ __rf0: { $eq: [] } });
     expect(where({ kind: 'relation', relation: rel.postAuthor, op: 'isNot', where: null }, 'posts').match).toEqual({ __rf0: { $ne: [] } });
     expect(where({ kind: 'not', item: { kind: 'relation', relation: rel.userPosts, op: 'none', where: null } }).match).toEqual({ __rf0: { $ne: [] } });

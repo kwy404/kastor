@@ -217,7 +217,13 @@ function relationFilter(
   const innerScope: FilterScope = { model: scope.model, table: relation.to, counter: scope.counter };
   const innerStages: Doc[] = [];
   if (inner) {
-    const innerMatch = node(inner, innerNeg, innerScope, innerStages);
+    let innerMatch = node(inner, false, innerScope, innerStages);
+    if (innerNeg) {
+      // every: look for a related row where the condition is not true. Unlike
+      // NOT under three valued logic this includes rows where it is unknown
+      // (null), so such rows break `every`, as in SQL.
+      innerMatch = innerMatch === NEVER ? {} : Object.keys(innerMatch).length === 0 ? NEVER : { $nor: [innerMatch] };
+    }
     if (innerMatch === NEVER) return exists ? NEVER : {};
     if (Object.keys(innerMatch).length > 0) innerStages.push({ $match: innerMatch });
   }
