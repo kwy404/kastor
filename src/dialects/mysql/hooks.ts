@@ -1,7 +1,7 @@
 import type { ColumnIR } from '../../core/ir';
 import { p, q, type Sql } from '../../core/sql/frag';
 import { defineHooks, escapeLike, limitOffset, placeholderQuestion, quoteBacktick, type SqlHooks, type TextMatchMode } from '../../core/sql/hooks';
-import { jsonMariadb, jsonMysql } from '../../core/sql/json';
+import { jsonMariadb, jsonMysql, type JsonChild, type JsonFlavor } from '../../core/sql/json';
 import { decodeValue, encodeValue, type CodecOptions } from '../../core/sql/values';
 
 /** MySQL's LIMIT has no ALL; the largest unsigned BIGINT means "no limit". */
@@ -90,7 +90,21 @@ const shared: Partial<SqlHooks> = {
 export const mysqlHooks: SqlHooks = defineHooks({ ...shared, json: jsonMysql });
 
 /**
- * MariaDB: JSON aggregation without outer references in derived tables, so
- * includes with take or skip load through the IN-list path.
+ * MariaDB cannot reference the outer row from a derived table, but its
+ * JSON_ARRAYAGG takes ORDER BY and LIMIT (10.5+), so ordered and paged
+ * includes still load in the same query without one.
  */
-export const mariadbHooks: SqlHooks = defineHooks({ ...shared, json: jsonMariadb });
+export const jsonMariadbAggregate: JsonFlavor = {
+  ...jsonMariadb,
+  name: 'mariadb',
+  many(child: JsonChild) {
+    const order = child.orderBy ? q` ORDER BY ${child.orderBy}` : '';
+    let limit = '';
+    if (child.take !== undefined) limit = child.skip ? ` LIMIT ${child.skip}, ${child.take}` : ` LIMIT ${child.take}`;
+    else if (child.skip) limit = ` LIMIT ${child.skip}, ${NO_LIMIT}`;
+    return q`(SELECT COALESCE(JSON_ARRAYAGG(${jsonMariadb.object(child.entries)}${order}${limit}), JSON_ARRAY()) FROM ${child.from} WHERE ${child.where})`;
+  },
+  pagingInDerivedTables: true,
+};
+
+export const mariadbHooks: SqlHooks = defineHooks({ ...shared, json: jsonMariadbAggregate });
