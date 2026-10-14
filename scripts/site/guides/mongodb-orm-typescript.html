@@ -1,0 +1,136 @@
+<!--meta
+{
+  "slug": "mongodb-orm-typescript",
+  "lang": "en",
+  "title": "MongoDB ORM in TypeScript with one schema API | kastor",
+  "description": "Use a MongoDB ORM in TypeScript with the same schema and queries as SQL: $lookup relations, filter operators, replica set transactions, indexes and trade-offs.",
+  "h1": "A MongoDB ORM in TypeScript that shares its API with SQL",
+  "crumb": "MongoDB ORM",
+  "lead": "kastor runs the same <code>table()</code> schema and the same <code>findMany</code>, <code>include</code> and <code>$transaction</code> calls on MongoDB as on PostgreSQL or SQLite. This guide shows what maps cleanly, what changes, and when MongoDB is the right pick.",
+  "readTime": "8 min read",
+  "keywords": ["MongoDB ORM in TypeScript", "MongoDB TypeScript ORM", "type-safe MongoDB queries", "MongoDB $lookup TypeScript", "MongoDB transactions Node.js"],
+  "faq": [
+    { "q": "Can I use the same TypeScript schema for MongoDB and PostgreSQL?", "a": "Yes. kastor schemas are plain TypeScript built with <code>table()</code> and <code>t</code>, and the MongoDB adapter reads the same definitions. Queries, includes and transactions keep the same API, so most application code does not change between the two." },
+    { "q": "Why do MongoDB transactions fail with a replica set error?", "a": "MongoDB only supports multi document transactions on a replica set or a sharded cluster. A standalone server rejects them. Locally, start <code>mongod</code> with <code>--replSet rs0</code> and run <code>rs.initiate()</code> once to get a single node replica set." },
+    { "q": "How does kastor load relations in MongoDB?", "a": "Includes compile to an aggregation pipeline with <code>$lookup</code> stages, so a <code>findMany</code> with nested includes runs as one pipeline per root call instead of one query per document." },
+    { "q": "Does kastor have migrations for MongoDB?", "a": "MongoDB has no DDL, so there is no migration SQL. The schema still drives what the database needs: collections and the indexes declared with <code>index()</code> and <code>uniqueIndex()</code>." },
+    { "q": "Is kastor a replacement for Mongoose?", "a": "They make different trade-offs. Mongoose is a MongoDB ODM with document instances, middleware and validation hooks. kastor returns plain typed objects and keeps one schema and query API across SQL databases and MongoDB." }
+  ],
+  "related": ["multi-database-apps", "typescript-orm", "avoid-n-plus-1-queries"]
+}
+-->
+<section id="setup"><h2>The same schema and queries, on MongoDB</h2>
+<p>Most ORMs are either SQL tools or MongoDB tools. kastor treats MongoDB as one more adapter: you declare tables with <code>table()</code>, describe relations with <code>one()</code> and <code>many()</code>, and query with <code>findMany</code>, <code>include</code>, <code>where</code> and <code>$transaction</code>. Types are inferred from the schema as you type, with no generate step.</p>
+<p>kastor ships no driver. Install the official <code>mongodb</code> package, connect a <code>MongoClient</code>, and pass a <code>Db</code> to the <code>mongodb</code> adapter from <code>kastor/mongodb</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor mongodb
+docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0
+docker exec mongo mongosh --quiet --eval "rs.initiate()"
+</pre>
+<p>The last two commands start a single node replica set, which you want even in development because transactions depend on it. More on that below.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import { MongoClient } from 'mongodb'
+import { kastor, one, many } from 'kastor'
+import { mongodb } from 'kastor/mongodb'
+import { users, posts } from './schema'
+
+const client = new MongoClient(
+  process.env.MONGODB_URL ?? 'mongodb://localhost:27017/?replicaSet=rs0&amp;directConnection=true',
+)
+await client.connect()
+
+export const db = kastor({
+  adapter: mongodb(client.db('app')),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+})
+</pre>
+<p>The <code>directConnection=true</code> parameter matters for a container started this way: the replica set member advertises the container host name, which your machine cannot resolve, and a direct connection skips that discovery step. Against MongoDB Atlas, use the connection string from the Atlas console as is.</p>
+</section>
+<section id="collections"><h2>Collections from table(), and what changes about ids</h2>
+<p>Each <code>table('posts', ...)</code> maps to a collection with the same name, and each column maps to a document field. <code>.map('db_name')</code> renames the stored field while your code keeps the TypeScript name. The value types you read back are the same as on SQL: <code>Date</code> for datetime, <code>bigint</code> for bigint, the declared type for <code>t.json()</code>, and plain objects instead of driver documents.</p>
+<p>Ids are where SQL habits need adjusting. Auto increment integers come from database sequences, and MongoDB has no such thing; its documents carry an <code>_id</code> field instead. For a schema meant to run on MongoDB, string keys such as <code>t.uuid().primaryKey().defaultRandom()</code> are the most natural fit, and they work the same on every SQL database too. The <a href="api.html">API reference</a> lists how each column type is stored on MongoDB.</p>
+<p>MongoDB does not enforce foreign keys. A <code>.references()</code> column still defines the relation for includes and relation filters, but the database will not stop you from deleting a user who still has posts. Delete children explicitly, inside a transaction, when integrity matters.</p>
+</section>
+<section id="relations"><h2>Relations through $lookup pipelines</h2>
+<p>MongoDB has no joins in the SQL sense, but the aggregation framework has <code>$lookup</code>, which pulls matching documents from another collection into each result. kastor compiles <code>include</code> trees to aggregation pipelines built on <code>$lookup</code>, with the nested <code>where</code>, <code>orderBy</code> and <code>take</code> applied inside each lookup. One root call runs one pipeline, so you never loop over parents to fetch children.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/feed.ts">
+import { db } from './db/client'
+
+const authors = await db.users.findMany({
+  where: {
+    role: 'admin',
+    email: { endsWith: '@example.com', mode: 'insensitive' },
+    posts: { some: { published: true } },
+  },
+  include: {
+    posts: { where: { published: true }, orderBy: { title: 'asc' }, take: 5 },
+    _count: { select: { posts: true } },
+  },
+  orderBy: { createdAt: 'desc' },
+  take: 20,
+})
+</pre>
+<p>The result is typed from the schema: <code>authors[0].posts</code> is an array of post rows, and <code>authors[0]._count.posts</code> is a number. Lookups need an index on the foreign field to stay fast, which is why the schema below indexes <code>authorId</code>.</p>
+</section>
+<section id="filters"><h2>Filters mapped to MongoDB operators</h2>
+<p>Every filter in the query API has a MongoDB counterpart. You write the portable form and the adapter produces the match stage:</p>
+<table class="spec">
+<thead><tr><th>kastor filter</th><th>MongoDB operator</th></tr></thead>
+<tbody>
+<tr><td><code>equals</code>, <code>not</code></td><td>$eq, $ne</td></tr>
+<tr><td><code>in</code>, <code>notIn</code></td><td>$in, $nin</td></tr>
+<tr><td><code>lt</code>, <code>lte</code>, <code>gt</code>, <code>gte</code></td><td>$lt, $lte, $gt, $gte</td></tr>
+<tr><td><code>contains</code>, <code>startsWith</code>, <code>endsWith</code></td><td>$regex with the input escaped</td></tr>
+<tr><td><code>mode: 'insensitive'</code></td><td>case insensitive regular expression</td></tr>
+<tr><td><code>AND</code>, <code>OR</code>, <code>NOT</code></td><td>$and, $or and a negated condition</td></tr>
+<tr><td><code>some</code>, <code>every</code>, <code>none</code>, <code>is</code>, <code>isNot</code></td><td>$lookup followed by a match on the joined documents</td></tr>
+</tbody>
+</table>
+<p>Two MongoDB behaviors are worth remembering. An equality match on null also matches documents where the field is missing. And a regular expression anchored at the start can use an index, while <code>contains</code> and case insensitive matches usually scan, so pair them with other selective filters on large collections.</p>
+<p>Raw SQL through <code>$sql</code> and <code>$execute</code> is a SQL feature. On MongoDB you already hold the <code>Db</code> instance, so use the driver directly for the rare query the API does not cover, such as geospatial or text search stages.</p>
+</section>
+<section id="transactions"><h2>Transactions need a replica set</h2>
+<p>MongoDB supports multi document transactions only on replica sets and sharded clusters. On a standalone server, starting one fails with an error saying transaction numbers are only allowed on a replica set member. Atlas clusters are replica sets already, so this mostly bites in local development and CI, and a single node replica set like the one above solves it.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/delete-user.ts">
+import { db } from './db/client'
+
+export async function deleteUser(userId: string) {
+  await db.$transaction(async (tx) =&gt; {
+    await tx.posts.deleteMany({ where: { authorId: userId } })
+    await tx.users.delete({ where: { id: userId } })
+  })
+}
+</pre>
+<p>The callback form runs every operation in one session and aborts if the callback throws. The array form, <code>db.$transaction([a, b])</code>, works the same way for a fixed list. MongoDB may abort a transaction on a write conflict; kastor surfaces that as a <code>KastorError</code>, and the fix is to retry the whole callback. Keep transactions short, since MongoDB limits how long one may stay open.</p>
+</section>
+<section id="indexes"><h2>Indexes instead of migration SQL</h2>
+<p>MongoDB has no DDL, so there is no <code>migration.sql</code> to review. What the schema still controls is the shape the database needs: collections, and the indexes you declare with <code>index()</code> and <code>uniqueIndex()</code> in the table options, plus <code>.unique()</code> on single columns.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index } from 'kastor'
+
+export const users = table('users', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  email: t.string(255).unique(),
+  role: t.enum(['user', 'admin']).default('user'),
+  createdAt: t.datetime().defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  authorId: t.uuid().references(() =&gt; users.id),
+  createdAt: t.datetime().defaultNow(),
+}, { indexes: (p) =&gt; [index(p.authorId), index(p.published, p.createdAt)] })
+</pre>
+<p>A unique index is your only uniqueness guarantee in MongoDB, and a duplicate insert arrives as <code>UNIQUE_VIOLATION</code>, the same code you handle on SQL. Changing a field's type is different, though: existing documents keep their old values until you rewrite them, so plan data backfills as scripts, and see the <a href="database-migrations-explained.html">migrations guide</a> for how that compares to SQL.</p>
+</section>
+<section id="when"><h2>When to pick MongoDB</h2>
+<p>MongoDB fits data that is naturally document shaped: nested settings, event payloads, content with varying fields, or records that are almost always read whole. It also fits teams already running Atlas, where operations and backups are taken care of.</p>
+<p>A relational database is the better default when integrity across tables matters more than flexibility: foreign keys, check constraints, ad hoc reporting with joins and aggregates. Because kastor keeps one API across both, you can start on one and move later, or run both side by side, as the <a href="multi-database-apps.html">multi-database guide</a> shows. Compare the generated queries in the <a href="./#playground">playground</a> before you decide.</p>
+<p>A practical test: write down the five queries your application runs most often. If each one reads a single document and its close relations, MongoDB with <code>$lookup</code> includes serves them well. If most of them join three or more tables, filter on relations, or aggregate across many rows for reports, a SQL database will express them more directly and enforce the rules your data depends on. Many teams end up with both, using MongoDB for flexible event or content data and a relational database for accounts and billing.</p>
+</section>

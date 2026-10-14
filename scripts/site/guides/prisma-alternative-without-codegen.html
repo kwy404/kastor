@@ -1,0 +1,162 @@
+<!--meta
+{
+  "slug": "prisma-alternative-without-codegen",
+  "lang": "en",
+  "title": "A Prisma alternative without codegen | kastor",
+  "description": "A Prisma alternative without codegen: map models, relations and migrations to a TypeScript schema with inferred types and move an existing project step by step.",
+  "h1": "A Prisma alternative without codegen",
+  "crumb": "Prisma alternative",
+  "lead": "Prisma made the object query API popular, and kastor keeps that API on purpose. The difference is where types come from: a TypeScript schema they are inferred from, with no <code>generate</code> step.",
+  "readTime": "10 min read",
+  "keywords": ["Prisma alternative without codegen", "prisma alternative", "orm without code generation", "prisma vs kastor", "migrate from prisma", "typescript schema orm"],
+  "faq": [
+    { "q": "Is there a Prisma alternative without a generate step?", "a": "Yes. ORMs that define the schema in TypeScript infer types directly from it, so nothing is generated. kastor does this while keeping a familiar query API with <code>findMany</code>, <code>include</code> and nested writes." },
+    { "q": "Can I migrate from Prisma to kastor without rewriting everything?", "a": "Yes, gradually. Run <code>npx kastor db pull</code> to get a TypeScript schema from the live database, then move queries one module at a time while both clients run side by side. Remove Prisma when nothing imports it anymore." },
+    { "q": "Does kastor read schema.prisma files?", "a": "No. kastor reads the database itself through <code>db pull</code>, which produces a TypeScript schema file. Because Prisma already created the tables, introspection gives you an accurate starting point." },
+    { "q": "Do I still need prisma generate in CI after switching?", "a": "Not for code that uses kastor. Types come from the schema file through the TypeScript compiler, so your CI runs the type check and <code>npx kastor migrate deploy</code>, with no client build in between." },
+    { "q": "Is Prisma a bad choice?", "a": "No. Prisma is mature, well documented and widely used. Its schema language plus generate step is a deliberate design with real benefits, such as a single readable model file. kastor makes a different trade-off for teams that prefer everything in TypeScript." }
+  ],
+  "related": ["typescript-orm", "drizzle-alternative", "database-migrations-explained"]
+}
+-->
+<section id="how-prisma-works"><h2>How Prisma works, and why it is a valid trade-off</h2>
+<p>Prisma has a clear model. You describe your data in <code>schema.prisma</code> using the Prisma Schema Language. Running <code>prisma generate</code> reads that file and produces a client tailored to your models, with types for every query. Queries are executed by Prisma's query engine, which historically ran as a separate component next to your Node.js process; recent Prisma versions have been moving that work into TypeScript, so check the docs for the version you use.</p>
+<p>This design has real strengths. The schema file is compact and readable by people who do not write TypeScript. The generated client is fully typed. Tooling such as migrations, introspection and Prisma Studio all work from the same file. Many teams ship production apps on it and are happy.</p>
+<p>The cost is a build step between your schema and your code. If you are looking for a <strong>Prisma alternative without codegen</strong>, you most likely want to remove that step while keeping the query style you already know. That is the gap kastor is designed for.</p>
+</section>
+<section id="what-changes"><h2>What changes when the schema is plain TypeScript</h2>
+<p>In kastor, the schema is a TypeScript module. Types are inferred from it by the compiler, the same way types flow from any other TypeScript value. In practice that changes four things:</p>
+<ul>
+<li><strong>No generate step in CI.</strong> Your pipeline installs dependencies, type checks and runs <code>npx kastor migrate deploy</code>. There is no client to build and no postinstall hook to keep working.</li>
+<li><strong>No stale client.</strong> A classic surprise with generated clients is pulling a branch with a new column and seeing type errors until someone regenerates. With inference, the types are always the schema you have checked out.</li>
+<li><strong>Editor feedback as you type.</strong> Add <code>slug: t.string(120).unique()</code> to a table and the next line of code can already filter on <code>slug</code>, with autocomplete.</li>
+<li><strong>No separate engine.</strong> kastor compiles queries in TypeScript and sends them through the driver you installed (<code>pg</code>, <code>mysql2</code>, <code>better-sqlite3</code>, <code>mssql</code> and others). Bundlers and serverless platforms see a regular package.</li>
+</ul>
+<p>What you give up is the dedicated schema language. Your models are TypeScript, so non TypeScript readers have to read code, and the schema file follows your formatter instead of its own.</p>
+</section>
+<section id="concept-map"><h2>Familiar concepts, side by side</h2>
+<p>kastor's query API is intentionally familiar, so most concepts map one to one. The main naming difference: the accessor is the key you give the table in the schema object, so <code>prisma.user</code> usually becomes <code>db.users</code>.</p>
+<table class="spec">
+<thead><tr><th>Prisma</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>model User</code> in schema.prisma</td><td><code>table('users', ...)</code> in schema.ts</td></tr>
+<tr><td><code>@id @default(autoincrement())</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>String?</code>, <code>@unique</code>, <code>@default(now())</code></td><td><code>.nullable()</code>, <code>.unique()</code>, <code>.defaultNow()</code></td></tr>
+<tr><td><code>@relation(fields: [authorId], references: [id])</code></td><td><code>one(users, ...)</code> in <code>relations</code></td></tr>
+<tr><td><code>posts Post[]</code></td><td><code>many(posts)</code></td></tr>
+<tr><td><code>findMany</code>, <code>findUnique</code>, <code>include</code>, <code>select</code></td><td>Same names, same shape</td></tr>
+<tr><td><code>$transaction</code>, <code>$queryRaw</code></td><td><code>db.$transaction</code>, <code>db.$sql</code></td></tr>
+<tr><td>Generated <code>User</code> type</td><td><code>InferSelect&lt;typeof users&gt;</code></td></tr>
+<tr><td><code>prisma migrate dev</code> / <code>deploy</code></td><td><code>npx kastor migrate dev</code> / <code>deploy</code></td></tr>
+<tr><td><code>prisma db pull</code>, <code>db push</code>, <code>db seed</code>, <code>studio</code></td><td><code>npx kastor db pull</code>, <code>db push</code>, <code>db seed</code>, <code>studio</code></td></tr>
+</tbody>
+</table>
+<p>Here is a typical pair of models written as kastor tables, with the Prisma attribute noted on each line:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t } from 'kastor'
+import type { InferSelect, InferInsert } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),                              // Int @id @default(autoincrement())
+  email: t.string(255).unique(),           // String @unique
+  name: t.string().nullable(),             // String?
+  createdAt: t.datetime().defaultNow(),    // DateTime @default(now())
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),  // Boolean @default(false)
+  // authorId Int, with onDelete: Cascade on the @relation
+  authorId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+})
+
+// Replaces the generated Prisma types
+export type User = InferSelect&lt;typeof users&gt;
+export type NewUser = InferInsert&lt;typeof users&gt;
+</pre>
+<p>Relations live on the client, where <code>posts Post[]</code> becomes <code>many(posts)</code> and the <code>@relation</code> attribute becomes <code>one(...)</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+})
+</pre>
+</section>
+<section id="queries"><h2>Queries look the same on purpose</h2>
+<p>If your team knows Prisma, most query code reads the same. Filters, nested includes, nested writes and atomic updates use the same vocabulary.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { isKastorError } from 'kastor'
+import { db } from '../db/client'
+
+// Before: prisma.user.findMany({ where: { email: { contains: 'acme' } }, include: { posts: true } })
+export const listTeam = () =&gt;
+  db.users.findMany({
+    where: { email: { contains: 'acme', mode: 'insensitive' } },
+    include: { posts: { where: { published: true }, take: 10 } },
+  })
+
+// Before: prisma.user.upsert({ where, create, update })
+export const saveUser = (email: string, name: string) =&gt;
+  db.users.upsert({ where: { email }, create: { email, name }, update: { name } })
+
+// Before: Prisma.PrismaClientKnownRequestError with code P2002
+export async function register(email: string) {
+  try {
+    return { user: await db.users.create({ data: { email } }) }
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') return { error: e.message, hint: e.hint }
+    throw e
+  }
+}
+</pre>
+<p>Two differences are worth knowing. Error codes are readable names such as <code>UNIQUE_VIOLATION</code> and <code>FOREIGN_KEY_VIOLATION</code> instead of numbered codes, and every error carries a <code>hint</code>. Nested includes load in one query per root call on databases with JSON aggregation; open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
+</section>
+<section id="migration-path"><h2>Moving an existing Prisma project</h2>
+<p>You do not need a big rewrite. The safest path keeps both ORMs running against the same database until the last query moves.</p>
+<ol>
+<li><strong>Install kastor and the driver</strong> next to Prisma, for example <code>npm install kastor pg</code>.</li>
+<li><strong>Run <code>npx kastor init</code></strong> to create <code>kastor.config.ts</code>, then point it at your database.</li>
+<li><strong>Run <code>npx kastor db pull</code></strong>. It introspects the live database (the tables Prisma created) and writes a TypeScript schema. If your models used <code>@map</code> or <code>@@map</code>, the database names are what you will see, so review the file and add relations.</li>
+<li><strong>Pick one owner for migrations.</strong> Keep running <code>prisma migrate</code> until the switch, and do not let both tools write migrations at the same time. Before handing over, run <code>npx kastor migrate dev</code> against a copy of the database: if the pulled schema matches, there should be nothing to change.</li>
+<li><strong>Move queries module by module.</strong> Start with read paths, then writes. Tests that already cover a module tell you when it is done.</li>
+<li><strong>Remove Prisma</strong> once nothing imports it, along with <code>prisma generate</code> in CI and postinstall.</li>
+</ol>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init
+npx kastor db pull
+npx kastor doctor
+</pre>
+<p>While both clients run, each one has its own connection pool. Lower the pool sizes so the sum stays under your database's connection limit, which matters most on small managed PostgreSQL plans.</p>
+</section>
+<section id="feature-table"><h2>Feature comparison</h2>
+<p>This table describes design choices, not quality. Both tools are actively developed, so check their docs for the details of your version.</p>
+<table class="spec">
+<thead><tr><th>Aspect</th><th>Prisma</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td>Schema</td><td>Prisma Schema Language file</td><td>TypeScript module</td></tr>
+<tr><td>Where types come from</td><td>Generated client</td><td>Inferred by the compiler</td></tr>
+<tr><td>Build step</td><td><code>prisma generate</code></td><td>None</td></tr>
+<tr><td>Query style</td><td>Object API with include and select</td><td>Object API with include and select</td></tr>
+<tr><td>Raw SQL</td><td>Tagged template with parameters</td><td>Tagged template with parameters</td></tr>
+<tr><td>Migrations</td><td>SQL files, diff based</td><td>SQL files, diff based, asks about renames</td></tr>
+<tr><td>Introspection</td><td><code>db pull</code> to schema.prisma</td><td><code>db pull</code> to schema.ts</td></tr>
+<tr><td>Databases</td><td>See the Prisma docs for the current list</td><td>PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, libSQL, D1, SQL Server, Oracle, MongoDB</td></tr>
+<tr><td>Maturity</td><td>Established, large ecosystem</td><td>New (0.1), smaller ecosystem</td></tr>
+</tbody>
+</table>
+</section>
+<section id="how-to-choose"><h2>Which one fits your project</h2>
+<p>Stay on Prisma if your team values a dedicated schema file, relies on its ecosystem of integrations, or simply has no pain with the generate step. A working setup is worth a lot.</p>
+<p>Consider kastor if the generate step causes friction in CI, monorepos or serverless builds, if you want types to update as you type, or if you need SQL Server, Oracle and MongoDB behind the same API. The <a href="typescript-orm.html">TypeScript ORM guide</a> walks through a full project, and the <a href="./#compare">comparison on the home page</a> lists more details.</p>
+</section>

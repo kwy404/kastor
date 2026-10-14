@@ -1,0 +1,142 @@
+<!--meta
+{
+  "slug": "evitar-consultas-n-mais-1",
+  "lang": "pt-BR",
+  "alt": "avoid-n-plus-1-queries",
+  "title": "Problema N+1: como evitar consultas N+1 no Node.js | kastor",
+  "description": "Entenda o problema N+1 com um exemplo real, aprenda a detectar consultas N+1 pelo log e resolva com include em uma consulta, listas IN, _count, select e take.",
+  "h1": "Problema N+1: como detectar e evitar consultas N+1 em TypeScript",
+  "crumb": "Consultas N+1",
+  "lead": "O problema N+1 é a causa mais comum de páginas lentas em aplicações com ORM: uma consulta para a lista e mais uma para cada item dela. Este guia mostra como reconhecer o padrão, como medir com <code>log: true</code> e como eliminá-lo com <code>include</code>, listas <code>in</code> e <code>_count</code>.",
+  "readTime": "9 min de leitura",
+  "keywords": ["problema N+1", "consultas N+1", "N+1 queries", "N+1 ORM", "evitar N+1 Node.js", "otimizar consultas ORM"],
+  "faq": [
+    { "q": "O que é o problema N+1 em banco de dados?", "a": "É quando o código faz uma consulta para buscar uma lista de N registros e depois mais uma consulta para cada registro, para carregar dados relacionados. O total é N+1 idas ao banco, e o tempo cresce junto com o tamanho da lista." },
+    { "q": "Como saber se minha aplicação tem consultas N+1?", "a": "Ative o log de consultas passando <code>log: true</code> ao criar o cliente com <code>kastor()</code> e carregue a página. Se você vir a mesma instrução repetida dezenas de vezes mudando só o parâmetro, é N+1. Contar consultas por requisição em testes também ajuda." },
+    { "q": "O include do kastor pode gerar N+1?", "a": "Não. Nos bancos com agregação JSON, os includes aninhados são carregados em uma única consulta por chamada raiz. Nos outros, o kastor faz uma consulta extra por nível de include usando listas <code>IN</code>, então o número de consultas é fixo e não depende de quantas linhas voltam." },
+    { "q": "Como contar registros relacionados sem carregar todos?", "a": "Use <code>_count</code> dentro de <code>include</code> ou <code>select</code>, por exemplo <code>include: { _count: { select: { posts: true } } }</code>. O banco devolve só o número, sem trazer as linhas para a memória." },
+    { "q": "Usar SQL puro resolve o problema N+1?", "a": "Só se a consulta for escrita para buscar tudo de uma vez. Um <code>db.$sql</code> dentro de um laço continua sendo N+1. A correção está no formato do acesso, não na ferramenta: busque em lote e agrupe na memória." }
+  ],
+  "related": ["orm-typescript", "nextjs-postgres-orm", "migracoes-banco-de-dados"]
+}
+-->
+<section id="o-que-e"><h2>O que é o problema N+1</h2>
+<p>O <strong>problema N+1</strong> aparece quando o código busca uma lista e, para cada item dessa lista, faz mais uma consulta ao banco. Uma lista de 50 posts com o nome do autor vira 51 consultas: uma para os posts e 50 para os autores.</p>
+<p>Em desenvolvimento, com o banco na mesma máquina, cada consulta leva menos de um milissegundo e ninguém percebe. Em produção, cada ida ao banco paga a latência de rede. Com o banco em outra zona ou em um serviço gerenciado, alguns milissegundos por consulta multiplicados por 50, ou por 500, viram uma página lenta. Pior: o custo cresce junto com os dados, então o problema piora sozinho com o tempo.</p>
+<p>O padrão é fácil de criar sem querer, porque cada linha de código parece inocente:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/feed.ts">
+import { db } from './db/client'
+
+// N+1: one query for the posts, then one query per post
+const posts = await db.posts.findMany({ where: { published: true }, take: 50 })
+
+const feed = []
+for (const post of posts) {
+  const author = await db.users.findUnique({ where: { id: post.authorId } })
+  feed.push({ ...post, authorName: author?.name ?? 'anon' })
+}
+</pre>
+<p>A mesma coisa acontece de formas menos óbvias: um <code>Promise.all</code> com um <code>map</code> que consulta o banco, um resolver de GraphQL que busca o autor de cada post, uma função auxiliar chamada dentro de um componente que renderiza uma lista. O <code>Promise.all</code> até dispara as consultas em paralelo, mas continua ocupando N conexões do pool e fazendo N idas ao banco.</p>
+</section>
+<section id="detectar"><h2>Como detectar consultas N+1</h2>
+<p>A forma mais direta de achar <strong>consultas N+1</strong> é olhar o que realmente chega ao banco. No kastor, ative o log no cliente durante o desenvolvimento:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+  // Print every statement in development only
+  log: process.env.NODE_ENV !== 'production',
+})
+</pre>
+<p>Agora carregue a página suspeita e leia o terminal. O sinal de N+1 é inconfundível: a mesma instrução repetida muitas vezes seguidas, mudando apenas o valor do parâmetro. Se uma lista de 20 itens gera 21 linhas de log, você encontrou o culpado.</p>
+<p>Algumas dicas para não deixar passar:</p>
+<ul>
+<li>Teste com volumes realistas. Com dois registros no seed, um N+1 gera só três consultas e passa despercebido. Use <code>factory</code> e <code>db seed</code> para criar algumas centenas de linhas.</li>
+<li>Olhe o número de consultas por requisição, não só o tempo. O tempo local engana; a contagem não.</li>
+<li>Use <code>query.toSQL()</code> para ver o que uma consulta específica vai gerar sem executá-la, e o <a href="../#playground">playground</a> para ver o SQL exato em cada banco.</li>
+</ul>
+<p>Em produção, o lugar para olhar é a observabilidade do próprio banco. No PostgreSQL, a extensão <code>pg_stat_statements</code> mostra quantas vezes cada instrução rodou. Uma busca simples por chave primária com número de chamadas muito acima do número de requisições da aplicação é um forte indício de N+1 escondido em algum laço.</p>
+</section>
+<section id="include"><h2>A correção principal: include em uma consulta</h2>
+<p>A solução é pedir os dados relacionados na própria consulta, em vez de buscá-los depois. Com as relações declaradas no cliente, basta um <code>include</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/feed.ts">
+import { db } from './db/client'
+
+const feed = await db.posts.findMany({
+  where: { published: true },
+  orderBy: { createdAt: 'desc' },
+  take: 50,
+  include: {
+    author: { select: { id: true, name: true } },
+  },
+})
+
+// feed[0].author.name is typed, no extra query happened
+</pre>
+<p>Nos bancos com agregação JSON (PostgreSQL, CockroachDB, MySQL, MariaDB, a família SQLite, SQL Server e Oracle), o kastor monta uma única consulta por chamada raiz. Os dados relacionados voltam agregados em JSON e são convertidos para os tipos certos, como <code>Date</code> para colunas datetime. Isso vale para includes aninhados também: autores com posts com comentários continuam sendo uma ida ao banco.</p>
+<p>Quando o banco não oferece agregação JSON, o kastor usa uma consulta extra por nível de include, com uma lista <code>IN</code> contendo as chaves do nível anterior. Um include de dois níveis vira três consultas, sejam 10 ou 10 mil linhas. O número de consultas é fixo, nunca proporcional aos dados. No MongoDB, o mesmo include vira um pipeline de agregação com <code>$lookup</code>.</p>
+<p>Uma consulta maior não é automaticamente uma consulta lenta. O banco planeja a junção uma vez e percorre os dados relacionados usando índices. Por isso, garanta que toda chave estrangeira usada em includes tenha índice, como o <code>index(p.authorId)</code> declarado nas opções da tabela <code>posts</code>. Sem ele, cada busca de relação pode virar uma leitura completa da tabela, e o ganho de eliminar o N+1 diminui bastante.</p>
+</section>
+<section id="lista-in"><h2>Quando os IDs vêm de fora: lista IN manual</h2>
+<p>Às vezes você não tem uma relação para incluir. Os IDs vieram de uma fila, de uma API externa ou de um cache. A tentação é fazer um <code>findUnique</code> por ID. Em vez disso, busque todos de uma vez com <code>in</code> e organize na memória:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/authors-by-id.ts">
+import { db } from './db/client'
+
+export async function loadAuthors(ids: number[]) {
+  const unique = [...new Set(ids)]
+  const rows = await db.users.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, name: true },
+  })
+  // Map for O(1) lookups when stitching results back together
+  return new Map(rows.map((u) =&gt; [u.id, u]))
+}
+</pre>
+<p>É a mesma ideia de um DataLoader: juntar chaves, fazer uma consulta, distribuir os resultados. Para listas muito grandes, divida em blocos de algumas centenas ou milhares de IDs, porque os bancos têm limites de parâmetros por instrução.</p>
+</section>
+<section id="count-select-take"><h2>_count, select e take: carregue só o necessário</h2>
+<p>Eliminar o N+1 é o primeiro passo. O segundo é não trazer mais dados do que a tela usa. Três ferramentas cobrem quase todos os casos.</p>
+<h3>_count para números</h3>
+<p>Se a tela mostra "12 posts" ao lado do nome do autor, não carregue os 12 posts. Peça só a contagem:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/authors.ts">
+import { db } from './db/client'
+
+const authors = await db.users.findMany({
+  select: {
+    id: true,
+    name: true,
+    _count: { select: { posts: true } },
+    posts: {
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { id: true, title: true },
+    },
+  },
+  take: 20,
+})
+</pre>
+<h3>select para colunas</h3>
+<p>Um <code>include</code> sem <code>select</code> traz todas as colunas da tabela relacionada, inclusive campos <code>text</code> grandes. Dentro do include, use <code>select</code> para listar só o que a interface mostra. O tipo do resultado encolhe junto, então o compilador avisa se algum componente dependia de um campo que você removeu.</p>
+<h3>take dentro do include</h3>
+<p>Relações para muitos podem crescer sem limite. Um autor ativo pode ter milhares de posts. Cada include aceita seu próprio <code>where</code>, <code>orderBy</code>, <code>take</code> e <code>skip</code>, como no exemplo acima, que traz só os três posts publicados mais recentes. Para listas paginadas na raiz, prefira <code>findPage</code>, que faz paginação por cursor.</p>
+</section>
+<section id="checklist"><h2>Checklist para revisão de código</h2>
+<p>Ao revisar um pull request que mexe com acesso a dados, procure estes sinais:</p>
+<ul>
+<li>Qualquer <code>await db.</code> dentro de <code>for</code>, <code>forEach</code> ou <code>map</code>. Quase sempre dá para trocar por um <code>include</code> ou por um <code>in</code>.</li>
+<li>Funções que recebem um único ID e são chamadas a partir de uma lista. Ofereça uma versão que recebe vários IDs.</li>
+<li>Includes sem <code>take</code> em relações para muitos que podem crescer.</li>
+<li>Carregar uma relação inteira só para usar o <code>length</code>. Troque por <code>_count</code>.</li>
+</ul>
+<p>Se você usa Next.js, cada componente de servidor que consulta o banco dentro de uma lista é um candidato a N+1. O guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra como concentrar a busca no componente pai. E para entender o resto da API de consultas, veja o guia de <a href="orm-typescript.html">ORM para TypeScript</a>.</p>
+</section>

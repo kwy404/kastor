@@ -1,0 +1,166 @@
+<!--meta
+{
+  "slug": "orm-typescript",
+  "lang": "pt-BR",
+  "alt": "typescript-orm",
+  "title": "ORM para TypeScript sem etapa de geração | kastor",
+  "description": "ORM para TypeScript: o que avaliar (tipos inferidos, vários bancos, migrações, sem N+1, SQL puro) e um tour completo do kastor, do schema às migrações.",
+  "h1": "ORM para TypeScript: como escolher e como usar o kastor do schema às migrações",
+  "crumb": "ORM para TypeScript",
+  "lead": "Um bom ORM para TypeScript deixa o compilador conferir cada consulta sem pedir uma etapa de geração de código. Este guia mostra o que avaliar antes de escolher e percorre o kastor do <code>table()</code> até o <code>migrate deploy</code>.",
+  "readTime": "10 min de leitura",
+  "keywords": ["ORM para TypeScript", "ORM TypeScript", "melhor ORM para TypeScript", "ORM Node.js TypeScript", "ORM TypeScript PostgreSQL", "ORM type-safe"],
+  "faq": [
+    { "q": "Qual o melhor ORM para TypeScript em 2026?", "a": "Depende do seu banco e do seu fluxo de trabalho. Avalie se os tipos são inferidos sem etapa de geração, quais bancos são suportados, como funcionam as migrações e se há saída para SQL puro. O kastor foca em schema em TypeScript, vários bancos com a mesma API e includes que nunca viram N+1." },
+    { "q": "Preciso rodar um comando de geração para ter tipos no kastor?", "a": "Não. O schema é código TypeScript comum, então os tipos de <code>findMany</code>, <code>create</code> e dos includes são inferidos enquanto você digita. Não existe binário de engine nem linguagem de schema separada." },
+    { "q": "O kastor instala o driver do banco de dados?", "a": "Não. Você instala o driver que quiser, como <code>pg</code>, <code>mysql2</code> ou <code>better-sqlite3</code>, cria a instância e entrega ao adaptador. Assim você controla versão do driver, pool e configurações de TLS." },
+    { "q": "Dá para usar SQL puro junto com um ORM TypeScript?", "a": "Sim. No kastor, <code>db.$sql</code> executa uma template tag tipada e transforma cada valor interpolado em parâmetro, e <code>db.$execute</code> devolve o número de linhas afetadas. Fragmentos <code>sql</code> também podem entrar dentro de um <code>where</code>." },
+    { "q": "Como migrar um banco existente para um ORM TypeScript?", "a": "Rode <code>npx kastor db pull</code> para gerar um arquivo de schema em TypeScript a partir das tabelas atuais. Revise o arquivo, ajuste nomes e relações e a partir daí use <code>migrate dev</code> normalmente. Veja o guia de <a href=\"migracoes-banco-de-dados.html\">migrações de banco de dados</a>." }
+  ],
+  "related": ["migracoes-banco-de-dados", "evitar-consultas-n-mais-1", "nextjs-postgres-orm"]
+}
+-->
+<section id="o-que-e"><h2>O que é um ORM para TypeScript</h2>
+<p>Um ORM (mapeamento objeto relacional) traduz chamadas de função em consultas ao banco e devolve objetos comuns. Em JavaScript puro isso já economiza muito SQL repetido. Em TypeScript o ganho é maior: o compilador sabe quais colunas existem, quais podem ser nulas e qual formato cada consulta devolve.</p>
+<p>Na prática, um <strong>ORM para TypeScript</strong> bem feito resolve três problemas. Primeiro, erros de digitação em nomes de coluna aparecem no editor, não em produção. Segundo, o formato do resultado muda junto com o <code>select</code> e o <code>include</code>, então você não precisa declarar interfaces à mão. Terceiro, o histórico do schema fica versionado em migrações, e não espalhado em scripts soltos.</p>
+<p>Um ORM não substitui saber SQL. Ele cuida do trabalho repetitivo (CRUD, relações, paginação, transações) e deixa você livre para escrever SQL à mão onde isso realmente faz diferença. Os melhores resultados vêm de usar as duas coisas no lugar certo.</p>
+<p>O que separa um ORM de outro são as escolhas de projeto: onde o schema mora, como os tipos nascem, quantos bancos são suportados e o que acontece quando você precisa sair da abstração.</p>
+</section>
+<section id="o-que-avaliar"><h2>O que avaliar antes de escolher</h2>
+<p>Antes de adotar qualquer ferramenta, passe por esta lista. Ela vale para o kastor e para qualquer alternativa.</p>
+<ul>
+<li><strong>Tipos inferidos sem etapa de geração.</strong> Alguns ORMs usam uma linguagem de schema própria e um comando de geração que cria o cliente tipado. É um trade-off legítimo, mas exige lembrar de rodar o comando e lidar com arquivos gerados no CI. Quando o schema é TypeScript, os tipos acompanham cada alteração na hora.</li>
+<li><strong>Vários bancos com a mesma API.</strong> Se o projeto pode trocar de PostgreSQL para SQLite nos testes, ou se a empresa tem SQL Server e Oracle legados, conta muito ter a mesma API de consultas em todos.</li>
+<li><strong>Migrações de verdade.</strong> Arquivos SQL versionados, um comando para aplicar em produção e detecção de renomeações para não perder dados por acidente.</li>
+<li><strong>Sem N+1.</strong> Carregar relações não pode disparar uma consulta por linha. Veja o guia sobre <a href="evitar-consultas-n-mais-1.html">consultas N+1</a> para entender o custo.</li>
+<li><strong>SQL puro quando precisar.</strong> Relatórios, CTEs e funções específicas do banco sempre aparecem. A saída para SQL precisa ser segura contra injeção e, de preferência, tipada.</li>
+<li><strong>Erros legíveis.</strong> Uma violação de unicidade deveria virar um código estável que você trata com <code>if</code>, não uma string do driver que muda entre bancos.</li>
+</ul>
+<p>O kastor foi desenhado em cima dessa lista: schema em TypeScript, nenhum binário de engine, nenhuma linguagem de schema, adaptadores para PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, libSQL (Turso), Cloudflare D1, SQL Server, Oracle e MongoDB.</p>
+</section>
+<section id="schema"><h2>Instalação e schema</h2>
+<p>O kastor não traz drivers embutidos. Você instala o pacote e o driver do seu banco, e o adaptador recebe a instância pronta. Isso deixa pool, TLS e versão do driver sob seu controle.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npm install -D @types/pg
+npx kastor init
+</pre>
+<p>O <code>init</code> cria o <code>kastor.config.ts</code>, que aponta para o arquivo de schema, para a pasta de migrações e para o seed. O schema é um módulo TypeScript comum, com uma chamada <code>table()</code> por tabela:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index } from 'kastor'
+import type { InferSelect, InferInsert } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  role: t.enum(['user', 'admin']).default('user'),
+  createdAt: t.datetime().defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  title: t.string(200),
+  body: t.text().nullable(),
+  published: t.boolean().default(false),
+  authorId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+  createdAt: t.datetime().defaultNow(),
+}, { indexes: (p) =&gt; [index(p.authorId)] })
+
+// Types come straight from the schema, no generate step
+export type User = InferSelect&lt;typeof users&gt;
+export type NewPost = InferInsert&lt;typeof posts&gt;
+</pre>
+<p>Repare nos tipos que saem daí: <code>createdAt</code> vira <code>Date</code>, <code>name</code> vira <code>string | null</code> e <code>role</code> vira a união <code>'user' | 'admin'</code>. Em <code>InferInsert</code>, colunas com default ficam opcionais. Se a tabela já tem nomes de coluna em snake_case, use <code>.map('created_at')</code> e mantenha camelCase no código.</p>
+</section>
+<section id="cliente"><h2>Cliente e relações</h2>
+<p>O cliente junta adaptador, schema e relações. As relações não criam colunas: elas só dizem ao kastor como ligar tabelas que já têm chave estrangeira.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+})
+</pre>
+<p>Para trocar de banco, troque apenas a linha do adaptador. Com SQLite seria <code>sqlite(new Database('app.db'))</code> usando <code>better-sqlite3</code>; com MySQL, <code>mysql(pool)</code> com um pool do <code>mysql2/promise</code>. Schema, relações e consultas continuam iguais.</p>
+</section>
+<section id="consultas"><h2>Consultas tipadas no dia a dia</h2>
+<p>Cada tabela vira um modelo em <code>db</code>, com métodos como <code>findMany</code>, <code>findUnique</code>, <code>create</code>, <code>update</code>, <code>upsert</code>, <code>count</code> e <code>groupBy</code>. Os argumentos seguem um padrão previsível: <code>where</code>, <code>select</code>, <code>include</code>, <code>orderBy</code>, <code>take</code>, <code>skip</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/queries.ts">
+import { db } from './db/client'
+
+// Authors with their 3 latest published posts, in one round trip
+const authors = await db.users.findMany({
+  where: { role: 'admin', email: { endsWith: '@example.com' } },
+  include: {
+    posts: {
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { id: true, title: true },
+    },
+  },
+})
+
+// Nested write: user and first post together
+const user = await db.users.create({
+  data: { email: 'ana@example.com', posts: { create: [{ title: 'Primeiro post' }] } },
+})
+
+// Two updates that commit or roll back together
+await db.$transaction(async (tx) =&gt; {
+  await tx.posts.update({ where: { id: 'some-uuid' }, data: { published: true } })
+  await tx.users.update({ where: { id: user.id }, data: { role: 'admin' } })
+})
+</pre>
+<p>O tipo de <code>authors</code> já inclui <code>posts</code> com apenas <code>id</code> e <code>title</code>. Se você remover o <code>select</code>, o tipo cresce sozinho. Esse é o ponto central de um ORM para TypeScript: o formato da resposta segue a consulta.</p>
+<p>Duas propriedades valem a pena conhecer. As consultas são preguiçosas: nada roda até o <code>await</code>, e <code>query.toSQL()</code> devolve as instruções sem executar. E os includes aninhados carregam em uma única consulta por chamada raiz nos bancos com agregação JSON. Para ver o SQL exato de cada banco, abra o <a href="../#playground">playground</a>.</p>
+</section>
+<section id="migracoes"><h2>Migrações: do schema ao banco</h2>
+<p>Quando o schema muda, a CLI compara o TypeScript com o banco ao vivo, escreve um arquivo SQL versionado e o aplica. Em produção, outro comando aplica só o que está pendente.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate dev --name add_posts
+npx kastor migrate status
+npx kastor migrate deploy
+</pre>
+<p>O <code>migrate dev</code> cria <code>kastor/migrations/&lt;timestamp&gt;_add_posts/migration.sql</code>. Se você renomeou uma coluna, ele pergunta se é uma renomeação em vez de apagar e recriar. Faça commit da pasta de migrações junto com o código. O <code>migrate deploy</code> roda no CI ou na etapa de release, nunca o <code>migrate dev</code>.</p>
+<p>Para protótipos, <code>db push</code> sincroniza o schema sem criar arquivo. Para bancos que já existem, <code>db pull</code> gera o schema em TypeScript. O guia de <a href="migracoes-banco-de-dados.html">migrações de banco de dados</a> detalha cada caso, inclusive mudanças destrutivas seguras.</p>
+<div class="callout"><p>Rode <code>npx kastor doctor</code> quando algo não conectar. Ele confere o arquivo de configuração e a conexão antes de você perder tempo depurando.</p></div>
+</section>
+<section id="sql-puro"><h2>SQL puro e tratamento de erros</h2>
+<p>Nem tudo cabe na API de modelos, e não precisa caber. O <code>db.$sql</code> aceita uma template tag com tipo de retorno declarado; cada valor interpolado vira parâmetro, então não há concatenação de strings.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/reports.ts">
+import { isKastorError } from 'kastor'
+import { db } from './db/client'
+
+const minPosts = 5
+const rows = await db.$sql&lt;{ id: number; total: number }&gt;`
+  select u.id, count(p.id) as total
+  from users u join posts p on p."authorId" = u.id
+  group by u.id having count(p.id) &gt;= ${minPosts}
+`
+
+try {
+  await db.users.create({ data: { email: 'ana@example.com' } })
+} catch (e) {
+  if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') {
+    console.warn(e.message, e.hint)
+  } else {
+    throw e
+  }
+}
+</pre>
+<p>Os erros chegam como <code>KastorError</code> com um <code>code</code> estável, como <code>UNIQUE_VIOLATION</code>, <code>FOREIGN_KEY_VIOLATION</code> ou <code>NOT_FOUND</code> para os métodos <code>OrThrow</code>. A mensagem é em inglês simples e o <code>hint</code> sugere a correção. Como o código é o mesmo em todos os bancos, o tratamento de erro não muda quando o adaptador muda.</p>
+</section>
+<section id="proximos-passos"><h2>Próximos passos</h2>
+<p>Com schema, cliente e migrações no lugar, o resto é aplicação. Se você usa Next.js, o guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra como reaproveitar um único cliente entre recarregamentos e como rodar migrações no deploy. Para outros frameworks, veja a <a href="../frameworks.html#nextjs">página de frameworks</a>, e consulte a <a href="../api.html">referência da API</a> para todos os filtros e opções.</p>
+<p>Um bom teste final para qualquer ORM para TypeScript: renomeie uma coluna no schema e veja quantos erros o editor aponta antes de você rodar qualquer coisa. Se a resposta for todos, você está no caminho certo.</p>
+</section>

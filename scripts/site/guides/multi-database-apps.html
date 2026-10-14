@@ -1,0 +1,201 @@
+<!--meta
+{
+  "slug": "multi-database-apps",
+  "lang": "en",
+  "title": "Multi database apps in Node.js with one ORM | kastor",
+  "description": "Build a multi database app in Node.js with one ORM: several clients, shared schema code, dialect differences that matter, cross database tests and switching.",
+  "h1": "Building a multi database app in Node.js with one ORM",
+  "crumb": "Multi database apps",
+  "lead": "PostgreSQL for the app, SQLite for fast local tests, MongoDB for an event log: many Node.js projects end up with more than one database. This guide shows how to run them with one ORM and one query API, and which dialect differences still deserve your attention.",
+  "readTime": "11 min read",
+  "keywords": ["multi database app in Node.js", "one ORM for multiple databases", "node.js multiple databases", "orm postgres and mongodb", "test against sqlite and postgres", "switch database orm"],
+  "faq": [
+    { "q": "Can one ORM work with multiple databases in the same Node.js app?", "a": "Yes. With kastor you create one client per database, each with its own adapter and schema, and they all share the same query API. A Postgres client and a MongoDB client can live side by side in the same module." },
+    { "q": "Can I run my tests on SQLite and production on PostgreSQL?", "a": "You can, and it makes tests fast, but also run the suite against PostgreSQL in CI. Case sensitivity, upsert conflicts and date handling differ between databases, and only a real run on the production database catches those." },
+    { "q": "Do transactions work across two databases?", "a": "No. A transaction belongs to one database connection. When a write must reach two databases, write to the primary one in a transaction and deliver the second write afterwards, for example with an outbox table and a retrying worker." },
+    { "q": "How hard is it to switch from SQLite to PostgreSQL later?", "a": "With a dialect neutral schema, the code change is mostly the adapter line. You still need a new migration history for the new database and a data copy script. Remember to reset auto increment sequences after copying rows with explicit ids." },
+    { "q": "Does kastor use the same schema for MongoDB and SQL?", "a": "Yes. Collections are declared with the same <code>table()</code> and <code>t</code> builders, so the client gets the same inferred types and query API. See the <a href=\"mongodb-orm-typescript.html\">MongoDB guide</a> for details specific to documents." }
+  ],
+  "related": ["typescript-orm", "mongodb-orm-typescript", "database-migrations-explained"]
+}
+-->
+<section id="why-multiple-databases"><h2>Why apps end up with several databases</h2>
+<p>Few teams set out to build a <strong>multi database app in Node.js</strong>. It happens one reasonable decision at a time. The main data lives in PostgreSQL. Tests run on SQLite because a file database starts in milliseconds. Product analytics or audit events go to MongoDB because they are append only documents. A reporting job reads from the company's SQL Server.</p>
+<p>The cost is usually not the databases themselves but the tooling: one ORM for the SQL side, another library for documents, raw drivers for the legacy system, each with its own types and error handling. Using <strong>one ORM for multiple databases</strong> removes most of that. kastor has adapters for PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, libSQL, D1, SQL Server, Oracle and MongoDB, all behind the same API. What remains are the real differences between databases, which this guide covers too.</p>
+</section>
+<section id="shared-schema"><h2>Sharing schema code</h2>
+<p>A kastor schema does not import anything dialect specific, so the same module can serve every SQL client you create. Keep the main tables in one file and the event collection in another, since they belong to different databases and have different lifecycles.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts and src/db/events.ts">
+import { table, t, index } from 'kastor'
+
+// src/db/schema.ts: the relational model, used by Postgres and SQLite
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+})
+
+export const orders = table('orders', {
+  id: t.id(),
+  userId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+  total: t.decimal(10, 2),
+  createdAt: t.datetime().defaultNow(),
+}, { indexes: (o) =&gt; [index(o.userId)] })
+
+// src/db/events.ts (same import line): append only events, stored in MongoDB
+export const events = table('events', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  type: t.string(64),
+  userId: t.int(),
+  payload: t.json&lt;Record&lt;string, unknown&gt;&gt;(),
+  createdAt: t.datetime().defaultNow(),
+})
+</pre>
+<p>Stick to the portable column types (<code>t.string</code>, <code>t.decimal</code>, <code>t.datetime</code>, <code>t.json</code> and so on) in shared tables. If one database needs a special type, <code>.nativeType()</code> sets it per column, but that column then stops being portable, so keep such tables out of the shared module.</p>
+</section>
+<section id="several-clients"><h2>Several clients side by side</h2>
+<p>Wrap client creation in a function that takes an adapter. Production picks Postgres, tests pick SQLite, and both get the exact same type. The MongoDB client is created separately with its own schema.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/clients.ts">
+import pg from 'pg'
+import Database from 'better-sqlite3'
+import { MongoClient } from 'mongodb'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { sqlite } from 'kastor/sqlite'
+import { mongodb } from 'kastor/mongodb'
+import { users, orders } from './schema'
+import { events } from './events'
+
+type SqlAdapter = ReturnType&lt;typeof postgres&gt; | ReturnType&lt;typeof sqlite&gt;
+
+export function createAppDb(adapter: SqlAdapter) {
+  return kastor({
+    adapter,
+    schema: { users, orders },
+    relations: ({ users, orders }) =&gt; ({
+      users: { orders: many(orders) },
+      orders: { user: one(users, { fields: ['userId'], references: ['id'] }) },
+    }),
+  })
+}
+export type AppDb = ReturnType&lt;typeof createAppDb&gt;
+
+export const db = process.env.DB_KIND === 'sqlite'
+  ? createAppDb(sqlite(new Database(process.env.SQLITE_FILE ?? './dev.db')))
+  : createAppDb(postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })))
+
+const mongo = new MongoClient(process.env.MONGO_URL ?? 'mongodb://localhost:27017')
+export const eventsDb = kastor({ adapter: mongodb(mongo.db('app')), schema: { events } })
+
+export async function placeOrder(userId: number, total: string) {
+  const order = await db.orders.create({ data: { userId, total } })
+  await eventsDb.events.create({
+    data: { type: 'order.placed', userId, payload: { orderId: order.id, total } },
+  })
+  return order
+}
+</pre>
+<p>Notice what <code>placeOrder</code> cannot do: wrap both writes in one transaction. A transaction lives on one database connection. If losing an event is not acceptable, write it to an outbox table inside the Postgres transaction and let a worker copy it to MongoDB with retries. Also call <code>$disconnect()</code> on every client during shutdown, not just the main one.</p>
+</section>
+<section id="dialect-differences"><h2>Dialect differences that matter</h2>
+<p>kastor compiles the same query differently for each database, so your code stays the same. Some differences still change behavior, and you should know them before you rely on a test database that is not your production one. Open the <a href="./#playground">playground</a> to see the exact SQL for each database.</p>
+<h3>Returning rows after a write</h3>
+<p><code>create</code>, <code>update</code> and <code>upsert</code> return the written row everywhere. PostgreSQL and SQLite support <code>RETURNING</code>, SQL Server has <code>OUTPUT</code>, and where the database cannot return rows from a write (MySQL is the usual example), kastor reads the row back by its key. That read back is a second statement, so keep such writes inside a transaction when another process may change the row at the same moment.</p>
+<h3>Upsert conflicts</h3>
+<p>The native mechanisms differ: <code>ON CONFLICT</code> in PostgreSQL and SQLite, <code>ON DUPLICATE KEY UPDATE</code> in MySQL and MariaDB, <code>MERGE</code> in SQL Server and Oracle. The subtle one is MySQL, where a conflict on <em>any</em> unique index triggers the update, not only the one in your <code>where</code>. If a table has several unique columns, test upserts on MySQL specifically.</p>
+<h3>Case insensitive matching</h3>
+<p><code>mode: 'insensitive'</code> works on every adapter, using <code>ILIKE</code> on PostgreSQL and comparing lowercased values on databases without it. The trap goes the other way: MySQL's default collations compare text case insensitively even for plain <code>equals</code>, while PostgreSQL does not. Code that passes on MySQL can miss rows on PostgreSQL, so be explicit with <code>mode</code> whenever case matters.</p>
+<h3>JSON aggregation for includes</h3>
+<p>Nested includes load in one query per root call on databases with JSON aggregation (PostgreSQL, CockroachDB, MySQL, MariaDB, the SQLite family, SQL Server, Oracle). Where it is not available, kastor runs one extra query per include level with IN lists. MongoDB uses aggregation pipelines with <code>$lookup</code>. All three are free of N+1 queries, but large includes still mean large responses, so use <code>take</code> and <code>select</code> inside includes.</p>
+<h3>Schema changes</h3>
+<p>PostgreSQL, SQLite and SQL Server can run DDL inside a transaction. MySQL and Oracle commit each DDL statement on its own, so a migration that fails halfway can leave part of it applied. Keep migrations for those databases small, one logical change per file.</p>
+</section>
+<section id="testing"><h2>Testing the same code against several databases</h2>
+<p>Run the suite once per target. A config file that reads an environment variable lets the CLI prepare each database, with a separate migrations folder per dialect since migration SQL is dialect specific.</p>
+<pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
+import { defineConfig } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { sqlite } from 'kastor/sqlite'
+import pg from 'pg'
+import Database from 'better-sqlite3'
+
+const kind = process.env.DB_KIND ?? 'postgres'
+
+export default defineConfig({
+  schema: './src/db/schema.ts',
+  adapter: () =&gt;
+    kind === 'sqlite'
+      ? sqlite(new Database(process.env.SQLITE_FILE ?? './dev.db'))
+      : postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  migrations: `./kastor/migrations/${kind}`,
+})
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="test/users.test.ts">
+import { describe, it, expect, beforeEach, afterAll } from 'vitest'
+import pg from 'pg'
+import Database from 'better-sqlite3'
+import { postgres } from 'kastor/postgres'
+import { sqlite } from 'kastor/sqlite'
+import { createAppDb } from '../src/db/clients'
+
+const targets = [
+  { name: 'sqlite', makeDb: () =&gt; createAppDb(sqlite(new Database('./test.db'))) },
+  { name: 'postgres', makeDb: () =&gt; createAppDb(postgres(new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL }))) },
+]
+
+describe.each(targets)('users on $name', ({ makeDb }) =&gt; {
+  const db = makeDb()
+  beforeEach(async () =&gt; {
+    await db.$execute`delete from orders`
+    await db.$execute`delete from users`
+  })
+  afterAll(() =&gt; db.$disconnect())
+
+  it('matches emails case insensitively', async () =&gt; {
+    await db.users.create({ data: { email: 'Ana@Example.com' } })
+    const found = await db.users.findFirst({
+      where: { email: { equals: 'ana@example.com', mode: 'insensitive' } },
+    })
+    expect(found?.email).toBe('Ana@Example.com')
+  })
+})
+</pre>
+<p>Before the run, sync both schemas with <code>DB_KIND=sqlite SQLITE_FILE=./test.db npx kastor db push</code> and <code>DATABASE_URL=$TEST_DATABASE_URL npx kastor db push</code>. Locally you can run only SQLite for speed; in CI run every target.</p>
+<p>Not every test needs to run everywhere. Focus the cross database runs on the behavior that actually differs:</p>
+<ul>
+<li><strong>Text matching:</strong> lookups by email or username, with and without <code>mode: 'insensitive'</code>.</li>
+<li><strong>Upserts</strong> on tables with more than one unique column.</li>
+<li><strong>Sorting with nulls:</strong> PostgreSQL puts nulls last in ascending order, MySQL and SQLite put them first, so assert on order only where the column cannot be null or the order is explicit.</li>
+<li><strong>Timestamps:</strong> fractional second precision depends on the database and column type, so compare dates with a tolerance or truncate them.</li>
+</ul>
+</section>
+<section id="switching"><h2>Switching databases</h2>
+<p>A common path is SQLite during prototyping and PostgreSQL in production. With a shared schema the code change is the adapter line. The rest is data and history:</p>
+<ol>
+<li>Create the new migration history with <code>DB_KIND=postgres npx kastor migrate dev --name init</code>. The old folder stays for the old database.</li>
+<li>Copy the data with a short script that reads from one client and writes to the other in batches.</li>
+<li>Reset auto increment sequences, because rows were inserted with explicit ids.</li>
+</ol>
+<pre data-kind="editor" data-lang="ts" data-title="scripts/copy-users.ts">
+import pg from 'pg'
+import Database from 'better-sqlite3'
+import { postgres } from 'kastor/postgres'
+import { sqlite } from 'kastor/sqlite'
+import { createAppDb } from '../src/db/clients'
+
+const from = createAppDb(sqlite(new Database('./dev.db')))
+const to = createAppDb(postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })))
+
+let lastId = 0
+for (;;) {
+  const batch = await from.users.findMany({ where: { id: { gt: lastId } }, orderBy: { id: 'asc' }, take: 500 })
+  if (batch.length === 0) break
+  await to.users.createMany({ data: batch })
+  lastId = batch[batch.length - 1].id
+}
+
+await to.$sql`select setval(pg_get_serial_sequence('users', 'id'), (select max(id) from users))`
+await Promise.all([from.$disconnect(), to.$disconnect()])
+</pre>
+<p>Copy parent tables before child tables so foreign keys resolve, then run the test suite against the new database before switching traffic. For more on migration workflows, read <a href="database-migrations-explained.html">database migrations explained</a>.</p>
+</section>

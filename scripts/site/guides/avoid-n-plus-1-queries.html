@@ -1,0 +1,154 @@
+<!--meta
+{
+  "slug": "avoid-n-plus-1-queries",
+  "lang": "en",
+  "title": "Avoid N+1 queries in TypeScript with nested includes | kastor",
+  "description": "Learn to spot and avoid N+1 queries in TypeScript: query logging, nested includes in one query, relation counts, select, take inside includes and pagination.",
+  "h1": "How to avoid N+1 queries in a TypeScript app",
+  "crumb": "Avoid N+1 queries",
+  "lead": "The N+1 problem turns one page load into dozens or hundreds of database round trips. This guide shows how to recognize it in your logs and how to avoid N+1 queries with kastor's <code>include</code>, <code>_count</code> and <code>select</code>.",
+  "readTime": "9 min read",
+  "keywords": ["avoid N+1 queries", "N+1 query problem", "N+1 queries ORM", "eager loading relations typescript", "fix N+1 queries node.js", "orm nested includes"],
+  "faq": [
+    { "q": "What is the N+1 query problem?", "a": "It happens when code runs one query to load a list of N rows, then one more query for each row to load related data. The total is N+1 queries where one or two would do, and the cost grows with the size of the list." },
+    { "q": "How do I detect N+1 queries?", "a": "Turn on query logging with <code>log: true</code> in the kastor client options and load the page. If you see the same statement repeated with only the parameter changing, you have an N+1." },
+    { "q": "Does kastor prevent N+1 queries?", "a": "Relations loaded with <code>include</code> never run one query per row. On databases with JSON aggregation the whole tree loads in one query; on others kastor runs one extra query per include level with an IN list. A manual loop that queries inside it is still N+1, so use <code>include</code> instead." },
+    { "q": "Is Promise.all a fix for N+1 queries?", "a": "No. Running the per row queries in parallel hides the latency a little, but the database still executes N queries and your pool can run out of connections. Load the relation with <code>include</code> or a single <code>in</code> filter instead." },
+    { "q": "How do I count related rows without loading them?", "a": "Use <code>_count</code> in <code>select</code> or <code>include</code>, for example <code>_count: { select: { posts: true } }</code>. The counts are computed in the database and returned next to each row." }
+  ],
+  "related": ["typescript-orm", "type-safe-sql-typescript", "nextjs-postgres-orm"]
+}
+-->
+<section id="what-is-n-plus-1"><h2>What the N+1 problem looks like</h2>
+<p>Say you render a list of the latest 50 users, each with their posts. The most natural code is a loop: fetch the users, then fetch posts for each user.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/authors.ts">
+// N+1: one query for the list, then one query per user
+const users = await db.users.findMany({ take: 50 })
+
+const result = []
+for (const user of users) {
+  const posts = await db.posts.findMany({
+    where: { authorId: user.id, published: true },
+  })
+  result.push({ ...user, posts })
+}
+</pre>
+<p>That is 1 query for the users plus 50 queries for the posts: 51 round trips. If each round trip to the database costs 2 ms, the page spends over 100 ms just waiting on the network before the database does any real work. Ask for 500 users and it becomes 501 queries.</p>
+<p>The name comes from that count: <strong>N</strong> queries for the children plus <strong>1</strong> for the parents. The code looks innocent, works with ten rows in development, and gets slower in production in exact proportion to your data.</p>
+<h3>Where it hides</h3>
+<ul>
+<li>Loops over results that call a helper which queries, such as <code>getAuthor(post.authorId)</code>.</li>
+<li>GraphQL resolvers for a nested field, which run once per parent object.</li>
+<li>Serializers or view helpers that lazily load a relation for each item.</li>
+<li><code>Promise.all(rows.map(...))</code> with a query inside. It is parallel, but still N queries, and it can drain your connection pool under load.</li>
+</ul>
+</section>
+<section id="spot-it"><h2>How to spot N+1 queries</h2>
+<p>You cannot fix what you cannot see. The fastest check is to log every statement the client runs. Pass <code>log: true</code> when you create the client:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+  log: true,
+})
+</pre>
+<p>Now load the slow page once and read the output. The signature of an N+1 is the <strong>same statement repeated many times</strong> with only a parameter changing. A healthy request usually runs a handful of queries no matter how many rows it shows.</p>
+<p>Two more habits help. Enable logging only in development, for example with <code>log: process.env.NODE_ENV !== 'production'</code>, so production logs stay clean. And when you want to see what a single call will send without running it, remember that kastor queries are lazy: build the query and call <code>.toSQL()</code> on it before awaiting. The <a href="./#playground">playground</a> shows the exact SQL each database receives for the same call.</p>
+</section>
+<section id="include"><h2>Load relations with include</h2>
+<p>The fix for the loop above is to tell the ORM about the relation and ask for it up front. With kastor that is <code>include</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/authors.ts">
+const users = await db.users.findMany({
+  take: 50,
+  orderBy: { createdAt: 'desc' },
+  include: {
+    posts: {
+      where: { published: true },
+      select: { id: true, title: true },
+      take: 3,
+    },
+  },
+})
+
+// users[0].posts is typed as { id: string; title: string }[]
+</pre>
+<p>On PostgreSQL, CockroachDB, MySQL, MariaDB, the SQLite family, SQL Server and Oracle, kastor compiles the whole tree into <strong>one query</strong>. Each relation is built inside the database with JSON aggregation and returned as a nested value on its parent row, so 50 users with their posts is a single round trip. Includes nest as deep as you need: posts can include their author, comments, or tags, and it is still one query per root call.</p>
+<p>The result is fully typed from your schema. If you add <code>select</code> inside the include, the type of <code>posts</code> narrows to exactly those fields, which keeps you honest about what the page actually uses.</p>
+<h3>The fallback: one query per level, never per row</h3>
+<p>When a database cannot aggregate JSON, kastor switches strategy. It loads the parents, collects their keys, and runs <strong>one extra query per include level</strong> with an <code>IN</code> list of those keys, then stitches the children onto their parents in memory. Fifty users with posts becomes two queries; adding comments under posts makes it three. The count depends on how deep your include is, not on how many rows come back. MongoDB uses aggregation pipelines with <code>$lookup</code> for the same job.</p>
+</section>
+<section id="counts-and-select"><h2>Counts, select and limits inside includes</h2>
+<p>Many N+1 problems are not about loading related rows at all. A list of authors that shows "12 posts" next to each name does not need the posts, only the number. Use <code>_count</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/authors.ts">
+const authors = await db.users.findMany({
+  where: { posts: { some: { published: true } } },
+  select: {
+    id: true,
+    name: true,
+    _count: { select: { posts: true } },
+  },
+  orderBy: { name: 'asc' },
+})
+
+// authors[0]._count.posts is a number
+</pre>
+<p>The count is computed in the database and never transfers a single post. The <code>some</code> relation filter in <code>where</code> also runs in the database, so you only get authors who have at least one published post.</p>
+<p>Three more rules keep nested loads cheap:</p>
+<ul>
+<li><strong>Select only what you render.</strong> A post body can be many kilobytes. If the list shows titles, select titles. This matters more with includes, because every parent multiplies the payload.</li>
+<li><strong>Put <code>take</code> and <code>orderBy</code> inside the include.</strong> "Latest 3 posts per author" should be expressed as <code>take: 3</code> on the include, not by loading every post and slicing in JavaScript.</li>
+<li><strong>Filter children in the include's <code>where</code>.</strong> Loading all posts and filtering out drafts in code moves work and bytes from the database to your server for nothing.</li>
+</ul>
+</section>
+<section id="batch-lookups"><h2>Batch lookups that are not modeled relations</h2>
+<p>Sometimes the data you need is not a relation in your schema: an id stored in a JSON column, a list of ids from a cache, or rows coming from another service that reference your users. You can still avoid the loop. Collect the keys first, load them all with a single <code>in</code> filter, and join in memory with a <code>Map</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/feed.ts">
+const events = await fetchRecentEvents() // rows from another service, each with a userId
+
+const userIds = [...new Set(events.map((e) =&gt; e.userId))]
+const users = await db.users.findMany({
+  where: { id: { in: userIds } },
+  select: { id: true, name: true },
+})
+
+const usersById = new Map(users.map((u) =&gt; [u.id, u]))
+const feed = events.map((e) =&gt; ({ ...e, user: usersById.get(e.userId) ?? null }))
+</pre>
+<p>That is two round trips no matter how many events there are. Deduplicate the keys with a <code>Set</code> first, and for very large lists split them into chunks of a few thousand ids, since databases limit how many parameters one statement can carry. This is the same technique kastor uses internally for its include fallback, written by hand for data the schema does not describe.</p>
+</section>
+<section id="pagination"><h2>Paginate the root, not the children</h2>
+<p>Includes keep the number of queries constant, but the amount of data still grows with the root list. A page that loads every user with their posts is fast with 50 users and slow with 50,000, even in one query. Always bound the root.</p>
+<p>For simple pages, <code>take</code> and <code>skip</code> work. For long lists and infinite scroll, keyset pagination is steadier because the database does not have to walk past skipped rows: filter on the last value you returned and order by it.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/authors.ts">
+// lastId: id of the last user on the previous page, or null on the first page
+const page = await db.users.findMany({
+  where: lastId ? { id: { gt: lastId } } : undefined,
+  orderBy: { id: 'asc' },
+  take: 20,
+  include: { _count: { select: { posts: true } } },
+})
+
+const nextLastId = page.length === 20 ? page[page.length - 1].id : null
+</pre>
+<p>kastor also has <code>findPage</code> for cursor pagination with opaque cursors, which saves you from encoding the cursor yourself. See the <a href="api.html">API reference</a> for its options.</p>
+</section>
+<section id="checklist"><h2>A quick N+1 checklist</h2>
+<p>Before you ship a list page or an API endpoint that returns collections, run through this:</p>
+<ol>
+<li>Turn on <code>log: true</code> locally and load the page with realistic data, not three rows.</li>
+<li>Look for repeated statements. Any query inside a loop over results is a candidate.</li>
+<li>Replace per row lookups with <code>include</code>, or with one query using an <code>in</code> filter on the collected ids when the data is not a modeled relation.</li>
+<li>Use <code>_count</code> when you only need numbers.</li>
+<li>Narrow with <code>select</code>, limit children with <code>take</code>, and paginate the root.</li>
+</ol>
+<p>For aggregates and reports that do not fit the model API, write the query yourself with <code>db.$sql</code>, which keeps values as parameters. The <a href="type-safe-sql-typescript.html">type-safe SQL guide</a> covers that path, and the <a href="nextjs-postgres-orm.html">Next.js guide</a> shows these patterns inside server components.</p>
+</section>

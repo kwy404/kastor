@@ -1,0 +1,174 @@
+<!--meta
+{
+  "slug": "nextjs-postgres-orm",
+  "lang": "pt-BR",
+  "alt": "nextjs-postgres-orm",
+  "title": "Next.js com PostgreSQL: ORM tipado no App Router | kastor",
+  "description": "Next.js com PostgreSQL no App Router: um cliente reaproveitado, server components, server actions, route handlers, Neon e Supabase via pg e migrações no deploy.",
+  "h1": "Next.js com PostgreSQL: configurando um ORM tipado no App Router",
+  "crumb": "Next.js com PostgreSQL",
+  "lead": "Usar Next.js com PostgreSQL fica simples quando o acesso ao banco mora no servidor e um único cliente é reaproveitado. Este guia monta tudo com o kastor e o driver <code>pg</code>: cliente, server components, server actions, route handlers, provedores gerenciados e migrações no deploy.",
+  "readTime": "10 min de leitura",
+  "keywords": ["Next.js com PostgreSQL", "Next.js Postgres", "ORM Next.js", "Next.js App Router banco de dados", "Next.js Neon", "Next.js Supabase Postgres"],
+  "faq": [
+    { "q": "Como conectar o Next.js ao PostgreSQL?", "a": "Instale o driver <code>pg</code> e o kastor, crie um <code>pg.Pool</code> com a variável <code>DATABASE_URL</code> e passe para o adaptador <code>postgres()</code>. Guarde o cliente em <code>globalThis</code> em desenvolvimento para não abrir um pool novo a cada recarregamento." },
+    { "q": "Por que o Next.js abre conexões demais com o banco?", "a": "Em desenvolvimento, o hot reload reavalia os módulos e cada avaliação pode criar um pool novo. Em produção serverless, cada instância da função tem o próprio pool. Reaproveite o cliente via <code>globalThis</code> e mantenha o <code>max</code> do pool baixo." },
+    { "q": "Posso consultar o banco direto em um server component?", "a": "Sim. Server components rodam só no servidor, então podem fazer <code>await db.posts.findMany()</code> diretamente. Importe <code>server-only</code> no módulo do cliente para que o build falhe se alguém tentar usá-lo em um componente de cliente." },
+    { "q": "O kastor funciona com Neon, Supabase e Vercel Postgres?", "a": "Sim, todos falam o protocolo do PostgreSQL. Use a string de conexão do provedor em um <code>pg.Pool</code>, de preferência a versão com pooler para a aplicação e a conexão direta para as migrações." },
+    { "q": "Onde rodar as migrações em um projeto Next.js na Vercel?", "a": "O mais seguro é uma etapa do CI que roda <code>npx kastor migrate deploy</code> antes de publicar. Outra opção é incluir o comando no script de build. Veja o guia de <a href=\"migracoes-banco-de-dados.html\">migrações de banco de dados</a>." }
+  ],
+  "related": ["orm-typescript", "migracoes-banco-de-dados", "evitar-consultas-n-mais-1"]
+}
+-->
+<section id="arquitetura"><h2>Next.js com PostgreSQL: onde o banco entra no App Router</h2>
+<p>No App Router, o código roda em dois lugares: no servidor e no navegador. O banco só pode ser acessado do servidor. Isso deixa três pontos de entrada naturais para consultas: <strong>server components</strong> para ler dados ao renderizar, <strong>server actions</strong> para gravar a partir de formulários e <strong>route handlers</strong> para expor uma API HTTP.</p>
+<p>Os três importam o mesmo módulo de banco. A regra principal de uma configuração de <strong>Next.js com PostgreSQL</strong> é essa: um único cliente, criado uma vez e reaproveitado. O resto do guia mostra como chegar lá com o kastor, um ORM em TypeScript que não precisa de etapa de geração e usa o driver <code>pg</code> que você mesmo instala.</p>
+</section>
+<section id="instalacao"><h2>Instalação e variáveis de ambiente</h2>
+<p>Instale o kastor, o driver <code>pg</code>, o pacote <code>server-only</code> e o <code>dotenv</code> para a CLI ler o mesmo arquivo de ambiente que o Next.js:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg server-only
+npm install -D @types/pg dotenv
+npx kastor init
+</pre>
+<p>Coloque a string de conexão em <code>.env.local</code>, que o Next.js carrega automaticamente e que não deve ir para o repositório. Use o nome <code>DATABASE_URL</code> sem o prefixo <code>NEXT_PUBLIC_</code>: variáveis com esse prefixo são embutidas no JavaScript enviado ao navegador, e a senha do banco nunca deve chegar lá.</p>
+<p>A CLI do kastor roda fora do Next.js, então ela não lê <code>.env.local</code> sozinha. Carregue o arquivo no <code>kastor.config.ts</code>. Aproveite para separar a conexão das migrações, como explicado mais adiante:</p>
+<pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
+import { config } from 'dotenv'
+import { defineConfig } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import pg from 'pg'
+
+config({ path: '.env.local' })
+
+export default defineConfig({
+  schema: './src/db/schema.ts',
+  // Migrations prefer a direct (non pooled) connection when one is set
+  adapter: () =&gt; postgres(new pg.Pool({
+    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+  })),
+  migrations: './kastor/migrations',
+  seed: './src/db/seed.ts',
+})
+</pre>
+</section>
+<section id="cliente"><h2>Um único cliente reaproveitado com globalThis</h2>
+<p>Em desenvolvimento, o Next.js recarrega módulos a cada alteração. Se o módulo do banco criar um <code>pg.Pool</code> no topo do arquivo, cada recarregamento abre um pool novo, e em pouco tempo o PostgreSQL recusa conexões. A solução conhecida é guardar o cliente em <code>globalThis</code>, que sobrevive aos recarregamentos:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import 'server-only'
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+function createDb() {
+  const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 5, // keep it small: every serverless instance has its own pool
+  })
+  return kastor({
+    adapter: postgres(pool),
+    schema: { users, posts },
+    relations: ({ users, posts }) =&gt; ({
+      users: { posts: many(posts) },
+      posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+    }),
+  })
+}
+
+const globalForDb = globalThis as unknown as { kastorDb?: ReturnType&lt;typeof createDb&gt; }
+
+export const db = globalForDb.kastorDb ?? createDb()
+
+// Reuse the same client across hot reloads in development
+if (process.env.NODE_ENV !== 'production') globalForDb.kastorDb = db
+</pre>
+<p>O <code>import 'server-only'</code> faz o build falhar se algum componente de cliente importar esse módulo por engano. É uma proteção barata contra vazar código de banco para o navegador. Em produção, o próprio cache de módulos do Node garante uma instância por processo.</p>
+<p>Não chame <code>db.$disconnect()</code> ao fim de cada requisição: o pool existe justamente para manter conexões abertas entre requisições. Reserve o <code>$disconnect</code> para scripts avulsos, como seeds e tarefas de manutenção, que precisam encerrar o processo quando terminam.</p>
+</section>
+<section id="server-components"><h2>Lendo dados em server components</h2>
+<p>Server components podem ser funções assíncronas, então a consulta fica direto no componente. Não há API intermediária, e o tipo de <code>posts</code> vem inferido do schema e do <code>include</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/app/page.tsx">
+import { db } from '@/db'
+
+// Render on every request instead of once at build time
+export const dynamic = 'force-dynamic'
+
+export default async function HomePage() {
+  const posts = await db.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: { author: { select: { name: true } } },
+  })
+
+  return (
+    &lt;ul&gt;
+      {posts.map((post) =&gt; (
+        &lt;li key={post.id}&gt;{post.title}, por {post.author.name ?? 'anônimo'}&lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+</pre>
+<p>Dois detalhes importam aqui. Primeiro, uma página que não usa cookies, headers nem parâmetros dinâmicos pode ser renderizada de forma estática no build, o que exigiria acesso ao banco durante o build e congelaria os dados. Declare <code>dynamic = 'force-dynamic'</code> ou use <code>revalidate</code> com um número de segundos, conforme a página.</p>
+<p>Segundo, busque os dados relacionados no componente pai com <code>include</code>. Se cada item da lista for um componente que faz a própria consulta, você cria um problema N+1 sem perceber. O guia sobre <a href="evitar-consultas-n-mais-1.html">consultas N+1</a> explica o padrão e a correção.</p>
+<p>Se o mesmo dado aparece no layout e na página, por exemplo o usuário logado, coloque a busca em uma função própria envolvida com <code>cache</code> do React. Durante uma mesma requisição, chamadas repetidas com os mesmos argumentos reaproveitam o resultado em vez de consultar o banco de novo. Fora da requisição, nada fica guardado, então não há risco de mostrar dados de outro usuário.</p>
+</section>
+<section id="server-actions"><h2>Gravando com server actions</h2>
+<p>Server actions recebem o <code>FormData</code> do formulário e rodam no servidor. Depois de gravar, chame <code>revalidatePath</code> para que a página mostre o dado novo:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/app/actions.ts">
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { db } from '@/db'
+
+export async function createPost(formData: FormData) {
+  const title = String(formData.get('title') ?? '').trim()
+  if (title.length === 0 || title.length &gt; 200) return
+
+  // In a real app, read the author id from the session, never from the form
+  const authorId = 1
+
+  await db.posts.create({ data: { title, authorId } })
+  revalidatePath('/')
+}
+</pre>
+<p>Use a ação com <code>action</code> em um elemento <code>form</code>. Para devolver mensagens de erro à interface, combine a ação com <code>useActionState</code> do React e trate erros com <code>isKastorError</code>: o <code>code</code> <code>UNIQUE_VIOLATION</code>, por exemplo, vira uma mensagem amigável sem depender do texto do driver. Lembre que uma server action é um endpoint público: valide a entrada e confira a permissão do usuário dentro dela.</p>
+</section>
+<section id="route-handlers"><h2>Route handlers para APIs</h2>
+<p>Quando outro cliente precisa dos dados (um app mobile, um webhook, um fetch do navegador), use um route handler. O driver <code>pg</code> usa sockets TCP do Node, então declare o runtime Node.js:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/app/api/posts/route.ts">
+import { db } from '@/db'
+
+export const runtime = 'nodejs'
+
+export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const take = Math.min(Number(url.searchParams.get('take') ?? 20), 100)
+
+  const posts = await db.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' },
+    take,
+    select: { id: true, title: true, createdAt: true },
+  })
+  return Response.json(posts)
+}
+</pre>
+<p>Limitar o <code>take</code> com um teto evita que alguém peça um milhão de linhas pela query string. Para listas longas, <code>findPage</code> oferece paginação por cursor, mais estável que <code>skip</code> em tabelas grandes.</p>
+</section>
+<section id="provedores"><h2>Neon, Supabase e Vercel Postgres</h2>
+<p>Os provedores gerenciados falam o protocolo do PostgreSQL, então todos funcionam com o mesmo <code>pg.Pool</code> e o adaptador <code>postgres()</code>. O que muda é qual string de conexão usar.</p>
+<ul>
+<li><strong>Neon</strong> oferece uma string com pooler e outra direta. Use a com pooler em <code>DATABASE_URL</code> para a aplicação e a direta em <code>DIRECT_URL</code> para as migrações. As branches do Neon são úteis para dar um banco separado a cada preview.</li>
+<li><strong>Supabase</strong> também expõe uma conexão via pooler e uma conexão direta. A lógica é a mesma: pooler para a aplicação em ambiente serverless, conexão direta para a CLI.</li>
+<li><strong>Vercel Postgres</strong>, pela integração do marketplace, injeta as variáveis de conexão no projeto. Aponte <code>DATABASE_URL</code> para a variável com pooler.</li>
+</ul>
+<p>Em qualquer provedor, lembre que cada instância serverless mantém o próprio pool. Com dez instâncias e <code>max: 5</code>, são até cinquenta conexões. Mantenha o <code>max</code> baixo e confie no pooler do provedor para o resto.</p>
+</section>
+<section id="deploy"><h2>Migrações no deploy</h2>
+<p>Em desenvolvimento, altere o schema e rode <code>npx kastor migrate dev --name descricao</code>. Faça commit da pasta <code>kastor/migrations</code>. No deploy, quem aplica as mudanças é o <code>npx kastor migrate deploy</code>, que só executa migrações pendentes e nunca gera SQL novo.</p>
+<p>O lugar mais seguro para ele é uma etapa do CI que roda antes de publicar a nova versão. Se preferir manter tudo na Vercel, dá para usar o script de build <code>kastor migrate deploy &amp;&amp; next build</code>. Nesse caso, garanta que deploys de preview apontem para outro banco, ou eles vão migrar o banco de produção. O guia de <a href="migracoes-banco-de-dados.html">migrações de banco de dados</a> cobre renomeações e o padrão expandir e contrair para mudanças sem downtime.</p>
+<p>Para outros frameworks, veja a <a href="../frameworks.html#nextjs">página de frameworks</a>, e para conhecer o resto da API, o guia de <a href="orm-typescript.html">ORM para TypeScript</a>.</p>
+</section>

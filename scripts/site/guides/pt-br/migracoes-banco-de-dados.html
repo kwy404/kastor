@@ -1,0 +1,141 @@
+<!--meta
+{
+  "slug": "migracoes-banco-de-dados",
+  "lang": "pt-BR",
+  "alt": "database-migrations-explained",
+  "title": "Migrações de banco de dados na prática com TypeScript | kastor",
+  "description": "Migrações de banco de dados explicadas: migrate dev, arquivos SQL versionados, deploy no CI, renomeações, mudanças destrutivas seguras, db push e db pull.",
+  "h1": "Migrações de banco de dados: um fluxo seguro do desenvolvimento à produção",
+  "crumb": "Migrações de banco",
+  "lead": "Migrações de banco de dados transformam cada mudança de schema em um arquivo SQL versionado que roda igual em todos os ambientes. Este guia mostra o fluxo completo com o kastor, de <code>migrate dev</code> a <code>migrate deploy</code>, e como mudar tabelas em produção sem derrubar a aplicação.",
+  "readTime": "10 min de leitura",
+  "keywords": ["migrações de banco de dados", "migração de banco de dados", "migrations TypeScript", "migração de schema", "como fazer migrations Node.js", "expand and contract"],
+  "faq": [
+    { "q": "O que são migrações de banco de dados?", "a": "São arquivos versionados que descrevem, em ordem, cada mudança no schema do banco: criar tabela, adicionar coluna, criar índice. Ficam no repositório junto com o código e são aplicados na mesma ordem em desenvolvimento, CI e produção." },
+    { "q": "Qual a diferença entre migrate dev e migrate deploy?", "a": "<code>migrate dev</code> compara o schema em TypeScript com o banco local, escreve um novo arquivo de migração e o aplica. <code>migrate deploy</code> não gera nada: só aplica as migrações pendentes que já estão no repositório, por isso é o comando para CI e produção." },
+    { "q": "Quando usar db push em vez de migrações?", "a": "Use <code>db push</code> para protótipos e experimentos locais, quando o histórico ainda não importa. Assim que o projeto tiver um banco compartilhado ou de produção, passe a usar <code>migrate dev</code> para que cada mudança fique registrada em arquivo." },
+    { "q": "Como renomear uma coluna sem perder dados?", "a": "Altere o nome no schema e rode <code>migrate dev</code>. O kastor detecta a possível renomeação e pergunta se deve renomear em vez de apagar e recriar. Em produção com várias instâncias rodando, prefira o padrão expandir e contrair descrito neste guia." },
+    { "q": "Posso editar uma migração que já foi aplicada?", "a": "Não é uma boa ideia. Outros ambientes já aplicaram aquele arquivo e não vão rodá-lo de novo. Para corrigir algo, crie uma nova migração. Em desenvolvimento local, <code>migrate reset</code> recria o banco do zero se você precisar recomeçar." }
+  ],
+  "related": ["orm-typescript", "nextjs-postgres-orm", "evitar-consultas-n-mais-1"]
+}
+-->
+<section id="por-que"><h2>Por que usar migrações de banco de dados</h2>
+<p>Todo projeto começa com alguém rodando um <code>CREATE TABLE</code> à mão. Funciona até a segunda pessoa entrar no time, ou até o primeiro deploy. A partir daí surgem as perguntas: qual coluna já existe em produção? Quem adicionou esse índice? Por que o staging tem uma tabela que o banco local não tem?</p>
+<p><strong>Migrações de banco de dados</strong> respondem a isso com uma regra simples: toda mudança de schema vira um arquivo, os arquivos ficam no repositório e são aplicados sempre na mesma ordem. O banco passa a ter histórico, como o código. Revisão de pull request, rollback de deploy e onboarding de pessoas novas ficam previsíveis.</p>
+<p>No kastor o schema é escrito em TypeScript, e a CLI cuida de transformar diferenças entre esse schema e o banco em SQL. Você descreve o estado desejado, e a ferramenta escreve o passo para chegar lá.</p>
+</section>
+<section id="fluxo-dev"><h2>O fluxo no dia a dia: migrate dev</h2>
+<p>O ciclo é sempre o mesmo. Você altera o arquivo de schema, roda um comando, revisa o SQL gerado e faz commit.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  createdAt: t.datetime().defaultNow(),
+})
+
+// New table added in this change
+export const posts = table('posts', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  authorId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, { indexes: (p) =&gt; [index(p.authorId)] })
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate dev --name add_posts
+</pre>
+<p>O comando lê o <code>kastor.config.ts</code>, compara o schema com o banco de desenvolvimento ao vivo, escreve <code>kastor/migrations/&lt;timestamp&gt;_add_posts/migration.sql</code> e aplica esse arquivo. O resultado é SQL comum, que você pode ler na revisão de código:</p>
+<pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261013120000_add_posts/migration.sql">
+CREATE TABLE "posts" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "title" varchar(200) NOT NULL,
+  "published" boolean NOT NULL DEFAULT false,
+  "authorId" integer NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE
+);
+CREATE INDEX "posts_authorId_idx" ON "posts" ("authorId");
+</pre>
+<p>Algumas boas práticas que evitam dor de cabeça:</p>
+<ul>
+<li>Dê nomes descritivos: <code>add_posts</code>, <code>users_add_role</code>, <code>drop_legacy_tokens</code>. O nome aparece no histórico para sempre.</li>
+<li>Faça uma mudança lógica por migração. Fica mais fácil revisar e entender o que deu errado.</li>
+<li>Faça commit da pasta <code>kastor/migrations</code> no mesmo pull request que altera o schema e o código que usa a mudança.</li>
+<li>Nunca edite uma migração já aplicada em outro ambiente. Crie uma nova.</li>
+</ul>
+</section>
+<section id="deploy"><h2>Produção e CI: migrate deploy e migrate status</h2>
+<p>Em produção você não quer que nenhuma ferramenta invente SQL. Por isso existe um comando separado: <code>migrate deploy</code> só aplica migrações que já estão no repositório e ainda não rodaram naquele banco. Ele não compara schema, não pergunta nada e não gera arquivo.</p>
+<p>O lugar certo para ele é uma etapa do pipeline antes de a nova versão da aplicação receber tráfego. Um exemplo com GitHub Actions:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx kastor migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npx kastor migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+</pre>
+<p>O <code>migrate status</code> mostra quais migrações já foram aplicadas e quais estão pendentes. É útil no log do CI e também localmente, quando você puxa a branch de alguém e quer saber se o banco está atrasado.</p>
+<div class="callout"><p>Rode <code>migrate deploy</code> em um único lugar por deploy. Se cada instância da aplicação tentar migrar ao iniciar, várias vão competir pelo mesmo banco ao mesmo tempo.</p></div>
+</section>
+<section id="renomeacoes"><h2>Renomeações sem perder dados</h2>
+<p>Para uma ferramenta que compara dois estados, renomear uma coluna parece igual a apagar uma coluna e criar outra. Ferramentas ingênuas geram exatamente isso, e os dados da coluna antiga somem.</p>
+<p>O <code>migrate dev</code> do kastor detecta esse padrão. Quando uma coluna desaparece e outra compatível aparece na mesma tabela, ele pergunta se é uma renomeação em vez de gerar o DROP. Responda que sim e o arquivo terá um rename, preservando os dados. O mesmo vale para tabelas.</p>
+<p>Se você só quer mudar o nome no código e manter o nome no banco, nem precisa de migração: use <code>.map('nome_antigo')</code> na coluna. O TypeScript enxerga o nome novo e o banco continua com o antigo.</p>
+</section>
+<section id="destrutivas"><h2>Mudanças destrutivas seguras: expandir e contrair</h2>
+<p>Renomear dentro de uma migração resolve o banco, mas não resolve o deploy. Durante alguns segundos ou minutos, a versão antiga da aplicação ainda está rodando e procura a coluna pelo nome antigo. Para mudanças que quebram compatibilidade, use o padrão <em>expandir e contrair</em> (expand and contract), em etapas separadas:</p>
+<ol>
+<li><strong>Expandir.</strong> Adicione a coluna nova como <code>.nullable()</code> ou com <code>.default()</code>. Gere a migração e faça deploy. Nada quebra, porque a versão antiga ignora a coluna.</li>
+<li><strong>Escrever nas duas.</strong> Publique código que grava na coluna antiga e na nova, e lê da antiga.</li>
+<li><strong>Preencher.</strong> Copie os dados existentes em lotes, com um script que usa <code>db.$execute</code>. Lotes pequenos evitam travar a tabela por muito tempo.</li>
+<li><strong>Trocar a leitura.</strong> Publique código que lê da coluna nova.</li>
+<li><strong>Contrair.</strong> Remova a coluna antiga do schema, gere a migração e faça deploy. Se precisar, torne a coluna nova obrigatória nessa mesma etapa.</li>
+</ol>
+<pre data-kind="editor" data-lang="ts" data-title="scripts/backfill-display-name.ts">
+import { db } from '../src/db/client'
+
+// Copy data in small batches until nothing is left to update
+let affected = 0
+do {
+  affected = await db.$execute`
+    update users set "displayName" = name
+    where id in (
+      select id from users
+      where "displayName" is null and name is not null
+      limit 1000
+    )
+  `
+} while (affected &gt; 0)
+
+await db.$disconnect()
+</pre>
+<p>Parece muito trabalho para trocar um nome, e para uma tabela pequena em um projeto pessoal talvez seja. Mas em tabelas grandes ou com várias instâncias da aplicação, é o que separa um deploy tranquilo de um incidente. A mesma lógica vale para trocar o tipo de uma coluna, dividir uma tabela ou tornar obrigatória uma coluna que era opcional.</p>
+<p>Revise também o SQL gerado pensando em bloqueios. Criar um índice ou mudar o tipo de uma coluna em uma tabela com milhões de linhas pode travar escritas enquanto o banco trabalha. Teste essas migrações em uma cópia com volume parecido com o de produção e programe o deploy para um horário de pouco movimento.</p>
+</section>
+<section id="push-pull"><h2>db push, db pull e migrate reset</h2>
+<p>Três comandos completam o conjunto, cada um com um uso bem definido.</p>
+<table class="spec">
+<thead><tr><th>Comando</th><th>Quando usar</th><th>Gera arquivo?</th></tr></thead>
+<tbody>
+<tr><td><code>db push</code></td><td>Protótipos e experimentos locais</td><td>Não</td></tr>
+<tr><td><code>db pull</code></td><td>Adotar o kastor em um banco que já existe</td><td>Gera o schema em TypeScript</td></tr>
+<tr><td><code>migrate reset</code></td><td>Recomeçar o banco local do zero</td><td>Não</td></tr>
+</tbody>
+</table>
+<p><strong>db push</strong> sincroniza o banco com o schema sem criar migração. É ótimo nas primeiras horas de um projeto, quando o modelo muda a cada dez minutos. Quando o schema estabilizar, rode o primeiro <code>migrate dev</code> e não use mais <code>db push</code> em bancos compartilhados.</p>
+<p><strong>db pull</strong> lê as tabelas, colunas, índices e chaves estrangeiras de um banco existente e escreve um arquivo de schema em TypeScript. Revise o resultado, acrescente as relações no cliente e siga com migrações normais. É o caminho para trazer um sistema legado para um <a href="orm-typescript.html">ORM para TypeScript</a> sem reescrever nada.</p>
+<p><strong>migrate reset</strong> apaga e recria o banco de desenvolvimento aplicando todas as migrações. Junto com <code>db seed</code>, deixa o ambiente local em um estado conhecido. Nunca aponte esse comando para produção.</p>
+<p>Se você usa Next.js na Vercel, o guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra onde encaixar o <code>migrate deploy</code> no build. A lista completa de opções da CLI está na <a href="../api.html">referência da API</a>.</p>
+</section>

@@ -1,0 +1,156 @@
+<!--meta
+{
+  "slug": "typescript-orm",
+  "lang": "en",
+  "title": "TypeScript ORM for every database, no codegen | kastor",
+  "description": "What a TypeScript ORM is, what to look for before you pick one, and a full tour of kastor from schema to queries to migrations, plus when to skip an ORM.",
+  "h1": "Choosing a TypeScript ORM: what matters and how kastor works",
+  "crumb": "TypeScript ORM",
+  "lead": "A TypeScript ORM maps your tables to typed objects so the compiler checks every query. This guide explains what to look for and walks through <code>kastor</code> from the first table to a production migration.",
+  "readTime": "9 min read",
+  "keywords": ["TypeScript ORM", "typescript orm", "node.js orm", "type safe orm", "orm for postgres and mysql", "best typescript orm"],
+  "faq": [
+    { "q": "What is the best TypeScript ORM?", "a": "It depends on your database and how you like to write queries. Check four things: whether types are inferred without a generate step, whether it supports your database, how it handles migrations and whether relation loading avoids N+1 queries. <code>kastor</code> covers all four with one API for SQL databases and MongoDB." },
+    { "q": "Does a TypeScript ORM need code generation?", "a": "Not necessarily. Some ORMs generate a client from a schema file, others infer types directly from a schema written in TypeScript. kastor infers everything as you type, so there is no generate command in development or CI." },
+    { "q": "Can a TypeScript ORM run raw SQL?", "a": "A good one should. kastor has <code>db.$sql</code> as a tagged template that turns every interpolated value into a bound parameter, and <code>sql</code> fragments you can drop into a <code>where</code> clause. See <a href=\"type-safe-sql-typescript.html\">type safe SQL in TypeScript</a>." },
+    { "q": "Is an ORM slower than writing SQL by hand?", "a": "The overhead of building a query is small compared to a network round trip. What makes an app slow is the number and shape of queries, which is why relation loading matters more than the ORM itself. kastor loads nested includes in one query on databases with JSON aggregation." },
+    { "q": "Which databases does kastor support?", "a": "PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB. You install the driver yourself and pass it to the adapter." }
+  ],
+  "related": ["prisma-alternative-without-codegen", "drizzle-alternative", "avoid-n-plus-1-queries"]
+}
+-->
+<section id="what-is-a-typescript-orm"><h2>What a TypeScript ORM actually does</h2>
+<p>An ORM (object relational mapper) sits between your code and the database. You describe your tables once, and the ORM turns method calls like <code>findMany</code> into SQL, sends it through your driver and turns the rows back into plain objects.</p>
+<p>A <strong>TypeScript ORM</strong> adds one more job: it knows the shape of every table, so the compiler can check your queries. If you select a column that does not exist, filter a number with a string or forget a required field on insert, you see a red line in the editor instead of an error in production.</p>
+<p>That type information has to come from somewhere. Some tools read a separate schema file and generate a client. Others let you write the schema in TypeScript and infer the types from it. Both work, but they feel different day to day, and that difference is the first thing to understand when you compare options.</p>
+</section>
+<section id="what-to-look-for"><h2>What to look for before you pick one</h2>
+<p>Most comparisons focus on syntax. Syntax matters less than these five properties, because they decide how much friction you hit over the life of a project.</p>
+<ul>
+<li><strong>Inference without codegen.</strong> When the schema is TypeScript and types are inferred, a new column is available in queries the moment you save the file. There is no generated client to forget to rebuild and no extra step in CI.</li>
+<li><strong>Every database you might use.</strong> Projects change. A startup that begins on SQLite moves to PostgreSQL, a company project has to talk to SQL Server or Oracle, an event store lives in MongoDB. One API across all of them means your team learns it once.</li>
+<li><strong>Migrations you can review.</strong> The ORM should diff your schema against the live database, write a plain SQL file you can read in a pull request, and apply pending files in production with one command. Rename detection matters: a renamed column should not become a drop plus an add.</li>
+<li><strong>No N+1 queries.</strong> Loading users with their posts should never run one query per user. Check how relations are loaded, not just whether they are supported. The <a href="avoid-n-plus-1-queries.html">N+1 guide</a> explains why this is the most common performance bug in ORM code.</li>
+<li><strong>A raw SQL escape hatch.</strong> Window functions, recursive CTEs and vendor specific features will come up. You want raw SQL that still uses bound parameters and still returns typed rows.</li>
+</ul>
+<p>kastor was built around these five points. The rest of this guide is a quick tour, so you can judge it against your own list.</p>
+</section>
+<section id="schema-and-client"><h2>Step 1: schema and client</h2>
+<p>Install kastor and the driver for your database. kastor ships no drivers, so you stay in control of versions and pooling. For PostgreSQL that is <code>npm install kastor pg</code>, for SQLite <code>npm install kastor better-sqlite3</code>.</p>
+<p>The schema is plain TypeScript. Each <code>table()</code> call declares columns with the <code>t</code> builders and returns an object you can import anywhere.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  role: t.enum(['user', 'admin']).default('user'),
+  createdAt: t.datetime().defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.uuid().primaryKey().defaultRandom(),
+  title: t.string(200),
+  body: t.text().nullable(),
+  published: t.boolean().default(false),
+  authorId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+  createdAt: t.datetime().defaultNow(),
+}, { indexes: (p) =&gt; [index(p.authorId)] })
+</pre>
+<p>The client combines an adapter, the schema and the relations between tables. Relations are declared once and used by <code>include</code> and relation filters.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import pg from 'pg'
+import { kastor, one, many } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { users, posts } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  schema: { users, posts },
+  relations: ({ users, posts }) =&gt; ({
+    users: { posts: many(posts) },
+    posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+  }),
+})
+</pre>
+<p>Hover <code>db.users</code> in your editor and you will see every method with the fields of your table. Switching to MySQL or SQLite means changing only the adapter line.</p>
+</section>
+<section id="queries"><h2>Step 2: queries, relations and transactions</h2>
+<p>Queries take an object with <code>where</code>, <code>select</code>, <code>include</code>, <code>orderBy</code>, <code>take</code> and <code>skip</code>. The return type follows your arguments: select two columns and the result has exactly those two keys.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/feed.ts">
+import { isKastorError } from 'kastor'
+import { db } from '../db/client'
+
+// Users with their five latest published posts, one root query
+const authors = await db.users.findMany({
+  where: { role: 'admin', email: { endsWith: '@example.com', mode: 'insensitive' } },
+  include: {
+    posts: { where: { published: true }, orderBy: { createdAt: 'desc' }, take: 5 },
+    _count: { select: { posts: true } },
+  },
+  orderBy: { createdAt: 'asc' },
+})
+
+// Narrow the row type with select
+const emails = await db.users.findMany({ select: { id: true, email: true } })
+
+// Nested write: the user and the first post in one call
+const ana = await db.users.create({
+  data: { email: 'ana@example.com', posts: { create: [{ title: 'Hello' }] } },
+})
+
+// Transactions
+await db.$transaction(async (tx) =&gt; {
+  await tx.posts.updateMany({ where: { authorId: ana.id }, data: { published: true } })
+  await tx.users.update({ where: { id: ana.id }, data: { role: 'admin' } })
+})
+
+// Readable errors with a hint
+try {
+  await db.users.create({ data: { email: 'ana@example.com' } })
+} catch (e) {
+  if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') console.log(e.message, e.hint)
+}
+</pre>
+<p>A few details are worth knowing early:</p>
+<ul>
+<li>Queries are lazy. Nothing runs until you <code>await</code>, and <code>query.toSQL()</code> returns the statements without executing them. Open the <a href="./#playground">playground</a> to see the exact SQL for each database.</li>
+<li>Nested includes load in one query per root call on databases with JSON aggregation (PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, CockroachDB). Elsewhere kastor runs one extra query per include level with an IN list, never one per row.</li>
+<li>Errors are <code>KastorError</code> instances with a stable <code>code</code>, a plain English message and a <code>hint</code> that suggests the fix.</li>
+<li>When the object API is not enough, <code>db.$sql</code> runs raw SQL with bound parameters and a typed result. The <a href="type-safe-sql-typescript.html">type safe SQL guide</a> covers it in depth.</li>
+</ul>
+</section>
+<section id="migrations"><h2>Step 3: migrations from the TypeScript schema</h2>
+<p>Create a <code>kastor.config.ts</code> that points to the schema file, an adapter factory and a migrations folder. Running <code>npx kastor init</code> writes one for you.</p>
+<p>From then on the loop is short: edit <code>schema.ts</code>, run <code>migrate dev</code>, commit the generated SQL file. kastor compares the TypeScript schema with the live database, writes the difference to a timestamped folder and applies it. If a column disappears and a similar one appears, it asks whether you renamed it instead of silently dropping data.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate dev --name add_posts
+npx kastor migrate status
+npx kastor migrate deploy
+</pre>
+<p>The file it writes is plain SQL for your dialect, so reviewers can read it in the pull request:</p>
+<pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261013120000_add_posts/migration.sql">
+CREATE TABLE "posts" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "title" varchar(200) NOT NULL,
+  "body" text,
+  "published" boolean NOT NULL DEFAULT false,
+  "authorId" integer NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX "posts_authorId_idx" ON "posts" ("authorId");
+</pre>
+<p>In CI or on deploy, run <code>npx kastor migrate deploy</code>: it applies pending files in order and never generates new ones. For quick prototypes, <code>npx kastor db push</code> syncs the schema without writing a file. Already have a database? <code>npx kastor db pull</code> introspects it into a TypeScript schema you can start from. The <a href="database-migrations-explained.html">migrations guide</a> covers team workflows, and <code>npx kastor studio</code> opens a local UI to browse data with an ER diagram.</p>
+</section>
+<section id="when-not-to-use-an-orm"><h2>When an ORM is not the right tool</h2>
+<p>An ORM pays off when most of your queries are reads and writes on a handful of related tables. That describes most web apps, but not all database work. Consider something else when:</p>
+<ul>
+<li><strong>The work is mostly analytics.</strong> Reports with many joins, window functions and grouping sets read better as SQL. Keep them in <code>.sql</code> files or use <code>db.$sql</code> for the few that live next to app code.</li>
+<li><strong>You run bulk data pipelines.</strong> Loading millions of rows is a job for the database's own tools, such as <code>COPY</code> in PostgreSQL or <code>bcp</code> in SQL Server.</li>
+<li><strong>The database is shared and owned by another team.</strong> If you cannot run migrations, you still get typed queries from <code>db pull</code>, but most of the value of a schema in code goes away.</li>
+<li><strong>A script needs one query.</strong> For a ten line maintenance script, the driver alone is fine.</li>
+</ul>
+<p>Most projects end up in the middle: the ORM for everyday CRUD and relations, raw SQL for the few hot or complex paths. Pick a tool that makes both easy instead of one that forces a choice.</p>
+<div class="callout"><p>Next steps: follow the <a href="./#start">quick start</a>, check the setup for your framework in <a href="frameworks.html#nextjs">the frameworks page</a>, or read the full <a href="api.html">API reference</a>.</p></div>
+</section>
