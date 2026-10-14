@@ -54,6 +54,10 @@ dialect; each item says how it is worked around today.
 
 ## Resolved
 
+Done on the mongo side: `features.idType` is `'string'` in the ObjectId and
+UUID modes, `mongodb()` has typed overloads, the `toSQL` skip is gone, and
+`test/mongo-client.int.test.ts` runs the client with ObjectId ids.
+
 1. **String ids for `t.id()` (core).** Set `features.idType: 'string'` on the
    MongoDB dialect for the `objectId` and `uuid` id modes (leave it out, or set
    `'number'`, for `ids: 'int'`). `DialectFeatures.idType?: 'number' | 'string'`

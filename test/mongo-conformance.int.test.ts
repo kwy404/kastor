@@ -12,7 +12,8 @@ runConformance(
     await client.connect();
     const db = client.db('kastor_conformance');
     // The fixture uses t.id() and expects numeric ids, so this run uses the
-    // counter based integer ids. ObjectId ids are covered by mongo-dialect.int.test.ts.
+    // counter based integer ids. ObjectId ids are covered by mongo-client.int.test.ts
+    // (through the client) and mongo-dialect.int.test.ts (every id mode).
     const adapter = mongodb(db, { ids: 'int' });
     return {
       adapter,
@@ -25,13 +26,5 @@ runConformance(
       close: () => client.close(),
     };
   },
-  {
-    enabled: !!url,
-    skip: [
-      // MongoDB has no SQL: toSQL() returns the aggregate command as JSON, so the
-      // SELECT text and positional params this test looks for do not exist.
-      // mongo-pipeline.test.ts checks the compiled commands instead.
-      'toSQL shows the statements without running them',
-    ],
-  },
+  { enabled: !!url },
 );

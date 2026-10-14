@@ -18,14 +18,34 @@ differently.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `ids` | `'objectId'` | How `t.id()` and `t.bigId()` keys are generated. `'objectId'`: a BSON ObjectId, returned as a 24 character hex string. `'uuid'`: a random UUID string. `'int'`: increasing integers, allocated from the `_kastor_counters` collection, the closest match to SQL identity columns. |
+| `ids` | `'objectId'` | How `t.id()` and `t.bigId()` keys are generated. `'objectId'`: a BSON ObjectId, a 24 character hex string in your code. `'uuid'`: a random UUID string. `'int'`: increasing integers, allocated from the `_kastor_counters` collection, the closest match to SQL identity columns. |
 | `sampleSize` | `100` | Documents read per collection by `db pull` when a collection has no validator. |
+
+## Ids are strings (unless you pick `ids: 'int'`)
+
+In the `objectId` and `uuid` modes the adapter reports string keys
+(`features.idType: 'string'`, typed as `Adapter<MongoExecutor, 'string'>`), and
+`kastor()` follows it at runtime and in the types: every `t.id()` / `t.bigId()`
+key, and every column with `.references()` to one, is a `string` in results,
+filters and create or update data.
+
+```ts
+const db = kastor({ adapter: mongodb(client.db('app')), schema, relations })
+const ada = await db.users.create({ data: { email: 'ada@acme.com' } })
+ada.id // string, '6720c0ffee...'
+await db.users.findUnique({ where: { id: ada.id } })
+await db.posts.create({ data: { title: 'Notes', authorId: ada.id } })
+```
+
+Other integer columns stay numbers. With `mongodb(db, { ids: 'int' })` keys are
+numbers, exactly like on the SQL databases, which helps when the same schema
+also runs on SQL.
 
 ## How tables map to collections
 
 - One table is one collection. Field names are the database column names (after `.map()`).
 - A single column primary key is stored as `_id`. The client still sees it under its own name (`id`). A composite primary key becomes a unique index named `<table>_pkey`, and the document keeps its own generated `_id`.
-- Columns that reference a generated key (`authorId: t.int().references(() => users.id)`) hold the same kind of value as the key: an ObjectId in `objectId` mode, a string in `uuid` mode. You always pass and receive them as strings in `objectId` mode.
+- Columns that reference a generated key (`authorId: t.int().references(() => users.id)`) hold the same kind of value as the key: an ObjectId in `objectId` mode, a string in `uuid` mode. Your code passes and receives them as strings.
 - Values use native BSON types: `decimal` is Decimal128 (returned as a string, padded to the declared scale), `bigint` is a 64 bit Long (returned as `bigint`), `datetime` is a Date, `date` is a Date at UTC midnight (returned as `YYYY-MM-DD`), `time` is a `HH:MM:SS` string, `bytes` is Binary (returned as `Uint8Array`), `json` is an embedded document or array, `uuid` and `enum` are strings.
 - Nullable columns are stored as `null` when you leave them out, so `{ name: null }` filters behave like SQL.
 

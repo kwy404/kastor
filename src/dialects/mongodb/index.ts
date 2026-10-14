@@ -7,7 +7,7 @@
  * behaves differently from the SQL dialects.
  */
 import { BSON, type Db } from 'mongodb';
-import type { Adapter, CompiledQuery, Dialect, QueryIR, SchemaIR } from '../../core/ir';
+import type { Adapter, CompiledQuery, Dialect, IdType, QueryIR, SchemaIR } from '../../core/ir';
 import { mapMongoError, mongoError } from './errors';
 import { mongoExecutor, type MongoExecutor } from './executor';
 import { introspectDb, mongoDdl, mongoMigrationTable, splitCommands } from './ddl';
@@ -155,6 +155,8 @@ export function createMongoDialect(options: MongoOptions = {}): Dialect<MongoExe
       namedEnums: false,
       transactionalDdl: false,
       rawSql: false,
+      // ObjectId and UUID keys reach the client as strings.
+      idType: ids === 'int' ? 'number' : 'string',
     },
     async execute(query, schema, exec) {
       try {
@@ -184,10 +186,15 @@ export const mongoDialect = createMongoDialect();
  *   const client = new MongoClient(url)
  *   const db = kastor({ adapter: mongodb(client.db('app')), schema })
  *
- * Transactions need a replica set or a sharded cluster (a single node replica
- * set is enough for development).
+ * With the default ObjectId ids (and with `ids: 'uuid'`) `t.id()` keys and the
+ * columns that reference them are strings in results, filters and data. With
+ * `ids: 'int'` they stay numbers. Transactions need a replica set or a sharded
+ * cluster (a single node replica set is enough for development).
  */
-export function mongodb(db: Db, options: MongoOptions = {}): Adapter<MongoExecutor> {
+export function mongodb(db: Db, options: MongoOptions & { ids: 'int' }): Adapter<MongoExecutor>;
+export function mongodb(db: Db, options?: MongoOptions & { ids?: 'objectId' | 'uuid' }): Adapter<MongoExecutor, 'string'>;
+export function mongodb(db: Db, options?: MongoOptions): Adapter<MongoExecutor, IdType>;
+export function mongodb(db: Db, options: MongoOptions = {}): Adapter<MongoExecutor, IdType> {
   return { dialect: options.ids || options.sampleSize ? createMongoDialect(options) : mongoDialect, executor: mongoExecutor(db) };
 }
 
