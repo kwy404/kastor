@@ -42,18 +42,3 @@ Requests for other owners. sqlmore works around each item until it lands.
   Please pass the full target schema there (and in `sameInDialect`) so an
   introspected `no action` key compares equal to the schema's `cascade` key
   when the dialect renders both the same way.
-
-## Resolved by core
-
-1. `hooks.selectColumn?(expr, column)` exists and wraps every column read into
-   a row: select lists, RETURNING / OUTPUT lists, re-selects, groupBy keys and
-   the IN-list loader. `hooks.compareColumn?(expr, column)` wraps columns in
-   comparisons, IN lists and ORDER BY.
-2. `returning: 'into'` appends ` RETURNING <cols> INTO <out binds>` to INSERT,
-   UPDATE and DELETE; every bind is `hooks.outParam(column, as)`. The executor
-   returns the out values as rows keyed by `as`. createMany with returning
-   runs one insert per row in this mode. MERGE upserts read the row back.
-3. `insertDefaults(quotedTable, table)` now receives the `TableIR`.
-4. The client fills `defaultRandom()`, `defaultNow()`, `.default(value)` and
-   `.default(fn)` in JS before every insert, so the key is always known.
-5. See 1 (`compareColumn`).
