@@ -40,9 +40,11 @@ export function parseEnumCheck(definition: string, column: string): string[] | u
   return values.length ? values.reverse() : undefined;
 }
 
+/** True for the JSON checks kastor writes (`ISJSON(CONCAT('[', [c], ']')) = 1`) and the plain `ISJSON([c]) = 1`. */
 export function isJsonCheck(definition: string, column: string): boolean {
-  const quotedColumn = '[' + column.replace(/]/g, ']]') + ']';
-  return unwrap(definition).replace(/\s+/g, '').toLowerCase() === `isjson(${quotedColumn.toLowerCase()})=(1)` || unwrap(definition).replace(/\s+/g, '').toLowerCase() === `isjson(${quotedColumn.toLowerCase()})=1`;
+  const c = ('[' + column.replace(/]/g, ']]') + ']').toLowerCase();
+  const compact = unwrap(definition).replace(/\s+/g, '').toLowerCase().replace(/=\(1\)$/, '=1');
+  return compact === `isjson(${c})=1` || compact === `isjson(concat('[',${c},']'))=1` || compact === `isjson(concat(n'[',${c},n']'))=1`;
 }
 
 export function parseDefault(definition: string, type: NeutralType): ColumnDefaultIR | undefined {

@@ -19,6 +19,11 @@ Open:
    `DEFAULT VALUES`; sqlmore emits `INSERT INTO t VALUES (DEFAULT)`, which
    only works for one column tables. Passing the `TableIR` as a second
    argument would allow `INSERT INTO t ("id") VALUES (DEFAULT)`.
+3. **User errors inside `$transaction(fn)` get wrapped.** `throw new Error('boom')`
+   in the callback comes back as `KastorError QUERY_FAILED: The database
+   rejected the query: boom` (seen on MySQL). It would be clearer to rethrow
+   errors that did not come from the driver unchanged.
+
 ## For migrate (`src/migrate/diff.ts`)
 
 - `sameFkInDialect` renders `addForeignKey` with `{ tables: [table] }` only.

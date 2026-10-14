@@ -88,7 +88,8 @@ export function defaultExpression(col: ColumnIR): string | undefined {
 export function checkExpression(col: ColumnIR): string | undefined {
   if (col.nativeType) return undefined;
   if (col.type === 'enum') return `${quoteIdent(col.name)} IN (${(col.enumValues ?? []).map(quoteString).join(', ')})`;
-  if (col.type === 'json') return `ISJSON(${quoteIdent(col.name)}) = 1`;
+  // ISJSON alone refuses scalars (a JSON string or number) before SQL Server 2022.
+  if (col.type === 'json') return `ISJSON(CONCAT('[', ${quoteIdent(col.name)}, ']')) = 1`;
   return undefined;
 }
 
