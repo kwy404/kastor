@@ -8,7 +8,7 @@ types is `src/core/ir.ts`; this file explains it.
 
 | Name | What it is |
 | --- | --- |
-| `kastor(config)` | Creates a client: `{ adapter, schema, relations?, log? }` |
+| `kastor(options)` | Creates a client: `{ adapter, schema, relations?, log? }` (type `KastorOptions`). `schema` may be a module namespace; non table exports are ignored |
 | `table(name, columns, options?)` | Declares a table. Options: `indexes(cols) => [...]`, `primaryKey(cols) => [cols.a, cols.b]` for composite keys, `softDelete: 'deletedAt'` |
 | `t` | Column builders: `id`, `bigId`, `uuid`, `string(len?)`, `text`, `int`, `bigint`, `float`, `decimal(p, s)`, `boolean`, `datetime`, `date`, `time`, `json<T>()`, `bytes`, `enum([...])` |
 | column modifiers | `nullable()`, `default(v)`, `defaultNow()`, `defaultRandom()`, `defaultSql('...')`, `unique()`, `primaryKey()`, `references(() => other.col, { onDelete, onUpdate })`, `map('db_name')`, `nativeType('varchar(64)')` |
@@ -18,9 +18,9 @@ types is `src/core/ir.ts`; this file explains it.
 | `sql` | Tagged template for raw SQL fragments (`sql.raw`, `sql.join`, `sql.ident`) usable in `where: { AND: [sql\`...\`] }` and `$sql` |
 | `KastorError`, `isKastorError(e)` | Error class with `code`, `message`, `hint`, `meta`, `cause` |
 | `toSchemaIR(schema)` | Converts the TypeScript schema object (`{ users, posts }`) to SchemaIR |
-| `defineConfig(config)` | Typed identity for `kastor.config.ts`: `{ schema, adapter, migrations?, seed? }` |
+| `defineConfig(config)` | Typed identity for `kastor.config.ts` (type `KastorConfigFile`, the same as `KastorConfig` of `kastor/migrate`) |
 | `defineSeed(fn)` / `factory(model, build)` | Seed and test factory helpers |
-| Types | `InferSelect<typeof users>`, `InferInsert<typeof users>`, `KastorClient<typeof schema, typeof relations>` |
+| Types | `InferSelect<typeof users>`, `InferInsert<typeof users>`, `KastorClient<typeof schema, ReturnType<typeof relations>>`, `Payload`, `WhereInput`, `CreateData`, `UpdateData`, `WithIdType` |
 
 `table()` objects expose their columns as properties (`users.email`), plus the
 metadata under `users.$table`.
@@ -84,6 +84,11 @@ export function postgres(pool: PgPoolLike): Adapter {
 }
 ```
 
+`features.idType` (`'number'` default, `'string'` for MongoDB ObjectId or
+UUID ids) makes the client accept strings for id like fields (autoincrement
+keys and integer columns with `.references()`); return `Adapter<E, 'string'>`
+so the client types them as strings too.
+
 `Executor.query(sql, params)` resolves `{ rows, rowsAffected?, insertId? }`.
 `Executor.transaction(fn, options?)` runs `fn(tx)` on one connection and sets
 `tx.inTransaction = true`; the client never nests transactions (a nested
@@ -105,13 +110,16 @@ SQL dialects should not compile queries themselves. They call
 | `quoteIdent(name)` | identifier quoting | `quoteDouble`, `quoteBacktick`, `quoteBracket` |
 | `placeholder(i)` | 1 based parameter marker | `$1`, `?`, `@p1`, `:1` |
 | `paginate(take, skip, ordered)` | `LIMIT/OFFSET`, `OFFSET FETCH`, `TOP` | `limitOffset`, `offsetFetch` |
-| `returning` | `'returning'`, `'output'` or `'none'` (re-select by key) | |
+| `returning` | `'returning'`, `'output'`, `'into'` (Oracle, with `outParam`) or `'none'` (re-select by key) | |
+| `selectColumn?` / `compareColumn?` | wrap columns read into rows / used in comparisons | |
 | `upsert` | `'onConflict'`, `'onDuplicateKey'`, `'merge'`, `'none'` | |
 | `json` | JSON aggregation flavor for includes, `null` for the IN-list fallback | `jsonPostgres`, `jsonMysql`, `jsonSqlite`, `jsonMssql`, `jsonOracle` |
 | `caseInsensitive` | `'ilike'` or `'lower'` | |
 | `textMatch?` | override `contains`, `startsWith`, `endsWith` (SQLite GLOB, MySQL binary collation) | |
 | `encode(value, column)` / `decode(value, column, source)` | value conversion | `defaultEncode`, `defaultDecode` |
-| `insertDefaults(table)` | insert with every column defaulted | |
+| `insertDefaults(quotedTable, table)` | insert with every column defaulted | |
+| `mutationSelfReference` | false when UPDATE/DELETE cannot use subqueries on the same table (MySQL) | |
+| `fromDual`, `mergeHint`, `mergeTerminator` | MERGE and constant SELECT details | |
 | `nullsOrder` | native `NULLS FIRST/LAST` or emulate with CASE | |
 | `lastInsertIdSql?` | statement that reads the last generated id when the driver does not report `insertId` | |
 | `maxParams`, `maxInList` | chunk sizes for IN lists | |
@@ -128,9 +136,21 @@ can use `sqlMigrationTable(hooks)` from the SQL base.
 
 ## Conformance suite
 
-`test/helpers/conformance.ts` exports `runConformance(name, makeDb)` and the
-fixture schema (`fixture.schema`, `fixture.relations`). `makeDb()` returns
-`{ adapter, reset(): Promise<void>, close(): Promise<void> }`; `reset` must
-(re)create the fixture tables, for example with
-`adapter.dialect.ddl({ kind: 'createTable', table }, schemaIR)` for each table
-of `toSchemaIR(fixture.schema)` after dropping them.
+`test/helpers/conformance.ts` exports `runConformance(name, makeDb, options)`,
+`resetWithDdl(adapter, schemaIR)`, `seed(db)` and `fixture` (tables in
+`test/helpers/fixture.ts`). `makeDb()` returns
+`{ adapter, reset?(schemaIR), close?() }`; without `reset` the suite drops and
+recreates the fixture tables with `dialect.ddl` (`dropTable`, `createEnum`,
+`createTable`). Options: `enabled` (pass `!!process.env.KASTOR_X_URL`) and
+`skip` (test titles or prefixes, give the reason at the call site).
+
+```ts
+runConformance('postgres', async () => {
+  const pool = new pg.Pool({ connectionString: process.env.KASTOR_PG_URL });
+  return { adapter: postgres(pool), close: () => pool.end() };
+}, { enabled: !!process.env.KASTOR_PG_URL });
+```
+
+`test/core-engine.test.ts` runs it on in-memory SQLite through the SQL base
+in three hook configurations (JSON includes with RETURNING, IN-list includes
+with re-select, emulated upsert), which is the reference behaviour.
