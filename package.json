@@ -1,6 +1,6 @@
 {
   "name": "kastor-orm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript ORM for almost every database: PostgreSQL, MySQL, MariaDB, SQLite, SQL Server, Oracle, CockroachDB and MongoDB. Schema in plain TypeScript with instant type inference, no generate step, no binary engine, nested includes in one query, automatic migrations and a local studio.",
   "keywords": [
     "orm",

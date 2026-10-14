@@ -6,6 +6,12 @@ All notable changes to kastor are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-14
+
+### Fixed
+
+- README badges: removed download and size badges that cannot render for a brand new package, and the install size link that pointed at the wrong package name.
+
 ## [0.1.0] - 2026-10-13
 
 Published on npm as `kastor-orm` (`npm i kastor-orm`, imports from `kastor-orm` and `kastor-orm/<adapter>`). The project, the repository and the CLI keep the name kastor: the package installs both a `kastor` and a `kastor-orm` command.
@@ -26,4 +32,5 @@ Published on npm as `kastor-orm` (`npm i kastor-orm`, imports from `kastor-orm` 
 - Docs site with a live playground, 14 guides in English and 4 in Portuguese, and Kas the beaver.
 
 [Unreleased]: https://github.com/kwy404/kastor/compare/v0.1.0...HEAD
+[0.1.1]: https://github.com/kwy404/kastor/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kwy404/kastor/releases/tag/v0.1.0

@@ -10,12 +10,9 @@
 **Schema em TypeScript puro. Tipos inferidos enquanto você digita. Sem etapa de geração, sem engine binária.**
 
 [![versão no npm](https://img.shields.io/npm/v/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
-[![downloads no npm por mês](https://img.shields.io/npm/dm/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
-[![downloads no npm no total](https://img.shields.io/npm/dt/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
 [![CI](https://github.com/kwy404/kastor/actions/workflows/ci.yml/badge.svg)](https://github.com/kwy404/kastor/actions/workflows/ci.yml)
 [![Licença: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kwy404/kastor/blob/main/LICENSE)
-[![Tamanho da instalação](https://packagephobia.com/badge?p=kastor)](https://packagephobia.com/result?p=kastor)
-[![Tamanho do bundle](https://img.shields.io/bundlephobia/minzip/kastor-orm)](https://bundlephobia.com/package/kastor-orm)
+[![tamanho do core: 22 kB gzip](https://img.shields.io/badge/core-22%20kB%20gzip-e2601e)](https://www.npmjs.com/package/kastor-orm)
 
 [English](https://github.com/kwy404/kastor/blob/main/README.md) | Português (Brasil)
 

@@ -10,12 +10,9 @@
 **Schema in plain TypeScript. Types inferred as you type. No generate step, no binary engine.**
 
 [![npm version](https://img.shields.io/npm/v/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
-[![npm downloads per month](https://img.shields.io/npm/dm/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
-[![npm downloads total](https://img.shields.io/npm/dt/kastor-orm.svg)](https://www.npmjs.com/package/kastor-orm)
 [![CI](https://github.com/kwy404/kastor/actions/workflows/ci.yml/badge.svg)](https://github.com/kwy404/kastor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kwy404/kastor/blob/main/LICENSE)
-[![Install size](https://packagephobia.com/badge?p=kastor)](https://packagephobia.com/result?p=kastor)
-[![Bundle size](https://img.shields.io/bundlephobia/minzip/kastor-orm)](https://bundlephobia.com/package/kastor-orm)
+[![core size: 22 kB gzip](https://img.shields.io/badge/core-22%20kB%20gzip-e2601e)](https://www.npmjs.com/package/kastor-orm)
 
 English | [Português (Brasil)](https://github.com/kwy404/kastor/blob/main/i18n/README.pt-BR.md)
 
