@@ -52,6 +52,8 @@ export function parseDefault(definition: string, type: NeutralType): ColumnDefau
   const lowered = s.toLowerCase().replace(/\s+/g, '');
   if (/^(sysutcdatetime|getutcdate|sysdatetime|getdate|current_timestamp|sysdatetimeoffset)(\(\))?$/.test(lowered)) return { kind: 'now' };
   if (/^(cast|convert)\((sysutcdatetime|getutcdate|sysdatetime|getdate)\(\)as(date|time(\(\d\))?)\)$/.test(lowered)) return { kind: 'now' };
+  // SQL Server stores CAST(x AS date) as CONVERT([date],x).
+  if (/^convert\(\[?(date|time)\]?(\(\d\))?,(sysutcdatetime|getutcdate|sysdatetime|getdate)\(\)\)$/.test(lowered)) return { kind: 'now' };
   if (/^(newid|newsequentialid)\(\)$/.test(lowered)) return { kind: 'random' };
   const quoted = /^N?'((?:[^']|'')*)'$/.exec(s);
   if (quoted) return valueDefault(quoted[1]!.replace(/''/g, "'"), type);

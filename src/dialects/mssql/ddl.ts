@@ -50,11 +50,14 @@ export function columnType(col: ColumnIR): string {
   }
 }
 
+const NUMERIC_TYPES = new Set(['int', 'bigint', 'float', 'decimal']);
+
 export function literal(value: unknown, col: ColumnIR): string {
   if (value === null || value === undefined) return 'NULL';
   if (col.type === 'boolean') return value === true || value === 1 || value === '1' || value === 'true' ? '1' : '0';
   if (col.type === 'json') return quoteString(typeof value === 'string' ? value : JSON.stringify(value));
   if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (NUMERIC_TYPES.has(col.type) && typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) return value;
   if (typeof value === 'boolean') return value ? '1' : '0';
   if (value instanceof Date) return quoteString(value.toISOString().replace('Z', ''));
   if (value instanceof Uint8Array) return '0x' + Buffer.from(value).toString('hex');
