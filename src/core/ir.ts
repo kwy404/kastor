@@ -504,7 +504,16 @@ export interface DialectFeatures {
   transactionalDdl: boolean;
   /** Accepts raw SQL through `$sql`. */
   rawSql: boolean;
+  /**
+   * How the database hands out generated keys. `number` (default) for SQL
+   * identity columns. `string` when keys are strings, such as MongoDB
+   * ObjectIds or UUIDs: the client then accepts and types `t.id()` /
+   * `t.bigId()` columns, and integer columns with `.references()`, as strings.
+   */
+  idType?: IdType;
 }
+
+export type IdType = 'number' | 'string';
 
 /** A compiled statement, for logging and `toSQL()`. */
 export interface CompiledQuery {
@@ -541,7 +550,13 @@ export interface Dialect<E = Executor> {
 }
 
 /** What an adapter factory returns: `postgres(pool)` gives `{ dialect, executor }`. */
-export interface Adapter<E = Executor> {
+export interface Adapter<E = Executor, Ids extends IdType = 'number'> {
   dialect: Dialect<E>;
   executor: E;
+  /**
+   * Type level marker for `features.idType`, never set at runtime. A dialect
+   * whose keys are strings returns `Adapter<MyExecutor, 'string'>` so the
+   * client types id columns as strings.
+   */
+  readonly idType?: Ids;
 }

@@ -51,3 +51,27 @@ dialect; each item says how it is worked around today.
   `migration.sql` writer works as is.
 - `features.transactionalDdl` is false: collection and index commands cannot
   run inside a transaction.
+
+## Resolved
+
+1. **String ids for `t.id()` (core).** Set `features.idType: 'string'` on the
+   MongoDB dialect for the `objectId` and `uuid` id modes (leave it out, or set
+   `'number'`, for `ids: 'int'`). `DialectFeatures.idType?: 'number' | 'string'`
+   and `IdType` live in `src/core/ir.ts`.
+   - Runtime: when `idType` is `'string'`, the client accepts a non empty
+     string for every id like field: `int`/`bigint` columns that are an
+     autoincrement primary key (`t.id()`, `t.bigId()`) or carry `.references()`
+     (`isIdLike` in `src/core/model.ts`, flag `FieldMeta.stringId`). Other
+     integer columns still reject strings. SQL dialects never set it, so their
+     behaviour is unchanged. Covered by `test/core-ids.test.ts`.
+   - Types: return `Adapter<MongoExecutor, 'string'>` from `mongodb(db)` in
+     the ObjectId and UUID modes (`Adapter` got a second type parameter,
+     `readonly idType?: Ids`, never set at runtime). `kastor()` reads it and
+     types those id like columns as `string` in results, filters and create /
+     update data (`WithIdType` in `src/core/types.ts`). With overloads, for
+     example `mongodb(db, { ids: 'int' }): Adapter<MongoExecutor>` and
+     `mongodb(db, options?): Adapter<MongoExecutor, 'string'>`, both modes get
+     the right types.
+2. **`toSQL` conformance test.** The conformance test now checks
+   `/"aggregate"/` when `db.$dialect.name === 'mongodb'` and SQL text otherwise,
+   so the skip can go.

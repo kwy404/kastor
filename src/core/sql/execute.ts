@@ -356,10 +356,15 @@ async function createMany(c: SqlCompiler, exec: Executor, query: CreateManyQuery
           }
         }
         if (returning) {
+          if (query.skipDuplicates) {
+            const sets = uniqueSetsIn(tbl, row);
+            const clash = sets.length ? await selectRows(c, exec, tbl.name, pkSelect(sets[0]!), { kind: 'or', items: sets.map((set) => keyWhere(set, row)) }, 1) : [];
+            if (clash.length > 0) continue;
+          }
           out.push(await create(c, exec, { kind: 'create', table: query.table, data: row, returning }));
           count++;
         } else {
-          const res = await run(c, exec, c.compileInsert(query.table, cols, [row]));
+          const res = await run(c, exec, c.compileInsert(query.table, cols, [row], query.skipDuplicates && nativeSkip ? { ignoreDuplicates: nativeSkip } : {}));
           count += res.rowsAffected ?? 1;
         }
       }

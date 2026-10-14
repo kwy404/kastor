@@ -14,6 +14,10 @@ export interface FieldMeta {
   column: string;
   config: Readonly<ColumnConfig>;
   ir: ColumnIR;
+  /** Generated key or integer foreign key: a string when the dialect uses string ids. */
+  idLike: boolean;
+  /** The dialect uses string ids and this field is id like: strings are accepted. */
+  stringId: boolean;
 }
 
 export interface RelationMeta {
@@ -61,7 +65,18 @@ export interface Models {
 
 export type RelationsInput = Record<string, Record<string, AnyRelation> | undefined>;
 
-export function buildModels(schema: Record<string, unknown>, relationsFn?: (tables: any) => RelationsInput): Models {
+export interface BuildOptions {
+  /** From `dialect.features.idType`. */
+  idType?: 'number' | 'string';
+}
+
+/** Integer columns that hold generated keys: autoincrement primary keys and integer foreign keys. */
+export function isIdLike(config: Readonly<ColumnConfig>): boolean {
+  if (config.type !== 'int' && config.type !== 'bigint') return false;
+  return (config.primaryKey && config.default?.kind === 'autoincrement') || config.references !== undefined;
+}
+
+export function buildModels(schema: Record<string, unknown>, relationsFn?: (tables: any) => RelationsInput, options: BuildOptions = {}): Models {
   const tables = tablesOf(schema);
   if (tables.length === 0) {
     throw errors.schema('The schema has no tables.', 'Pass your tables: kastor({ schema: { users, posts }, ... }).');
@@ -80,7 +95,8 @@ export function buildModels(schema: Record<string, unknown>, relationsFn?: (tabl
     const byColumn = new Map<string, FieldMeta>();
     for (const [fieldKey, column] of Object.entries(tbl.$table.columns) as [string, AnyColumn][]) {
       const ir = tableIR.columns.find((c) => c.name === column.name)!;
-      const f: FieldMeta = { key: fieldKey, column: column.name, config: column.config, ir };
+      const idLike = isIdLike(column.config);
+      const f: FieldMeta = { key: fieldKey, column: column.name, config: column.config, ir, idLike, stringId: idLike && options.idType === 'string' };
       fields.set(fieldKey, f);
       byColumn.set(column.name, f);
     }

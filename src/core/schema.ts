@@ -298,9 +298,9 @@ export type BindColumns<Name extends string, C extends ColumnMap> = {
 
 export interface TableOptions<C extends ColumnMap = ColumnMap> {
   /** Secondary indexes: `indexes: (p) => [index(p.authorId), uniqueIndex(p.slug, p.siteId)]`. */
-  indexes?: (columns: C) => IndexBuilder[];
+  indexes?(columns: C): IndexBuilder[];
   /** Composite primary key: `primaryKey: (p) => [p.postId, p.tagId]`. */
-  primaryKey?: (columns: C) => AnyColumn[];
+  primaryKey?(columns: C): AnyColumn[];
   /**
    * Turns deletes into updates that set this nullable datetime column. Reads
    * skip deleted rows unless `withDeleted: true`.
@@ -311,7 +311,7 @@ export interface TableOptions<C extends ColumnMap = ColumnMap> {
 export interface TableMeta<Name extends string = string, C extends ColumnMap = ColumnMap> {
   readonly name: Name;
   readonly columns: C;
-  readonly options: TableOptions<C>;
+  readonly options: TableOptions<any>;
 }
 
 export type Table<Name extends string = string, C extends ColumnMap = ColumnMap> = {

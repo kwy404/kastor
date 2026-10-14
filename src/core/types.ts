@@ -6,7 +6,7 @@
  * `select` picks fields, `include` adds relations, nullable columns read as
  * `T | null`, create inputs require only columns without a default.
  */
-import type { AnyRelation, AnyTable, Column, ColumnState, Many, One } from './schema';
+import type { AnyRelation, AnyTable, Column, ColumnMap, ColumnState, Many, One, Table, TableMeta } from './schema';
 import type { SqlFragment } from './raw';
 
 /* ------------------------------------------------------------------------ */
@@ -19,6 +19,33 @@ type OneOrMany<T> = T | readonly T[];
 type Falsy = false | undefined | null;
 
 export type SchemaShape = Record<string, AnyTable>;
+
+/* ------------------------------------------------------------------------ */
+/* String ids                                                                 */
+/* ------------------------------------------------------------------------ */
+
+type IsIdState<St extends ColumnState> = St['type'] extends 'int' | 'bigint'
+  ? St['primaryKey'] extends true
+    ? St['hasDefault'] extends true
+      ? true
+      : false
+    : St['references'] extends ''
+      ? false
+      : true
+  : false;
+
+type StringIdColumns<C> = {
+  [K in keyof C]: C[K] extends Column<infer St> ? (IsIdState<St> extends true ? Column<Omit<St, 'data'> & { data: string }> : C[K]) : C[K];
+};
+
+type StringIdTable<T> = T extends { $table: TableMeta<infer N, infer C> } ? Table<N, StringIdColumns<C> & ColumnMap> : T;
+
+/**
+ * The schema as the client sees it for a dialect id type: with `'string'`,
+ * auto increment keys and integer foreign keys read and write as strings
+ * (MongoDB ObjectIds, UUID ids).
+ */
+export type WithIdType<S extends SchemaShape, Ids> = Ids extends 'string' ? { [K in keyof S]: StringIdTable<S[K]> } extends infer X extends SchemaShape ? X : S : S;
 export type RelationsShape<S extends SchemaShape = SchemaShape> = { [K in keyof S]?: Record<string, AnyRelation> };
 
 /* ------------------------------------------------------------------------ */
@@ -301,8 +328,10 @@ type OwnedChoice<S extends SchemaShape, R, K extends keyof S, N extends string> 
 
 type OwnedChoices<S extends SchemaShape, R, K extends keyof S, Parent extends string> = [ActiveOwnedKeys<S, R, K, Parent>] extends [never]
   ? {}
-  : UnionToIntersection<{ [N in ActiveOwnedKeys<S, R, K, Parent>]: [OwnedChoice<S, R, K, N & string>] }[ActiveOwnedKeys<S, R, K, Parent>]> extends [infer X]
-    ? X
+  : UnionToIntersection<{ [N in ActiveOwnedKeys<S, R, K, Parent>]: [OwnedChoice<S, R, K, N & string>] }[ActiveOwnedKeys<S, R, K, Parent>]> extends infer I
+    ? I extends [unknown]
+      ? I[0]
+      : {}
     : {};
 
 type OtherRelationCreates<S extends SchemaShape, R, K extends keyof S> = {
