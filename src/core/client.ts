@@ -48,7 +48,7 @@ import type {
   Page,
   Payload,
   SchemaShape,
-  Strict,
+  Checked,
   WithIdType,
   UpdateArgs,
   UpdateManyArgs,
@@ -101,43 +101,43 @@ export interface KastorOptions<S, R, Ids extends IdType = 'number'> {
 
 export interface ModelClient<S extends SchemaShape, R, K extends keyof S> {
   /** Rows matching `where`, shaped by `select` / `include`. */
-  findMany<A extends FindManyArgs<S, R, K> = {}>(args?: A & Strict<A, FindManyArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>[]>;
+  findMany<A extends FindManyArgs<S, R, K> = {}>(args?: A & Checked<A, FindManyArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>[]>;
   /** First matching row or null. */
-  findFirst<A extends FindFirstArgs<S, R, K> = {}>(args?: A & Strict<A, FindFirstArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A> | null>;
+  findFirst<A extends FindFirstArgs<S, R, K> = {}>(args?: A & Checked<A, FindFirstArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A> | null>;
   /** First matching row; throws KastorError NOT_FOUND when there is none. */
-  findFirstOrThrow<A extends FindFirstArgs<S, R, K> = {}>(args?: A & Strict<A, FindFirstArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  findFirstOrThrow<A extends FindFirstArgs<S, R, K> = {}>(args?: A & Checked<A, FindFirstArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** The row with this unique value (primary key or `.unique()` column) or null. */
-  findUnique<A extends FindUniqueArgs<S, R, K>>(args: A & Strict<A, FindUniqueArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A> | null>;
+  findUnique<A extends FindUniqueArgs<S, R, K>>(args: A & Checked<A, FindUniqueArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A> | null>;
   /** Like findUnique, throws KastorError NOT_FOUND when there is none. */
-  findUniqueOrThrow<A extends FindUniqueArgs<S, R, K>>(args: A & Strict<A, FindUniqueArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  findUniqueOrThrow<A extends FindUniqueArgs<S, R, K>>(args: A & Checked<A, FindUniqueArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Cursor pagination with opaque cursors: `{ items, pageInfo }`. */
-  findPage<A extends FindPageArgs<S, R, K>>(args: A & Strict<A, FindPageArgs<S, R, K>>): KastorQuery<Page<Payload<S, R, K, A>>>;
+  findPage<A extends FindPageArgs<S, R, K>>(args: A & Checked<A, FindPageArgs<S, R, K>>): KastorQuery<Page<Payload<S, R, K, A>>>;
   /** Creates one row, with nested writes through relations. */
-  create<A extends CreateArgs<S, R, K>>(args: A & Strict<A, CreateArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  create<A extends CreateArgs<S, R, K>>(args: A & Checked<A, CreateArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Inserts many rows in as few statements as possible. */
   createMany(args: CreateManyArgs<S, K>): KastorQuery<{ count: number }>;
   /** Inserts many rows and returns them. */
-  createManyAndReturn<A extends CreateManyAndReturnArgs<S, K>>(args: A): KastorQuery<Payload<S, R, K, A>[]>;
+  createManyAndReturn<A extends CreateManyAndReturnArgs<S, K>>(args: A & Checked<A, CreateManyAndReturnArgs<S, K>>): KastorQuery<Payload<S, R, K, A>[]>;
   /** Updates the row with this unique value; throws NOT_FOUND when there is none. */
-  update<A extends UpdateArgs<S, R, K>>(args: A & Strict<A, UpdateArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  update<A extends UpdateArgs<S, R, K>>(args: A & Checked<A, UpdateArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Updates every matching row. */
   updateMany(args: UpdateManyArgs<S, R, K>): KastorQuery<{ count: number }>;
   /** Creates the row or updates it when the unique value exists. */
-  upsert<A extends UpsertArgs<S, R, K>>(args: A & Strict<A, UpsertArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  upsert<A extends UpsertArgs<S, R, K>>(args: A & Checked<A, UpsertArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Deletes the row with this unique value (soft delete tables: marks it deleted). */
-  delete<A extends DeleteArgs<S, R, K>>(args: A & Strict<A, DeleteArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  delete<A extends DeleteArgs<S, R, K>>(args: A & Checked<A, DeleteArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Deletes every matching row (soft delete tables: marks them deleted). */
   deleteMany(args?: DeleteManyArgs<S, R, K>): KastorQuery<{ count: number }>;
   /** Number of matching rows, or per field counts with `select`. */
-  count<A extends CountArgs<S, R, K> = {}>(args?: A): KastorQuery<CountResult<A>>;
+  count<A extends CountArgs<S, R, K> = {}>(args?: A & Checked<A, CountArgs<S, R, K>>): KastorQuery<CountResult<A>>;
   /** `_count`, `_sum`, `_avg`, `_min`, `_max` over matching rows. */
-  aggregate<A extends AggregateArgs<S, R, K>>(args: A): KastorQuery<AggregateResult<S, K, A>>;
+  aggregate<A extends AggregateArgs<S, R, K>>(args: A & Checked<A, AggregateArgs<S, R, K>>): KastorQuery<AggregateResult<S, K, A>>;
   /** Aggregates per group of `by` fields. */
-  groupBy<A extends GroupByArgs<S, R, K>>(args: A): KastorQuery<GroupByResult<S, K, A>[]>;
+  groupBy<A extends GroupByArgs<S, R, K>>(args: A & Checked<A, GroupByArgs<S, R, K>>): KastorQuery<GroupByResult<S, K, A>[]>;
   /** Soft delete tables: brings back deleted rows. */
   restore(args?: { where?: WhereInput<S, R, K> }): KastorQuery<{ count: number }>;
   /** Soft delete tables: deletes the row for real. */
-  hardDelete<A extends DeleteArgs<S, R, K>>(args: A & Strict<A, DeleteArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
+  hardDelete<A extends DeleteArgs<S, R, K>>(args: A & Checked<A, DeleteArgs<S, R, K>>): KastorQuery<Payload<S, R, K, A>>;
   /** Soft delete tables: deletes matching rows for real. */
   hardDeleteMany(args?: DeleteManyArgs<S, R, K>): KastorQuery<{ count: number }>;
 }

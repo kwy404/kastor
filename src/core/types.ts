@@ -595,16 +595,56 @@ export type GroupByResult<S extends SchemaShape, K extends keyof S, A> = Simplif
 
 type KeysOfUnion<T> = T extends unknown ? keyof T : never;
 
+type Leaf = string | number | bigint | boolean | symbol | null | undefined | Date | Uint8Array | ((...args: any[]) => unknown);
+type ValueAt<S, K> = S extends unknown ? (K extends keyof S ? S[K] : never) : never;
+type ElementOf<S> = S extends readonly (infer E)[] ? E : never;
+type ObjectPart<S> = Exclude<S, Leaf | readonly unknown[]>;
+
 /**
- * Keeps inference on the literal argument while rejecting unknown top level
- * keys and unknown keys in `select` / `include` with a compile error.
+ * The argument `A` with every key that `Shape` does not know turned into
+ * `never`, recursively through objects and arrays. Used as `A & Exact<A, Shape>`
+ * so inference stays on `A` and a misspelled key fails right where it is
+ * written ("Type 'string' is not assignable to type 'never'"). Positions
+ * where the shape also accepts a plain value (field filters, json values)
+ * stop the recursion: they are checked by the normal assignability rules,
+ * which keeps type checking fast.
  */
-export type Strict<A, Shape> = {
-  [P in keyof A]: P extends KeysOfUnion<Shape>
-    ? P extends 'select' | 'include'
-      ? StrictKeys<A[P], Extract<Shape, { [Q in P]?: unknown }>[P & keyof Extract<Shape, { [Q in P]?: unknown }>]>
-      : A[P]
-    : never;
+export type Exact<A, Shape, D extends unknown[] = []> = A extends Leaf
+  ? A
+  : D['length'] extends ExactDepth
+    ? A
+    : unknown extends Shape
+      ? A
+      : [Extract<NonNullable<Shape>, boolean>] extends [never]
+        ? ExactInner<A, Shape, D>
+        : // `true | { ...args }` (select and include of a relation): check two more levels only, to keep checking fast
+          ExactInner<A, Shape, D['length'] extends 0 | 1 | 2 ? [0, 0, 0] : [...D, 0]>;
+
+type ExactInner<A, Shape, D extends unknown[]> = A extends readonly unknown[]
+  ? ElementOf<Shape> extends infer E
+    ? [E] extends [never]
+      ? A
+      : { [I in keyof A]: A[I] extends Leaf ? A[I] : Exact<A[I], E, D> }
+    : A
+  : ObjectPart<Shape> extends infer O
+    ? [O] extends [never]
+      ? A
+      : ExactObject<A, O, KeysOfUnion<O>, D>
+    : A;
+
+/** Levels of nested objects checked: arguments, where / data / select, fields, relation filters. */
+type ExactDepth = 5;
+
+type ExactObject<A, O, Keys, D extends unknown[]> = {
+  [K in keyof A]: K extends Keys ? (A[K] extends Leaf ? A[K] : Exact<A[K], ValueAt<O, K>, [...D, 0]>) : never;
 };
 
-type StrictKeys<A, Shape> = A extends object ? { [P in keyof A]: P extends KeysOfUnion<NonNullable<Shape>> ? A[P] : never } : A;
+/** Exactness for method arguments; see `Exact`. */
+export type Strict<A, Shape> = Exact<A, Shape>;
+
+/**
+ * `Exact` wrapped in a conditional so inference ignores it: method parameters
+ * are written `A & Checked<A, Shape>`, inference reads `A` from the argument,
+ * then the argument is checked against the exact form.
+ */
+export type Checked<A, Shape> = A extends unknown ? Exact<A, Shape> : never;

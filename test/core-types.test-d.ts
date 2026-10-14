@@ -170,6 +170,48 @@ describe('inputs', () => {
     db.users.update({ where: { id: 1 }, data: { email: { increment: 1 } } });
   });
 
+  it('rejects misspelled keys next to valid ones, at any depth', async () => {
+    // @ts-expect-error emial is not a field
+    db.users.findMany({ where: { email: 'x', emial: 'y' } });
+    // @ts-expect-error unknown filter operator next to a valid one
+    db.users.findMany({ where: { email: { startsWith: 'a', endWith: 'b' } } });
+    // @ts-expect-error misspelled field inside a relation filter
+    db.users.findMany({ where: { posts: { some: { published: true, titel: 'x' } } } });
+    // @ts-expect-error misspelled field inside OR
+    db.users.findMany({ where: { OR: [{ email: 'a' }, { emial: 'b' }] } });
+    // @ts-expect-error misspelled field in a nested select
+    db.users.findMany({ select: { id: true, posts: { select: { title: true, titel: true } } } });
+    // @ts-expect-error misspelled relation in include
+    db.users.findMany({ include: { posts: true, profil: true } });
+    // @ts-expect-error misspelled field in orderBy
+    db.users.findMany({ orderBy: { email: 'asc', nmae: 'desc' } });
+    // @ts-expect-error misspelled field in an orderBy list
+    db.users.findMany({ orderBy: [{ nmae: 'desc' }] });
+    // @ts-expect-error misspelled field in groupBy
+    db.posts.groupBy({ by: ['authorId'], _sum: { views: true, veiws: true } });
+    // @ts-expect-error misspelled field in create data
+    db.users.create({ data: { email: 'a@b.c', nmae: 'x' } });
+    // @ts-expect-error misspelled field in a nested create
+    db.users.create({ data: { email: 'a@b.c', posts: { create: { title: 'x', titel: 'y' } } } });
+    // @ts-expect-error misspelled field in update data
+    db.users.update({ where: { id: 1 }, data: { name: 'x', agee: 3 } });
+    // @ts-expect-error misspelled number operation
+    db.users.update({ where: { id: 1 }, data: { age: { incremnt: 1 } } });
+    // @ts-expect-error misspelled field in createMany data
+    db.tags.createMany({ data: [{ name: 'a' }, { nam: 'b' }] });
+    // @ts-expect-error misspelled field in upsert update
+    db.users.upsert({ where: { email: 'a@b.c' }, create: { email: 'a@b.c' }, update: { nmae: 'x' } });
+    // valid deep arguments still infer their result
+    const ok = await db.users.findMany({
+      where: { email: 'x', posts: { some: { title: { contains: 'k', mode: 'insensitive' } } }, AND: [{ age: { gte: 1 } }] },
+      include: { posts: { where: { published: true }, orderBy: [{ views: 'desc' }], take: 2, include: { tags: true } } },
+    });
+    expectTypeOf(ok[0]!.email).toEqualTypeOf<string>();
+    expectTypeOf(ok[0]!.posts[0]!.updatedAt).toEqualTypeOf<Date>();
+    expectTypeOf(ok[0]!.posts[0]!.tags).toEqualTypeOf<{ id: number; name: string }[]>();
+    db.profiles.create({ data: { userId: 1, bio: 'b', settings: { theme: 'x', tags: ['a'] } } });
+  });
+
   it('relation filters take some / every / none or is / isNot', () => {
     db.users.findMany({ where: { posts: { some: { published: true } }, profile: { is: { bio: 'x' } } } });
     db.posts.findMany({ where: { author: { email: { endsWith: '@acme.com' } } } });

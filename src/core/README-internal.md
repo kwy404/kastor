@@ -202,3 +202,17 @@ db.users.findMany({ include: { posts: true } }).toSQL(); // [{ sql, params }]
   when left out, and sets it on update, upsert update, updateMany, nested
   updates, connect / disconnect of children, soft delete and restore, unless
   the data sets the column itself. An update with no column changes leaves it.
+
+## Exact argument types
+
+Method parameters are typed `A & Checked<A, Shape>` (`src/core/types.ts`):
+`A` is inferred from the call so results follow `select` / `include`, and
+`Checked` maps every key `Shape` does not know to `never`, so a misspelled key
+fails where it is written ("Type 'string' is not assignable to type 'never'").
+It recurses through where trees (fields, operators, relation filters,
+AND / OR / NOT), data (including nested writes), orderBy, select, include,
+count, aggregate and groupBy arguments. Inside the arguments of an included or
+selected relation (`posts: { where, select, ... }`) it checks two more levels
+to keep checking fast; deeper misspellings there fall back to the usual
+assignability rules. `Checked` is a deferred conditional, so inference never
+reads it (works on TypeScript before 5.4, no `NoInfer` needed).

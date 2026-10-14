@@ -114,3 +114,21 @@ The conformance fixture now has `tag_votes` (composite key to `post_tags`),
 Also fixed on the way: a native upsert on a table whose key has a JS side
 default (`t.uuid().defaultRandom()`) now always uses the `where` values as the
 conflict key instead of a freshly generated one.
+
+## Exact argument types (misspelled keys fail to compile)
+
+Done. `where: { emial: 'x' }`, a misspelled filter operator, field, relation,
+nested write field, orderBy, select, include, count, aggregate or groupBy key
+is now a type error at the misspelled key. Type tests:
+`test/core-types.test-d.ts` ("rejects misspelled keys next to valid ones").
+Cost on the conformance file (`tsc --extendedDiagnostics`, same machine,
+noisy because other suites were running): instantiations 181k to 522k, check
+time about 4.5 s to 4.7 to 7.5 s. A normal application file has far fewer
+calls than that file.
+
+**For brand (docs):** the stricter types found a real bug in
+`scripts/site/guides/pt-br/migrar-do-prisma.html`, sample
+`src/posts/service.ts`: `orderBy: { createdAt: 'desc' }` on `post`, whose
+schema in that guide has no `createdAt` column (only `user` has one). Add
+`createdAt: t.datetime().defaultNow()` to `post` in the guide's schema, or
+order by another column. `test/site-samples.test.ts` reports it.
