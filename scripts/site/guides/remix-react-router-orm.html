@@ -1,0 +1,185 @@
+<!--meta
+{
+  "slug": "remix-react-router-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Remix and React Router ORM: kastor in loaders and actions | kastor",
+  "description": "Use kastor with React Router 7 framework mode and Remix: a .server module, typed loaders and actions, redirects, hot reload safe pooling, env vars and migrations on deploy.",
+  "h1": "kastor with Remix and React Router",
+  "crumb": "Remix and React Router",
+  "lead": "Remix became React Router 7's framework mode, and the data model stayed the same: loaders read, actions write, both run on the server. kastor slots into a <code>.server.ts</code> module, so the bundler keeps it out of the browser, and loader data is typed from your schema.",
+  "readTime": "10 min read",
+  "keywords": ["Remix ORM", "React Router ORM", "React Router 7 database", "Remix loader database", "Remix action database", "React Router framework mode TypeScript ORM"],
+  "howto": {
+    "name": "Set up kastor in a React Router or Remix app",
+    "totalTime": "PT20M",
+    "tools": ["React Router 7 or Remix 2", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres with the schema in app/db/schema.ts.", "anchor": "structure" },
+      { "name": "Create app/db.server.ts", "text": "Create the client in a .server module and reuse it through globalThis in development.", "anchor": "client" },
+      { "name": "Read in loaders", "text": "Return kastor results from loaders and read them with useLoaderData.", "anchor": "loaders" },
+      { "name": "Write in actions", "text": "Parse formData in actions, write with kastor and redirect or return errors.", "anchor": "actions" },
+      { "name": "Migrate on deploy", "text": "Run npx kastor migrate deploy before react-router-serve starts the new build.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "How do I keep the database client out of the browser bundle?", "a": "Name the module <code>db.server.ts</code> (or put it in a <code>.server</code> folder). React Router and Remix refuse to include <code>.server</code> modules in client code, and they strip loaders and actions from the client build." },
+    { "q": "Is this guide for Remix or React Router?", "a": "Both. Remix 2 apps and React Router 7 framework mode apps use the same loader and action model. Imports come from <code>react-router</code> in v7 and from <code>@remix-run/node</code> and <code>@remix-run/react</code> in Remix 2." },
+    { "q": "Can I return Date values from a loader?", "a": "With single fetch (the default in React Router 7), loader data is serialized with turbo-stream, which keeps <code>Date</code> and <code>bigint</code>. Older Remix setups that use <code>json()</code> turn dates into strings." },
+    { "q": "Does it run on Cloudflare?", "a": "Yes. With the Cloudflare template, the D1 binding arrives on <code>context.cloudflare.env.DB</code> in loaders and actions; create the client with <code>d1()</code> per request." }
+  ],
+  "related": ["nextjs-app-router-orm", "sveltekit-orm", "express-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>A <strong>React Router</strong> or <strong>Remix</strong> route module exports a loader, an action and a component from one file. The loader and action run on the server; the component renders on both sides. Database access goes in the first two, through a client module the bundler is not allowed to ship:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+app/
+  db/schema.ts            tables and relations
+  db.server.ts            the client (".server" keeps it off the client)
+  routes/posts.tsx        loader, action and component
+  routes/posts.$id.tsx    one post
+  routes.ts               route config (React Router 7)
+kastor.config.ts          schema: './app/db/schema.ts'
+kastor/migrations/
+.env                      DATABASE_URL
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+</section>
+<section id="client"><h2>The client in app/db.server.ts</h2>
+<p>The dev server reloads server modules on change. Keep the client on <code>globalThis</code> so every reload reuses one pool.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/db.server.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './db/schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+</section>
+<section id="loaders"><h2>Reading in loaders</h2>
+<p>A loader returns data; the component reads it with <code>useLoaderData</code>, typed from the loader's return value. In React Router 7 you can also use the generated <code>Route.LoaderArgs</code> types; the plain <code>LoaderFunctionArgs</code> type below works in both versions.</p>
+<pre data-kind="editor" data-lang="tsx" data-title="app/routes/posts.tsx">
+import { Form, redirect, useActionData, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router'
+import { isKastorError } from 'kastor'
+import { db } from '../db.server'
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const q = new URL(request.url).searchParams.get('q') ?? ''
+  const posts = await db.posts.findMany({
+    where: { published: true, title: { contains: q, mode: 'insensitive' } },
+    include: { author: { select: { name: true } }, _count: { select: { tags: true } } },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+  return { posts, q }
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const form = await request.formData()
+  const title = String(form.get('title') ?? '').trim()
+  if (!title) return { error: 'A title is required.' }
+  try {
+    const post = await db.posts.create({ data: { title, authorId: Number(form.get('authorId')) } })
+    return redirect(`/posts/${post.id}`)
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'FOREIGN_KEY_VIOLATION') return { error: 'Unknown author.' }
+    throw e
+  }
+}
+
+export default function Posts() {
+  const { posts, q } = useLoaderData&lt;typeof loader&gt;()
+  const result = useActionData&lt;typeof action&gt;()
+  return (
+    &lt;main&gt;
+      &lt;Form method="get"&gt;&lt;input name="q" defaultValue={q} /&gt;&lt;/Form&gt;
+      &lt;ul&gt;
+        {posts.map((p) =&gt; (
+          &lt;li key={p.id}&gt;{p.title} by {p.author.name} ({p._count.tags} tags)&lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+      &lt;Form method="post"&gt;
+        &lt;input name="title" /&gt;
+        &lt;input name="authorId" type="hidden" value="1" /&gt;
+        &lt;button&gt;Create&lt;/button&gt;
+        {result?.error ? &lt;p&gt;{result.error}&lt;/p&gt; : null}
+      &lt;/Form&gt;
+    &lt;/main&gt;
+  )
+}
+</pre>
+</section>
+<section id="actions"><h2>Actions, params and 404s</h2>
+<p>Actions receive the submitted form; after a successful write, return a redirect so a refresh does not submit twice. For a detail page, read the param, and throw a <code>Response</code> with status 404 when the row is missing: the nearest error boundary renders it.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/routes/posts.$id.tsx">
+import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router'
+import { db } from '../db.server'
+
+export async function loader({ params }: LoaderFunctionArgs) {
+  const post = await db.posts.findUnique({
+    where: { id: Number(params.id) },
+    include: { author: true, tags: true },
+  })
+  if (!post) throw new Response('Not found', { status: 404 })
+  return { post }
+}
+
+export async function action({ params, request }: ActionFunctionArgs) {
+  const intent = (await request.formData()).get('intent')
+  const id = Number(params.id)
+  if (intent === 'publish') return db.posts.update({ where: { id }, data: { published: true } })
+  if (intent === 'delete') return db.posts.delete({ where: { id } })
+  throw new Response('Unknown intent', { status: 400 })
+}
+</pre>
+<p>Multi step writes belong in one transaction. Inside an action, <code>db.$transaction(async (tx) =&gt; ...)</code> commits when the callback resolves and rolls back if it throws, including when you throw a redirect or a <code>Response</code>.</p>
+</section>
+<section id="deploy"><h2>Environment variables and migrations on deploy</h2>
+<p><code>react-router build</code> produces <code>build/server</code> and <code>build/client</code>, and <code>react-router-serve</code> runs the server build as one long lived Node process, so one pool per process is the right shape. Read secrets from <code>process.env</code> (the server never inlines them into the client build) and run migrations before the new server starts:</p>
+<pre data-kind="editor" data-lang="json" data-title="package.json">
+{
+  "scripts": {
+    "build": "react-router build",
+    "start": "kastor migrate deploy &amp;&amp; react-router-serve ./build/server/index.js",
+    "typecheck": "react-router typegen &amp;&amp; tsc"
+  }
+}
+</pre>
+<p>On Vercel or Netlify, loaders run as functions: keep the pool small, use a pooled URL, and run <code>npx kastor migrate deploy</code> in CI with the direct URL. On Cloudflare, read <code>context.cloudflare.env.DB</code> in each loader and action and create the client with <code>d1()</code>.</p>
+</section>
+<section id="patterns"><h2>Patterns that keep loaders fast</h2>
+<p>Every navigation runs the loaders of the matched routes in parallel, and every action triggers revalidation of the loaders on the page. That makes loader cost visible quickly. Three habits help. Select only what the component renders, using <code>select</code> on the root and on includes. Load nested data with <code>include</code> in the same call instead of awaiting several queries one after another, since kastor builds one statement per call. And move independent reads into the same <code>Promise.all</code>, or into the array form of <code>$transaction</code> when they must see the same snapshot.</p>
+<p>For forms that write several rows, keep the writes in one <code>db.$transaction(async (tx) =&gt; ...)</code> inside the action, and return or redirect after it resolves. If validation fails, return the errors before opening the transaction so no connection is held while the user fixes the form.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The client lives in a <code>.server</code> module.</li>
+<li>Loaders select only the fields the component renders.</li>
+<li>Actions redirect after successful writes.</li>
+<li>Function deployments use a pooled URL and a small pool.</li>
+<li>The start script or CI applies migrations before the new server takes traffic.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Importing db in components.</strong> Only loaders, actions and other <code>.server</code> modules may import <code>db.server.ts</code>. A component import breaks the build, which is the point.</li>
+<li><strong>clientLoader.</strong> <code>clientLoader</code> runs in the browser and cannot query the database; call your server loader or an API route instead.</li>
+<li><strong>Revalidation.</strong> After an action, React Router revalidates every loader on the page. Keep loaders cheap with <code>select</code> and <code>take</code>, and use <code>shouldRevalidate</code> where a loader does not depend on the action.</li>
+<li><strong>Bigint keys.</strong> turbo-stream keeps <code>bigint</code>, but anything you send through <code>Response.json</code> does not; convert with <code>String(id)</code>.</li>
+</ul>
+</section>

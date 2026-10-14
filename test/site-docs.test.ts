@@ -45,14 +45,54 @@ function target(page: { rel: string }, href: string): { file: string; hash: stri
 
 describe('docs site', () => {
   it('has the home page, the hubs, the reference pages, 404, sitemap and robots', () => {
-    for (const f of ['index.html', 'guides.html', 'pt-br/index.html', 'frameworks.html', 'api.html', '404.html', 'sitemap.xml', 'robots.txt', 'og.png', 'favicon.svg', 'site.css', 'site.js', 'search.json']) {
+    for (const f of ['index.html', 'guides.html', 'pt-br/index.html', 'frameworks.html', 'migrate-to-kastor.html', 'api.html', '404.html', 'sitemap.xml', 'robots.txt', 'og.png', 'favicon.svg', 'site.css', 'site.js', 'search.json']) {
       expect(existsSync(join(docs, f)), f).toBe(true);
     }
   });
 
-  it('has 14 English guides and 4 Portuguese guides', () => {
-    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(14);
-    expect(guidePages.filter((p) => p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(4);
+  it('has 38 English guides and 6 Portuguese guides', () => {
+    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(38);
+    expect(guidePages.filter((p) => p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(6);
+  });
+
+  const MIGRATE = ['prisma', 'drizzle', 'typeorm', 'sequelize', 'knex', 'mongoose', 'laravel-eloquent', 'django-orm', 'rails-active-record'].map((s) => `migrate-from-${s}.html`);
+  const FRAMEWORK_GUIDES = ['nextjs-app-router-orm', 'nuxt-orm', 'sveltekit-orm', 'remix-react-router-orm', 'astro-orm', 'nestjs-orm', 'express-orm', 'fastify-orm', 'hono-orm', 'adonisjs-orm', 'bun-orm', 'deno-orm', 'cloudflare-workers-orm', 'electron-sqlite-orm', 'aws-lambda-orm'].map((s) => `${s}.html`);
+  const proseWords = (html: string) => {
+    const main = /<article class="read-main[^"]*">([\s\S]*?)<\/article>/.exec(html)![1]!;
+    return main.replace(/<figure[\s\S]*?<\/figure>/g, ' ').replace(/<[^>]+>/g, ' ').split(/\s+/).filter((w) => /[A-Za-zÀ-ÿ]/.test(w)).length;
+  };
+
+  it('has a migration guide of 900+ words for every source ORM, linked from the migrate hub, the nav and the home page', () => {
+    const hub = byRel.get('migrate-to-kastor.html')!.html;
+    for (const rel of [...MIGRATE, 'pt-br/migrar-do-prisma.html', 'pt-br/migrar-do-laravel-eloquent.html']) {
+      const page = byRel.get(rel);
+      expect(page, rel).toBeTruthy();
+      expect(proseWords(page!.html), rel).toBeGreaterThanOrEqual(900);
+      if (!rel.startsWith('pt-br/')) expect(hub, rel).toContain(`href="${rel}"`);
+    }
+    expect(byRel.get('index.html')!.html).toContain('href="migrate-to-kastor.html"');
+    for (const p of pages) if (p.rel !== '404.html') expect(p.html, p.rel).toMatch(/<a href="(\.\.\/)?migrate-to-kastor\.html" class="top-link/);
+  });
+
+  it('has a framework guide of 700+ words for every framework, linked from the frameworks page', () => {
+    const fw = byRel.get('frameworks.html')!.html;
+    for (const rel of FRAMEWORK_GUIDES) {
+      const page = byRel.get(rel);
+      expect(page, rel).toBeTruthy();
+      expect(proseWords(page!.html), rel).toBeGreaterThanOrEqual(700);
+      expect(fw, rel).toContain(`href="${rel}"`);
+    }
+  });
+
+  it('gives migration and framework guides HowTo structured data whose steps point at sections of the page', () => {
+    for (const rel of [...MIGRATE, ...FRAMEWORK_GUIDES]) {
+      const html = byRel.get(rel)!.html;
+      const graph = attr(html, /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g).flatMap((j) => JSON.parse(j)['@graph'] || []);
+      const howto = graph.find((n: { '@type': string }) => n['@type'] === 'HowTo');
+      expect(howto, rel).toBeTruthy();
+      expect(howto.step.length, rel).toBeGreaterThanOrEqual(3);
+      for (const step of howto.step) expect(ids(html).has(step.url.split('#')[1]), `${rel} ${step.url}`).toBe(true);
+    }
   });
 
   it('gives every page a title, a description, a canonical URL and an Open Graph image that exists', () => {

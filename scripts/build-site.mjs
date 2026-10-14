@@ -15,7 +15,7 @@ import { writeAssets } from './site/assets.mjs';
 import { API } from './site/content/api.mjs';
 import { FAQ, fileBadge, homeBody, homeJsonLd } from './site/home.mjs';
 import { SITE, UPDATED, esc, page } from './site/layout.mjs';
-import { apiBody, frameworksBody, guideBody, guideJsonLd, guideUrl, hubBody, hubJsonLd, notFoundBody } from './site/pages.mjs';
+import { apiBody, frameworksBody, guideBody, guideJsonLd, guideUrl, hubBody, hubJsonLd, migrateHubBody, migrateHubJsonLd, notFoundBody } from './site/pages.mjs';
 import { FRAMEWORKS } from './site/content/frameworks.mjs';
 import { bundlePlayground } from './site/bundle.mjs';
 
@@ -38,7 +38,7 @@ async function loadShiki() {
   throw new Error('shiki is not installed: npm i -D shiki, or keep a graphemely checkout next to this repo');
 }
 const shiki = await loadShiki();
-const highlighter = await shiki.createHighlighter({ themes: ['light-plus', 'dark-plus'], langs: ['ts', 'tsx', 'js', 'sql', 'json', 'bash', 'yaml', 'toml', 'text'] });
+const highlighter = await shiki.createHighlighter({ themes: ['light-plus', 'dark-plus'], langs: ['ts', 'tsx', 'js', 'sql', 'json', 'bash', 'yaml', 'toml', 'text', 'prisma', 'php', 'python', 'ruby', 'svelte', 'vue', 'astro', 'dockerfile'] });
 
 let codeId = 0;
 /** A VS Code style frame around Shiki output. kind: editor, terminal or output. */
@@ -47,7 +47,9 @@ export function frame(code, opts = {}) {
   const kind = opts.kind || 'editor';
   const title = opts.title || (kind === 'terminal' ? 'Terminal' : 'snippet');
   const html = highlighter.codeToHtml(code, { lang, themes: { light: 'light-plus', dark: 'dark-plus' }, defaultColor: false });
-  const inner = /<code>([\s\S]*)<\/code>/.exec(html)[1];
+  let inner = /<code>([\s\S]*)<\/code>/.exec(html)[1];
+  // Plain text has no tokens; give its lines the theme colors like every other sample.
+  if (lang === 'text') inner = inner.replace(/<span class="line"><span>/g, '<span class="line"><span style="--shiki-light:#000000;--shiki-dark:#D4D4D4">');
   const id = `code-${++codeId}`;
   const cls = ['frame', `frame-${kind}`, opts.compact ? 'frame-compact' : ''].filter(Boolean).join(' ');
   return `<figure class="${cls}" data-lang="${lang}"><div class="frame-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="frame-tab">${fileBadge(kind === 'terminal' ? 'bash' : lang)}<span>${esc(title)}</span></span><button type="button" class="frame-copy" v-copy-from="#${id}" aria-label="Copy ${esc(title)}"><svg class="ic" aria-hidden="true"><use href="#u-copy"/></svg><span>Copy</span></button></div><pre class="shiki" tabindex="0"><code id="${id}">${inner}</code></pre></figure>`;
@@ -94,10 +96,16 @@ for (const p of guidesPt) {
   if (!en) throw new Error(`pt-br/${p.file}: alt ${p.meta.alt} not found`);
   en.meta.alt = p.meta.slug;
 }
-const ORDER = ['typescript-orm', 'prisma-alternative-without-codegen', 'drizzle-alternative', 'type-safe-sql-typescript', 'avoid-n-plus-1-queries', 'database-migrations-explained', 'nextjs-postgres-orm', 'database-seeding-typescript', 'multi-database-apps', 'sql-server-orm-nodejs', 'oracle-orm-nodejs', 'mongodb-orm-typescript', 'cloudflare-d1-orm', 'turso-libsql-orm'];
-guidesEn.sort((a, b) => ORDER.indexOf(a.meta.slug) - ORDER.indexOf(b.meta.slug));
-const PT_ORDER = ['orm-typescript', 'migracoes-banco-de-dados', 'evitar-consultas-n-mais-1', 'nextjs-postgres-orm'];
-guidesPt.sort((a, b) => PT_ORDER.indexOf(a.meta.slug) - PT_ORDER.indexOf(b.meta.slug));
+const ORDER = [
+  'typescript-orm', 'prisma-alternative-without-codegen', 'drizzle-alternative', 'type-safe-sql-typescript', 'avoid-n-plus-1-queries', 'database-migrations-explained', 'nextjs-postgres-orm', 'database-seeding-typescript', 'multi-database-apps', 'sql-server-orm-nodejs', 'oracle-orm-nodejs', 'mongodb-orm-typescript', 'cloudflare-d1-orm', 'turso-libsql-orm',
+  'migrate-from-prisma', 'migrate-from-drizzle', 'migrate-from-typeorm', 'migrate-from-sequelize', 'migrate-from-knex', 'migrate-from-mongoose', 'migrate-from-laravel-eloquent', 'migrate-from-django-orm', 'migrate-from-rails-active-record',
+  'nextjs-app-router-orm', 'nuxt-orm', 'sveltekit-orm', 'remix-react-router-orm', 'astro-orm', 'nestjs-orm', 'express-orm', 'fastify-orm', 'hono-orm', 'adonisjs-orm', 'bun-orm', 'deno-orm', 'cloudflare-workers-orm', 'electron-sqlite-orm', 'aws-lambda-orm',
+];
+const rank = (list, slug) => (list.includes(slug) ? list.indexOf(slug) : list.length);
+for (const g of guidesEn) if (!ORDER.includes(g.meta.slug)) throw new Error(`${g.file}: add the slug to ORDER in build-site.mjs`);
+guidesEn.sort((a, b) => rank(ORDER, a.meta.slug) - rank(ORDER, b.meta.slug));
+const PT_ORDER = ['orm-typescript', 'migracoes-banco-de-dados', 'evitar-consultas-n-mais-1', 'nextjs-postgres-orm', 'migrar-do-prisma', 'migrar-do-laravel-eloquent'];
+guidesPt.sort((a, b) => rank(PT_ORDER, a.meta.slug) - rank(PT_ORDER, b.meta.slug));
 const guides = [...guidesEn, ...guidesPt];
 
 // ---------- Assets and static files ----------
@@ -145,8 +153,8 @@ out['frameworks.html'] = page(
     kind: 'doc',
     path: 'frameworks.html',
     nav: 'frameworks',
-    title: 'kastor with Next.js, Nuxt, SvelteKit, Express, Hono and more',
-    description: 'Set up the kastor TypeScript ORM in Next.js, Nuxt, SvelteKit, Express, Fastify, NestJS, Hono, Bun, Deno and Cloudflare Workers, with complete code.',
+    title: 'kastor with Next.js, Nuxt, SvelteKit, NestJS, Hono and more | kastor',
+    description: 'Set up the kastor TypeScript ORM in Next.js, Nuxt, SvelteKit, Remix, Astro, NestJS, Express, Fastify, Hono, AdonisJS, Bun, Deno, Workers, Electron and Lambda.',
     jsonld: {
       '@context': 'https://schema.org',
       '@type': 'TechArticle',
@@ -175,6 +183,20 @@ out['api.html'] = page(
   guides,
 );
 
+codeId = 0;
+out['migrate-to-kastor.html'] = page(
+  {
+    kind: 'hub',
+    path: 'migrate-to-kastor.html',
+    nav: 'migrate',
+    title: 'Migrate to kastor from Prisma, Drizzle, TypeORM and more | kastor',
+    description: 'Move to the kastor TypeScript ORM from Prisma, Drizzle, TypeORM, Sequelize, Knex, Mongoose, Laravel, Django or Rails without losing data or migration history.',
+    jsonld: migrateHubJsonLd(guides),
+  },
+  migrateHubBody(guides, frame),
+  guides,
+);
+
 out['guides.html'] = page(
   { kind: 'hub', path: 'guides.html', nav: 'guides', title: 'Guides: TypeScript ORM, migrations, N+1 and more | kastor', description: 'Long form guides on TypeScript ORMs, database migrations, avoiding N+1 queries, type safe SQL, Next.js with Postgres, D1, Turso, SQL Server, Oracle and MongoDB.', jsonld: hubJsonLd(guides, 'en'), alternates: [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']] },
   hubBody(guides, 'en'),
@@ -197,7 +219,7 @@ for (const lang of ['en', 'pt-BR']) {
         path: guideUrl(g.meta),
         depth: pt ? 1 : 0,
         lang,
-        nav: 'guides',
+        nav: g.meta.section === 'migrate' && !pt ? 'migrate' : g.meta.section === 'frameworks' ? 'frameworks' : 'guides',
         ogType: 'article',
         ogImage: `og/${pt ? 'pt-br-' : ''}${g.meta.slug}.png`,
         ogAlt: g.meta.h1,
@@ -224,6 +246,7 @@ const search = [
   { kind: 'Page', title: 'Get started in 60 seconds', sub: 'Install, client and first query per database', url: '#start', home: true },
   { kind: 'Page', title: 'Framework guides', sub: FRAMEWORKS.map((f) => f.name).join(', '), url: 'frameworks.html' },
   { kind: 'Page', title: 'API reference', sub: 'Client, schema, queries, filters, errors, CLI', url: 'api.html' },
+  { kind: 'Page', title: 'Migrate to kastor', sub: 'From Prisma, Drizzle, TypeORM, Sequelize, Knex, Mongoose, Laravel, Django and Rails', url: 'migrate-to-kastor.html' },
   { kind: 'Page', title: 'FAQ', sub: FAQ.map((f) => f.q).join(' '), url: '#faq', home: true },
   ...FRAMEWORKS.map((f) => ({ kind: 'Framework', title: f.name, sub: f.tag, url: `frameworks.html#${f.id}` })),
   ...API.flatMap((s) => s.items.map((it) => ({ kind: 'API', title: it.name, sub: s.title, url: `api.html#${it.id}` }))),
@@ -235,6 +258,7 @@ const urls = [
   ['', 'weekly', '1.0'],
   ['frameworks.html', 'monthly', '0.9'],
   ['api.html', 'monthly', '0.9'],
+  ['migrate-to-kastor.html', 'monthly', '0.9'],
   ['guides.html', 'monthly', '0.8', [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']]],
   ['pt-br/', 'monthly', '0.7', [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']]],
   ...guides.map((g) => [guideUrl(g.meta), 'monthly', g.meta.lang === 'en' ? '0.8' : '0.7', alternatesFor(g.meta)]),

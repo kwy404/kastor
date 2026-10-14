@@ -1,0 +1,165 @@
+<!--meta
+{
+  "slug": "hono-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Hono ORM: kastor on Node, Bun, Deno and Cloudflare Workers | kastor",
+  "description": "Use kastor as the Hono ORM: a typed db variable set by middleware, one client on Node, Bun and Deno, a client per request on Workers, error handling and migrations.",
+  "h1": "kastor with Hono",
+  "crumb": "Hono",
+  "lead": "Hono runs the same app on Node.js, Bun, Deno and Cloudflare Workers, and kastor runs on all of them. The only part that changes per runtime is how the client is created: once per process on servers, once per request from a binding on Workers. A middleware hides that difference behind <code>c.var.db</code>.",
+  "readTime": "10 min read",
+  "keywords": ["Hono ORM", "Hono database", "Hono Cloudflare Workers database", "Hono Bun ORM", "Hono TypeScript ORM", "Hono middleware database"],
+  "howto": {
+    "name": "Use kastor in a Hono app",
+    "totalTime": "PT20M",
+    "tools": ["Hono 4", "kastor", "pg, better-sqlite3 or a D1 binding"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor hono plus a driver and npx kastor init.", "anchor": "structure" },
+      { "name": "Type the context", "text": "Declare Variables with db typed from the client so c.var.db is typed in every route.", "anchor": "middleware" },
+      { "name": "Set the client in middleware", "text": "Use one shared client on servers, or build one from c.env per request on Workers.", "anchor": "middleware" },
+      { "name": "Write routes and handle errors", "text": "Query c.var.db in routes and map KastorError codes in app.onError.", "anchor": "routes" },
+      { "name": "Migrate on deploy", "text": "Run npx kastor migrate deploy for server databases, or wrangler d1 migrations apply for D1.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "How do I pass a database client to Hono routes?", "a": "Set it in middleware with <code>c.set(&#39;db&#39;, db)</code> and declare it in the app's <code>Variables</code> type. Routes read it as <code>c.var.db</code>, fully typed." },
+    { "q": "Should the client be created per request?", "a": "On Node, Bun and Deno, no: create one client per process and reuse it. On Cloudflare Workers, bindings such as D1 arrive with each request, so build the client per request; wrapping a binding is cheap." },
+    { "q": "Which driver should I use on each runtime?", "a": "<code>pg</code> or <code>mysql2</code> on Node, Bun and Deno for server databases, <code>bun:sqlite</code> on Bun, <code>better-sqlite3</code> on Node, the D1 binding or <code>@libsql/client/web</code> for Turso on Workers." },
+    { "q": "Does Hono RPC keep kastor types?", "a": "Yes. Routes that return <code>c.json(result)</code> expose the result type to the <code>hc</code> client. Dates arrive as strings over JSON, so type the client side accordingly." }
+  ],
+  "related": ["cloudflare-workers-orm", "bun-orm", "express-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>A <strong>Hono</strong> app is a single object with routes and middleware, and the entry file decides the runtime. Keeping the app separate from the entry lets the same routes serve Node in development and Workers in production, if you want that.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  db/client.ts            createDb(adapter) and the Db type
+  app.ts                  Hono app, middleware, routes
+  node.ts                 entry for Node (also works on Bun and Deno)
+  worker.ts               entry for Cloudflare Workers
+kastor.config.ts
+kastor/migrations/
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor hono @hono/node-server pg
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+</section>
+<section id="middleware"><h2>A typed db variable set by middleware</h2>
+<p>The client factory takes an adapter, so each runtime can pass its own. The <code>Db</code> type comes from the factory, and the Hono generics put it on <code>c.var</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/client.ts">
+import { kastor, type Adapter } from 'kastor'
+import { schema, relations } from './schema'
+
+export const createDb = (adapter: Adapter) =&gt; kastor({ adapter, schema, relations })
+export type Db = ReturnType&lt;typeof createDb&gt;
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/app.ts">
+import { Hono } from 'hono'
+import { isKastorError } from 'kastor'
+import type { Db } from './db/client'
+
+export type Env = { Variables: { db: Db } }
+
+export function buildApp(getDb: (c: unknown) =&gt; Db) {
+  const app = new Hono&lt;Env&gt;()
+
+  app.use('*', async (c, next) =&gt; {
+    c.set('db', getDb(c))
+    await next()
+  })
+
+  app.get('/posts', async (c) =&gt; {
+    const tag = c.req.query('tag')
+    const posts = await c.var.db.posts.findMany({
+      where: { published: true, ...(tag ? { tags: { some: { name: tag } } } : {}) },
+      include: { author: { select: { name: true } }, tags: true },
+      orderBy: { id: 'desc' },
+      take: 20,
+    })
+    return c.json(posts)
+  })
+
+  app.post('/posts', async (c) =&gt; {
+    const body = await c.req.json&lt;{ title: string; authorId: number }&gt;()
+    const post = await c.var.db.posts.create({ data: { title: body.title, authorId: body.authorId } })
+    return c.json(post, 201)
+  })
+
+  app.onError((err, c) =&gt; {
+    if (isKastorError(err)) {
+      const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'UNIQUE_VIOLATION' ? 409 : 400
+      return c.json({ error: err.code, message: err.message }, status)
+    }
+    return c.json({ error: 'INTERNAL' }, 500)
+  })
+
+  return app
+}
+</pre>
+</section>
+<section id="routes"><h2>Entries per runtime</h2>
+<p>On Node, the client is created once when the module loads, and the middleware hands the same instance to every request. The same file runs on Bun and Deno, which both support <code>pg</code>; on Bun you can also serve with <code>export default app</code> instead of <code>@hono/node-server</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/node.ts">
+import { serve } from '@hono/node-server'
+import pg from 'pg'
+import { postgres } from 'kastor/postgres'
+import { buildApp } from './app'
+import { createDb } from './db/client'
+
+const db = createDb(postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10 })))
+const app = buildApp(() =&gt; db)
+
+const server = serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 3000) })
+process.on('SIGTERM', () =&gt; server.close(() =&gt; void db.$disconnect()))
+</pre>
+<p>On Workers there is no process to hold a pool, and the D1 binding comes with each request on <code>c.env</code>. The middleware builds a client per request from the binding:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/worker.ts">
+import { d1 } from 'kastor/d1'
+import { buildApp } from './app'
+import { createDb } from './db/client'
+
+const app = buildApp((c) =&gt; createDb(d1((c as { env: { DB: D1Database } }).env.DB)))
+
+export default app
+</pre>
+</section>
+<section id="deploy"><h2>Environment variables and migrations</h2>
+<p>On servers, <code>DATABASE_URL</code> comes from the environment: <code>node --env-file=.env</code>, Bun's automatic <code>.env</code> loading, or <code>deno run --env-file</code>. Run <code>npx kastor migrate deploy</code> in CI before the new version starts. On Workers, there is no URL: the binding is declared in <code>wrangler.toml</code>, and D1 migrations are applied with wrangler from the SQL files kastor writes. The <a href="cloudflare-workers-orm.html">Workers guide</a> shows the whole loop.</p>
+<p>With Postgres on Node, Bun or Deno, the first command is all you need; with D1, the last two:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate deploy
+npx wrangler d1 migrations apply app-db --remote
+npx wrangler deploy
+</pre>
+<p>Development reloads are process restarts with <code>tsx watch</code>, <code>bun --watch</code> or <code>deno run --watch</code>, so the client is recreated cleanly. With <code>bun --hot</code>, which keeps the process alive, store the client on <code>globalThis</code> as the <a href="bun-orm.html">Bun guide</a> shows.</p>
+</section>
+<section id="runtimes"><h2>Choosing the driver per runtime</h2>
+<p>The adapter is the only runtime specific line, so it is worth choosing deliberately. On Node.js, Bun and Deno, a long lived process holds a pool: <code>postgres(new pg.Pool(...))</code> for PostgreSQL, <code>mysql(...)</code> with mysql2 for MySQL, or <code>sqlite(...)</code> for a local file. Bun can also pass a <code>bun:sqlite</code> database to the same <code>sqlite</code> adapter. On Cloudflare Workers there is no process to hold a pool, so you choose between bindings and HTTP: <code>d1(env.DB)</code> for D1, a <code>pg.Client</code> through Hyperdrive for PostgreSQL, or <code>libsql()</code> with the web client for Turso.</p>
+<p>Because <code>createDb</code> takes any adapter, tests can use a third option: SQLite in memory with <code>sqlite(new Database(&#39;:memory:&#39;))</code>, migrated with <code>npx kastor db push</code> or by applying the migration files at startup. The routes do not change, which is the point of keeping the app separate from the entries.</p>
+</section>
+<section id="transactions"><h2>Transactions and request scope</h2>
+<p>On servers, <code>c.var.db.$transaction(async (tx) =&gt; ...)</code> borrows one connection from the pool for the callback and returns it afterwards. On Workers with D1, use the array form instead, which kastor sends as one atomic batch. A useful pattern is to keep the middleware generic and let each route decide: routes that only read never open a transaction, routes that write several rows wrap exactly those writes.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>Servers build one client per process; Workers build one per request.</li>
+<li>The <code>Variables</code> type gives <code>c.var.db</code> its full type.</li>
+<li><code>app.onError</code> maps <code>KastorError</code> codes to responses.</li>
+<li>D1 routes use the array form of <code>$transaction</code>.</li>
+<li>Migrations run before each deploy, with kastor or wrangler.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Per request pools on servers.</strong> Do not call <code>new pg.Pool</code> inside the middleware on Node; that opens a pool per request. Build it once.</li>
+<li><strong>Transactions on D1.</strong> D1 runs atomic batches, not interactive transactions. Use <code>db.$transaction([a, b])</code> there.</li>
+<li><strong>JSON and bigint.</strong> <code>c.json</code> cannot serialize <code>bigint</code>; convert big keys first.</li>
+<li><strong>Validation.</strong> Pair routes with a validator middleware so bodies are checked before they reach <code>create</code>.</li>
+</ul>
+</section>

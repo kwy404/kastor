@@ -19,7 +19,7 @@
 
 [English](https://github.com/kwy404/kastor/blob/main/README.md) | Português (Brasil)
 
-[Site e playground ao vivo](https://kwy404.github.io/kastor/) · [Referência da API](https://kwy404.github.io/kastor/api.html) · [Guias](https://kwy404.github.io/kastor/guides.html) · [Guias em português](https://kwy404.github.io/kastor/pt-br/) · [npm](https://www.npmjs.com/package/kastor)
+[Site e playground ao vivo](https://kwy404.github.io/kastor/) · [Referência da API](https://kwy404.github.io/kastor/api.html) · [Guias](https://kwy404.github.io/kastor/guides.html) · [Guias em português](https://kwy404.github.io/kastor/pt-br/) · [Migrar para o kastor](https://kwy404.github.io/kastor/migrate-to-kastor.html) · [Frameworks](https://kwy404.github.io/kastor/frameworks.html) · [npm](https://www.npmjs.com/package/kastor)
 
 </div>
 
@@ -46,7 +46,8 @@ O nome vem de *castor*, palavra latina para o animal de mesmo nome. Castores con
 - [Erros](#erros)
 - [Migrações e a CLI](#migrações-e-a-cli)
 - [Studio](#studio)
-- [Uso com frameworks: Next.js, React, Vue, Angular, HTML puro](#uso-com-frameworks)
+- [Migre do Prisma e de outros ORMs](#migre-do-prisma-e-de-outros-orms)
+- [Use com o seu framework](#use-com-o-seu-framework)
 - [Referência da API](#referência-da-api)
 - [Perguntas frequentes](#perguntas-frequentes)
 - [Comparação](#comparação)
@@ -302,12 +303,14 @@ export default defineConfig({
 | --- | --- |
 | `npx kastor init --db postgres` | Cria o `kastor.config.ts`, um schema inicial e um arquivo de seed para o seu banco |
 | `npx kastor migrate dev --name <name>` | Compara o schema com o banco de dados, grava `kastor/migrations/<timestamp>_<name>/migration.sql` e aplica a migração. Uma possível renomeação vira uma pergunta, nunca um drop silencioso. `--create-only`, `--rename users.name:fullName`, `--accept-data-loss` |
+| `npx kastor migrate baseline` | Adota um banco existente: registra o schema atual como a primeira migração sem executá-la (`--name init`, `--from-prisma prisma/migrations`) |
 | `npx kastor migrate deploy` | Aplica as migrações pendentes (CI e produção) |
 | `npx kastor migrate status` | Lista as migrações aplicadas e pendentes |
 | `npx kastor migrate reset` | Apaga tudo, aplica todas as migrações de novo e roda o seed |
 | `npx kastor db push` | Sincroniza o schema sem arquivo de migração, para protótipos |
 | `npx kastor db pull` | Gera um schema TypeScript a partir de um banco de dados existente (`--out`, `--print`) |
 | `npx kastor db seed` | Executa o arquivo de seed |
+| `npx kastor import prisma` | Converte o schema.prisma em um schema do kastor para o mesmo banco e imprime um relatório (`--schema`, `--out`, `--config`) |
 | `npx kastor studio` | Abre o studio local |
 | `npx kastor doctor` | Verifica a configuração, a conexão, o drift e as migrações pendentes |
 
@@ -322,9 +325,43 @@ Leia [migrações de banco de dados explicadas](https://kwy404.github.io/kastor/
 
 `npx kastor studio` abre uma interface web local: navegue por todas as tabelas, filtre e busque, crie, edite e apague linhas, siga as chaves estrangeiras e veja o diagrama do banco de dados inteiro. Ele roda em 127.0.0.1 protegido por um token de sessão privado, e `--read-only` protege dados que não podem ser alterados.
 
-## Uso com frameworks
+## Migre do Prisma e de outros ORMs
 
-O kastor roda no servidor. Crie um client por processo e importe ele apenas em código de servidor.
+O banco e os dados continuam onde estão. O kastor lê o schema que você já tem, registra o banco como a primeira migração sem executar nada e assume dali em diante.
+
+```bash
+npm i kastor pg
+npx kastor import prisma --config                               # schema.prisma para src/db/schema.ts, com relatório
+npx kastor migrate baseline --from-prisma prisma/migrations     # adota o banco e preserva o histórico do Prisma
+npx kastor migrate dev                                          # deve responder: Already in sync
+```
+
+O import mantém os nomes dos models, então a maioria das chamadas do Prisma Client só troca a primeira palavra:
+
+```ts
+// Antes: prisma.post.findMany({ where: { published: true }, include: { author: true }, take: 20 })
+const posts = await db.post.findMany({ where: { published: true }, include: { author: true }, take: 20 })
+```
+
+Vindo de outro ORM ou de outra linguagem, `npx kastor db pull` gera o schema TypeScript a partir do banco e `npx kastor migrate baseline --name init` adota o banco. Guias passo a passo com tabelas de equivalência e cuidados:
+
+| Vindo de | Guia | Como começa |
+| --- | --- | --- |
+| Prisma | [Guia em português](https://kwy404.github.io/kastor/pt-br/migrar-do-prisma.html) · [English](https://kwy404.github.io/kastor/migrate-from-prisma.html) | `npx kastor import prisma` e depois `migrate baseline --from-prisma`, que preserva o histórico |
+| Drizzle ORM | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-drizzle.html) | `db pull` e depois `migrate baseline` |
+| TypeORM | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-typeorm.html) | entities e repositories viram `table()` e o client |
+| Sequelize | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-sequelize.html) | models e `Op` viram tipos inferidos e objetos `where` |
+| Knex | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-knex.html) | query builder vira consultas tipadas, SQL puro com `$sql` |
+| Mongoose | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-mongoose.html) | schemas e `populate` viram `table()` e `include` no MongoDB |
+| Laravel Eloquent (PHP) | [Guia em português](https://kwy404.github.io/kastor/pt-br/migrar-do-laravel-eloquent.html) · [English](https://kwy404.github.io/kastor/migrate-from-laravel-eloquent.html) | leve um serviço para TypeScript ou divida o banco com o Laravel |
+| Django ORM (Python) | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-django-orm.html) | leve um serviço para TypeScript ou divida o banco com o Django |
+| Rails Active Record (Ruby) | [Guia em inglês](https://kwy404.github.io/kastor/migrate-from-rails-active-record.html) | leve um serviço para TypeScript ou divida o banco com o Rails |
+
+Todos os caminhos e comandos em um só lugar: [Migrate to kastor](https://kwy404.github.io/kastor/migrate-to-kastor.html).
+
+## Use com o seu framework
+
+O kastor roda no servidor. Crie um client por processo (ou por requisição no Workers), importe ele apenas em código de servidor e reaproveite entre os hot reloads.
 
 **Next.js (App Router)**: reaproveite o client entre os hot reloads e faça consultas em server components e server actions. Veja também o guia [Next.js com PostgreSQL e ORM](https://kwy404.github.io/kastor/pt-br/nextjs-postgres-orm.html).
 
@@ -346,9 +383,36 @@ export default async function Posts() {
 }
 ```
 
-**React** (Remix, React Router, Vite SSR): chame o kastor em loaders e actions, nunca em client components. **Vue** com Nuxt: coloque o client em `server/utils/db.ts` e faça as consultas nas rotas `server/api/*.ts`. **Angular** com SSR: consulte a partir do servidor Express que o `@angular/ssr` gera, ou a partir da sua API. **HTML puro**: sirva o HTML a partir de qualquer rota de servidor que consulte o kastor, ou use o build da CDN acima para ferramentas de schema no navegador.
+**Cloudflare Workers e Hono**: os bindings chegam em cada requisição, então crie o client ali. Envolver um binding não abre conexão nenhuma.
 
-Configurações completas para Next.js, Nuxt, SvelteKit, Express, Fastify, NestJS, Hono, Bun, Deno e Cloudflare Workers estão na [página de guias de frameworks](https://kwy404.github.io/kastor/frameworks.html).
+```ts
+app.get('/posts', async (c) => {
+  const db = kastor({ adapter: d1(c.env.DB), schema, relations })
+  return c.json(await db.posts.findMany({ where: { published: true }, take: 20 }))
+})
+```
+
+Cada guia (em inglês) cobre a estrutura do projeto, o reaproveitamento de conexões em hot reload e serverless, as variáveis de ambiente e as migrações no CI e no deploy:
+
+| Framework | Guia | Destaques |
+| --- | --- | --- |
+| Next.js App Router | [kastor com Next.js App Router](https://kwy404.github.io/kastor/nextjs-app-router-orm.html) | server components, server actions, route handlers, edge com Neon, Turso ou D1 |
+| Nuxt | [kastor com Nuxt](https://kwy404.github.io/kastor/nuxt-orm.html) | rotas do Nitro, runtimeConfig |
+| SvelteKit | [kastor com SvelteKit](https://kwy404.github.io/kastor/sveltekit-orm.html) | load functions, form actions, $lib/server |
+| Remix e React Router | [kastor com Remix e React Router](https://kwy404.github.io/kastor/remix-react-router-orm.html) | loaders e actions em um módulo .server |
+| Astro | [kastor com Astro](https://kwy404.github.io/kastor/astro-orm.html) | páginas sob demanda, endpoints, actions |
+| NestJS | [kastor com NestJS](https://kwy404.github.io/kastor/nestjs-orm.html) | um módulo global e um provider |
+| Express | [kastor com Express](https://kwy404.github.io/kastor/express-orm.html) | middleware de erros, desligamento gracioso |
+| Fastify | [kastor com Fastify](https://kwy404.github.io/kastor/fastify-orm.html) | um plugin com decorator tipado |
+| Hono | [kastor com Hono](https://kwy404.github.io/kastor/hono-orm.html) | Node, Bun, Deno e Workers |
+| AdonisJS | [kastor com AdonisJS](https://kwy404.github.io/kastor/adonisjs-orm.html) | um service ao lado ou no lugar do Lucid |
+| Bun | [kastor com Bun](https://kwy404.github.io/kastor/bun-orm.html) | bun:sqlite, Bun.serve |
+| Deno | [kastor com Deno](https://kwy404.github.io/kastor/deno-orm.html) | npm specifiers, Deno.serve |
+| Cloudflare Workers | [kastor com Cloudflare Workers](https://kwy404.github.io/kastor/cloudflare-workers-orm.html) | D1, Hyperdrive, Turso |
+| Electron | [kastor com Electron](https://kwy404.github.io/kastor/electron-sqlite-orm.html) | SQLite no processo principal, IPC tipado |
+| AWS Lambda | [kastor com AWS Lambda](https://kwy404.github.io/kastor/aws-lambda-orm.html) | reaproveitamento de conexão, RDS Proxy |
+
+**React** com Vite SSR, **Vue** e **Angular** com SSR seguem a mesma regra: consulte em código de servidor (loaders, rotas de servidor, o servidor Express que o `@angular/ssr` gera) e envie dados simples para os componentes. Configurações curtas de cada framework estão na [página de frameworks](https://kwy404.github.io/kastor/frameworks.html).
 
 ## Referência da API
 
@@ -389,7 +453,7 @@ Sim: `d1(env.DB)` dentro de um Worker e `libsql(createClient(...))` para o Turso
 O adaptador de MongoDB do kastor usa o mesmo schema e a mesma API de consultas, e compila os includes para pipelines com `$lookup`. Veja [ORM para MongoDB em TypeScript](https://kwy404.github.io/kastor/mongodb-orm-typescript.html).
 
 ### Funciona com um banco de dados que já existe?
-Sim. `npx kastor db pull` gera o schema TypeScript a partir do banco de dados em uso, com as relações incluídas.
+Sim. `npx kastor db pull` gera o schema TypeScript a partir do banco de dados em uso, com as relações incluídas. O `npx kastor migrate baseline` registra o banco como a primeira migração sem alterá-lo, e quem vem do Prisma pode converter o schema.prisma direto com `npx kastor import prisma`. Veja o [guia de migração do Prisma](https://kwy404.github.io/kastor/pt-br/migrar-do-prisma.html).
 
 ## Comparação
 

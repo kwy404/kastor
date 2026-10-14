@@ -1,0 +1,184 @@
+<!--meta
+{
+  "slug": "adonisjs-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "AdonisJS with kastor: a typed ORM next to or instead of Lucid | kastor",
+  "description": "Use kastor in AdonisJS 6: validated env vars, a service module and a provider for shutdown, typed controllers, VineJS input, HMR safe reuse and migrations in CI.",
+  "h1": "kastor with AdonisJS",
+  "crumb": "AdonisJS",
+  "lead": "AdonisJS ships its own ORM, Lucid, and it is a good one. kastor is an option when you want types inferred from one schema instead of model classes, the same API on SQL Server, Oracle or MongoDB, or a data layer shared with other TypeScript services. This guide wires it in the AdonisJS 6 way: env validation, a service module and a provider.",
+  "readTime": "10 min read",
+  "keywords": ["AdonisJS ORM", "AdonisJS kastor", "AdonisJS Lucid alternative", "AdonisJS database", "AdonisJS 6 TypeScript ORM", "AdonisJS PostgreSQL"],
+  "howto": {
+    "name": "Use kastor in an AdonisJS 6 application",
+    "totalTime": "PT30M",
+    "tools": ["AdonisJS 6", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres with the schema in database/schema.ts.", "anchor": "structure" },
+      { "name": "Validate the env var", "text": "Add DATABASE_URL to start/env.ts with Env.schema.string().", "anchor": "env" },
+      { "name": "Create a service module", "text": "Export the client from app/services/db.ts and reuse it across hot module reloads.", "anchor": "service" },
+      { "name": "Close the pool in a provider", "text": "Register a provider whose shutdown method calls db.$disconnect().", "anchor": "service" },
+      { "name": "Use it in controllers and migrate", "text": "Import #services/db in controllers, validate input with VineJS and run npx kastor migrate deploy in CI.", "anchor": "controllers" }
+    ]
+  },
+  "faq": [
+    { "q": "Should I replace Lucid with kastor in AdonisJS?", "a": "Only if you have a reason: inferred types without model classes, a database Lucid does not cover, or one schema shared with other TypeScript services. Lucid is well integrated with AdonisJS, and both can run side by side on the same database." },
+    { "q": "Where does the kastor client go in AdonisJS?", "a": "In a service module such as <code>app/services/db.ts</code>, imported through the <code>#services/db</code> subpath alias. A provider closes the pool when the app shuts down." },
+    { "q": "Can Lucid migrations and kastor share a database?", "a": "Yes, as long as one tool owns schema changes. Keep running <code>node ace migration:run</code> and refresh the kastor schema with <code>npx kastor db pull</code>, or baseline with <code>npx kastor migrate baseline</code> and let kastor own changes." },
+    { "q": "Does it work with the AdonisJS dev server and HMR?", "a": "Yes. Keep the client on <code>globalThis</code> outside production so hot module reloads reuse the same pool." }
+  ],
+  "related": ["migrate-from-laravel-eloquent", "nestjs-orm", "express-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p><strong>AdonisJS</strong> 6 organizes code with subpath imports such as <code>#controllers/*</code> and <code>#services/*</code>, validates environment variables at boot, and uses providers for lifecycle work. kastor slots into those three places:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+start/env.ts                    DATABASE_URL validation
+start/routes.ts                 routes
+database/schema.ts              kastor tables and relations
+app/services/db.ts              the client (#services/db)
+providers/kastor_provider.ts    closes the pool on shutdown
+app/controllers/posts_controller.ts
+app/validators/post.ts          VineJS input validation
+kastor.config.ts                schema: './database/schema.ts'
+kastor/migrations/
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+</pre>
+<p>Move the starter schema to <code>database/schema.ts</code> and update the config. If the project already uses Lucid, run <code>npx kastor db pull --out database/schema.ts</code> instead, so kastor describes the tables Lucid migrations created.</p>
+</section>
+<section id="env"><h2>Validated environment variables</h2>
+<p>AdonisJS refuses to boot when a declared variable is missing or malformed, which is exactly what you want for a connection string.</p>
+<pre data-kind="editor" data-lang="ts" data-title="start/env.ts">
+import { Env } from '@adonisjs/core/env'
+
+export default await Env.create(new URL('../', import.meta.url), {
+  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  PORT: Env.schema.number(),
+  APP_KEY: Env.schema.string(),
+  DATABASE_URL: Env.schema.string(),
+})
+</pre>
+</section>
+<section id="service"><h2>The service module and the provider</h2>
+<p>The AdonisJS dev server reloads changed modules with hot module replacement. Keeping the client on <code>globalThis</code> in development makes every reload reuse one pool.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/services/db.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import env from '#start/env'
+import { schema, relations } from '../../database/schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: env.get('DATABASE_URL'), max: 10 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { kastorDb?: ReturnType&lt;typeof create&gt; }
+const db = g.kastorDb ?? create()
+if (env.get('NODE_ENV') !== 'production') g.kastorDb = db
+
+export default db
+export type Db = typeof db
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="providers/kastor_provider.ts">
+import type { ApplicationService } from '@adonisjs/core/types'
+
+export default class KastorProvider {
+  constructor(protected app: ApplicationService) {}
+
+  async shutdown() {
+    const { default: db } = await import('#services/db')
+    await db.$disconnect()
+  }
+}
+</pre>
+<p>Register the provider in <code>adonisrc.ts</code> under <code>providers</code> with <code>() =&gt; import(&#39;./providers/kastor_provider.js&#39;)</code>. The <code>shutdown</code> method runs when the app receives a termination signal, after the HTTP server stops.</p>
+</section>
+<section id="controllers"><h2>Controllers, validation and routes</h2>
+<p>Controllers import the service through its alias. VineJS validates the request body; kastor then receives values that are checked at runtime and at compile time.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/controllers/posts_controller.ts">
+import type { HttpContext } from '@adonisjs/core/http'
+import vine from '@vinejs/vine'
+import db from '#services/db'
+
+const createPost = vine.compile(vine.object({ title: vine.string().minLength(3), authorId: vine.number() }))
+
+export default class PostsController {
+  async index({ request }: HttpContext) {
+    const page = Number(request.input('page', 1))
+    const [items, total] = await db.$transaction([
+      db.posts.findMany({
+        where: { published: true },
+        include: { author: { select: { name: true } } },
+        orderBy: { id: 'desc' },
+        skip: (page - 1) * 20,
+        take: 20,
+      }),
+      db.posts.count({ where: { published: true } }),
+    ])
+    return { items, total, page }
+  }
+
+  async show({ params, response }: HttpContext) {
+    const post = await db.posts.findUnique({ where: { id: Number(params.id) }, include: { tags: true } })
+    return post ?? response.notFound({ error: 'Post not found' })
+  }
+
+  async store({ request, response }: HttpContext) {
+    const data: { title: string; authorId: number } = await request.validateUsing(createPost)
+    return response.created(await db.posts.create({ data }))
+  }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="start/routes.ts">
+import router from '@adonisjs/core/services/router'
+const PostsController = () =&gt; import('#controllers/posts_controller')
+
+router.get('/posts', [PostsController, 'index'])
+router.get('/posts/:id', [PostsController, 'show'])
+router.post('/posts', [PostsController, 'store'])
+</pre>
+<p>The array form of <code>$transaction</code> runs the page query and the count in one transaction, the kastor version of Lucid's <code>paginate()</code>. For cursor pagination, <code>db.posts.findPage</code> returns items and opaque cursors.</p>
+</section>
+<section id="deploy"><h2>Migrations in CI and deploy</h2>
+<p>Decide who owns schema changes. If Lucid migrations stay in charge, keep <code>node ace migration:run</code> in your deploy and run <code>npx kastor db pull</code> after each new migration to refresh <code>database/schema.ts</code>. If kastor takes over, record the current database once with <code>npx kastor migrate baseline</code>, commit <code>kastor/migrations</code>, and from then on:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: node ace build
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+- run: ./deploy.sh
+</pre>
+<p>The production build in <code>build/</code> needs <code>DATABASE_URL</code> in its environment like every other variable in <code>start/env.ts</code>.</p>
+</section>
+<section id="lucid"><h2>Running next to Lucid</h2>
+<p>Many AdonisJS apps will not drop Lucid at once, and they do not have to. Both libraries can use the same database with separate pools. A practical split is to keep Lucid for authentication and the parts that rely on its model hooks, and use kastor for read heavy endpoints that benefit from nested includes in one query, or for code shared with other TypeScript services. Size both pools so their sum stays under the database's connection limit.</p>
+<p>Schema ownership needs one rule: only one tool writes migrations. If Lucid stays in charge, kastor follows with <code>db pull</code> after each change. If kastor takes over, stop creating Lucid migrations and let <code>npx kastor migrate dev</code> write the SQL. Mixing the two leads to two histories that disagree about the same tables.</p>
+<p>Transactions follow the same split. A Lucid transaction and a kastor transaction are separate connections, so do not expect a write through one to be rolled back by the other. Keep each use case on one library.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li><code>DATABASE_URL</code> is declared in <code>start/env.ts</code>.</li>
+<li>The client is exported from <code>app/services/db.ts</code> and reused across HMR reloads.</li>
+<li>The provider disconnects the pool on shutdown.</li>
+<li>Exactly one tool owns migrations.</li>
+<li>Controllers validate input with VineJS before writing.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Two owners.</strong> Running both <code>node ace migration:run</code> and <code>kastor migrate deploy</code> for the same tables leads to conflicting histories. Pick one.</li>
+<li><strong>The .js extension.</strong> AdonisJS 6 is ESM; lazy imports in <code>adonisrc.ts</code> use <code>.js</code> paths even for TypeScript files.</li>
+<li><strong>Serialization.</strong> Controllers return values as JSON; convert <code>bigint</code> keys before returning them.</li>
+<li><strong>Auth.</strong> The AdonisJS auth package works with Lucid models. If you drop Lucid entirely, implement the user provider over kastor or keep a Lucid user model only for auth.</li>
+</ul>
+<p>Developers coming from Laravel will recognize much of AdonisJS; the <a href="migrate-from-laravel-eloquent.html">Laravel guide</a> maps Eloquent concepts to kastor.</p>
+</section>

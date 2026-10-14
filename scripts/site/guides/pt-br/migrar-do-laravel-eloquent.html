@@ -1,0 +1,172 @@
+<!--meta
+{
+  "slug": "migrar-do-laravel-eloquent",
+  "lang": "pt-BR",
+  "alt": "migrate-from-laravel-eloquent",
+  "section": "migrate",
+  "title": "Vindo do Laravel Eloquent: o kastor para quem programa em PHP | kastor",
+  "description": "Vindo do Laravel Eloquent: o kastor roda em Node, Bun, Deno e edge, não em PHP. Veja models, relações, scopes, with(), migrações, seeders e factories em TypeScript.",
+  "h1": "Vindo do Laravel e do Eloquent",
+  "crumb": "Vindo do Laravel",
+  "lead": "O kastor é um ORM em TypeScript. Ele roda em runtimes JavaScript como Node.js, Bun, Deno e Cloudflare Workers, e não roda dentro do PHP. Se você conhece o Eloquent, este guia cobre os dois caminhos que fazem sentido: levar um serviço Laravel para TypeScript ou rodar uma API TypeScript ao lado do Laravel no mesmo banco.",
+  "readTime": "12 min de leitura",
+  "keywords": ["Laravel Eloquent TypeScript", "alternativa ao Eloquent em Node.js", "migrar Laravel para Node.js", "Laravel para TypeScript", "Eloquent equivalente TypeScript", "Laravel e Node.js no mesmo banco"],
+  "howto": {
+    "name": "Usar o kastor em um banco criado pelo Laravel",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 ou mais novo", "kastor", "o driver mysql2 ou pg", "o seu projeto Laravel"],
+    "steps": [
+      { "name": "Escolher o caminho", "text": "Decida se o serviço vai para TypeScript ou se uma API TypeScript vai rodar ao lado do Laravel no mesmo banco.", "anchor": "caminhos" },
+      { "name": "Puxar o schema do Laravel", "text": "Rode npx kastor init e npx kastor db pull no banco criado pelo php artisan migrate.", "anchor": "pull" },
+      { "name": "Definir o dono das migrações", "text": "Mantenha as migrações do Laravel e atualize com db pull, ou rode npx kastor migrate baseline --name init e passe a usar o kastor.", "anchor": "dono" },
+      { "name": "Traduzir models, relações e scopes", "text": "Mapeie models para table(), hasMany e belongsTo para many() e one(), scopes para objetos where e with() para include.", "anchor": "mapa" },
+      { "name": "Portar seeders e factories", "text": "Reescreva o DatabaseSeeder com defineSeed e as factories com factory().", "anchor": "seeders" }
+    ]
+  },
+  "faq": [
+    { "q": "Dá para usar o kastor dentro de um projeto Laravel?", "a": "Não. O kastor é uma biblioteca TypeScript e roda em runtimes JavaScript: Node.js, Bun, Deno e plataformas edge. Uma aplicação PHP continua usando o Eloquent. O que dá para fazer é rodar um serviço TypeScript ao lado do Laravel no mesmo banco, ou levar um serviço para TypeScript." },
+    { "q": "Laravel e uma API Node.js podem dividir o mesmo banco?", "a": "Sim. Rode <code>npx kastor db pull</code> no banco do Laravel para ter um schema tipado, escolha um lado para cuidar das migrações e siga as convenções do Laravel no lado TypeScript: <code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code> e os mesmos formatos JSON das colunas com cast." },
+    { "q": "Qual é o equivalente do with() do Eloquent?", "a": "<code>include</code>. <code>Post::with([&#39;author&#39;, &#39;tags&#39;])-&gt;withCount(&#39;comments&#39;)</code> vira <code>db.posts.findMany(&#123; include: &#123; author: true, tags: true, _count: &#123; select: &#123; comments: true &#125; &#125; &#125; &#125;)</code>, carregado em uma única instrução por chamada." },
+    { "q": "Tem seeders e factories?", "a": "Sim. Um arquivo de seed exporta <code>defineSeed(async (db) =&gt; ...)</code> e roda com <code>npx kastor db seed</code>. <code>factory(db.users, (&#123; seq &#125;) =&gt; dados)</code> cria registros de teste, e <code>npx kastor migrate reset</code> faz o papel do <code>migrate:fresh --seed</code>." }
+  ],
+  "related": ["migracoes-banco-de-dados", "orm-typescript", "evitar-consultas-n-mais-1"]
+}
+-->
+<section id="caminhos"><h2>A parte honesta primeiro: dois runtimes, dois caminhos</h2>
+<p>O Eloquent vive no PHP. O kastor vive em runtimes JavaScript: Node.js, Bun, Deno, Cloudflare Workers e outras plataformas edge. Não existe extensão PHP nem ponte, e este guia não vai fingir que existe. Se o seu produto é um monólito Laravel e você está satisfeito com ele, o Eloquent é a ferramenta certa ali.</p>
+<p>Quem vem do <strong>Laravel Eloquent</strong> costuma chegar ao kastor em uma de duas situações, e o guia cobre as duas:</p>
+<ul>
+<li><strong>Caminho A: levar para TypeScript.</strong> O time reescreve uma aplicação Laravel ou separa um serviço em Node.js ou Bun, e quer um ORM com cara conhecida: models, relações, eager loading, scopes, migrações, seeders e factories.</li>
+<li><strong>Caminho B: TypeScript ao lado do PHP.</strong> O Laravel continua rodando, e uma API TypeScript nova (um backend mobile, um serviço de tempo real, um frontend Next.js com código no servidor) lê e grava no mesmo banco.</li>
+</ul>
+<p>Os dois começam do mesmo jeito: o kastor lê o banco que o Laravel construiu.</p>
+</section>
+<section id="pull"><h2>Passo 1: puxar o schema que as migrações do Laravel criaram</h2>
+<p>Em um projeto TypeScript novo, instale o kastor e o driver do seu banco. A maioria das aplicações Laravel roda MySQL ou MariaDB; PostgreSQL funciona do mesmo jeito com <code>pg</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor mysql2
+npx kastor init --db mysql
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p>Antes do pull, aponte o <code>DATABASE_URL</code> do <code>.env</code> criado pelo <code>init</code> para o banco do Laravel, por exemplo <code>mysql://forge:secret@127.0.0.1:3306/laravel</code>. O <code>db pull</code> lê tabelas, colunas, defaults, índices e chaves estrangeiras criadas pelo <code>php artisan migrate</code> e escreve definições <code>table()</code> com as relações deduzidas das chaves. O Laravel usa snake case nas colunas, então o schema mantém os nomes do banco com <code>.map()</code> e o TypeScript lê em camelCase:</p>
+<pre data-kind="editor" data-lang="php" data-title="app/Models/Post.php">
+class Post extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $casts = ['published' =&gt; 'boolean', 'meta' =&gt; 'array'];
+
+    public function author() { return $this-&gt;belongsTo(User::class, 'user_id'); }
+    public function comments() { return $this-&gt;hasMany(Comment::class); }
+
+    public function scopePublished($query) { return $query-&gt;where('published', true); }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.bigId(),
+  name: t.string(),
+  email: t.string().unique(),
+  createdAt: t.datetime().map('created_at').nullable().defaultNow(),
+  updatedAt: t.datetime().map('updated_at').nullable().updatedAt(),
+})
+
+export const posts = table('posts', {
+  id: t.bigId(),
+  userId: t.bigint().map('user_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  meta: t.json&lt;{ tags?: string[] }&gt;().nullable(),
+  createdAt: t.datetime().map('created_at').nullable().defaultNow(),
+  updatedAt: t.datetime().map('updated_at').nullable().updatedAt(),
+  deletedAt: t.datetime().map('deleted_at').nullable(),
+}, { softDelete: 'deletedAt' })
+
+export const comments = table('comments', {
+  id: t.bigId(),
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id, { onDelete: 'cascade' }),
+  body: t.text(),
+})
+
+export const schema = { users, posts, comments }
+
+export const relations = ({ users, posts, comments }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['userId'], references: ['id'] }), comments: many(comments) },
+  comments: { post: one(posts, { fields: ['postId'], references: ['id'] }) },
+})
+</pre>
+<p>O <code>$table-&gt;id()</code> do Laravel é um big integer sem sinal, então os ids são <code>t.bigId()</code> e chegam como <code>bigint</code> no JavaScript. É exato para qualquer valor que o MySQL guarda; converta com <code>String(id)</code> antes de enviar como JSON.</p>
+</section>
+<section id="dono"><h2>Passo 2: decidir quem cuida das migrações</h2>
+<p>No caminho A, o kastor assume. Registre o banco atual como primeira migração do kastor e faça cada mudança em <code>src/db/schema.ts</code>:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate dev --name add_slug_to_posts
+npx kastor migrate deploy
+</pre>
+<p>No caminho B, mantenha o Laravel como dono enquanto o PHP for a aplicação principal. Rode <code>php artisan migrate</code> como sempre e depois <code>npx kastor db pull</code> para atualizar o schema TypeScript, com commit junto da mudança. Não rode <code>kastor migrate dev</code> nesse banco enquanto o Laravel cuidar dele. O Laravel guarda o histórico na tabela <code>migrations</code> e o kastor na <code>_kastor_migrations</code>; uma nunca mexe na outra, então trocar de dono depois é seguro.</p>
+</section>
+<section id="mapa"><h2>Passo 3: do Eloquent para o kastor, conceito por conceito</h2>
+<table class="spec">
+<thead><tr><th>Eloquent e Laravel</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>class Post extends Model</code></td><td><code>table(&#39;posts&#39;, ...)</code> e tipos por <code>InferSelect</code></td></tr>
+<tr><td><code>$fillable</code>, <code>$casts</code></td><td>os tipos de create e update, <code>t.boolean()</code>, <code>t.json&lt;T&gt;()</code></td></tr>
+<tr><td><code>belongsTo</code>, <code>hasOne</code>, <code>hasMany</code></td><td><code>one()</code> e <code>many()</code></td></tr>
+<tr><td><code>belongsToMany</code> com tabela pivot</td><td><code>many(tags, &#123; through: postTag &#125;)</code></td></tr>
+<tr><td><code>scopePublished</code></td><td>um objeto where tipado</td></tr>
+<tr><td><code>with()</code>, <code>withCount()</code>, <code>whereHas()</code></td><td><code>include</code>, <code>_count</code>, <code>some</code></td></tr>
+<tr><td><code>SoftDeletes</code>, <code>withTrashed</code>, <code>restore</code></td><td><code>softDelete</code>, <code>withDeleted: true</code>, <code>restore</code></td></tr>
+<tr><td><code>paginate()</code>, <code>cursorPaginate()</code></td><td><code>take</code> e <code>skip</code> com <code>count</code>, ou <code>findPage</code></td></tr>
+<tr><td><code>updateOrCreate</code>, <code>increment</code></td><td><code>upsert</code>, <code>&#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>DB::transaction</code>, <code>DB::select</code></td><td><code>db.$transaction</code>, <code>db.$sql</code></td></tr>
+<tr><td><code>php artisan migrate</code>, <code>migrate:fresh --seed</code></td><td><code>npx kastor migrate deploy</code>, <code>migrate reset</code></td></tr>
+</tbody>
+</table>
+<p>O eager loading é onde o kastor fica mais parecido com o Eloquent, com uma vantagem: o <code>with()</code> roda uma consulta extra por relação, enquanto o kastor carrega a árvore inteira em uma instrução por chamada.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/list.ts">
+import { db } from '../db'
+
+// Era: scopePublished
+const published = { published: true } as const
+
+export const latest = () =&gt;
+  db.posts.findMany({
+    where: { ...published, comments: { some: {} } },
+    include: { author: { select: { id: true, name: true } }, _count: { select: { comments: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+</pre>
+<p>Eventos de model e observers não têm equivalente. Coloque essa lógica na função que grava, onde o TypeScript confere tudo. Accessors como <code>getFullNameAttribute</code> viram funções comuns sobre o tipo da linha.</p>
+</section>
+<section id="seeders"><h2>Passo 4: seeders e factories</h2>
+<p>A chave <code>seed</code> do <code>kastor.config.ts</code> aponta para um arquivo que faz o papel do <code>DatabaseSeeder</code>, e <code>factory()</code> cobre as model factories, inclusive registros aninhados como o <code>has()</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
+import { defineSeed, factory } from 'kastor'
+import type { db as client } from './index'
+
+export default defineSeed&lt;typeof client&gt;(async (db) =&gt; {
+  const users = factory(db.users, ({ seq }) =&gt; ({ name: `Usuário ${seq}`, email: `user${seq}@example.com` }))
+
+  // Era: User::factory()-&gt;count(10)-&gt;has(Post::factory()-&gt;count(3))-&gt;create()
+  await users.createMany(10, () =&gt; ({
+    posts: { create: [1, 2, 3].map((n) =&gt; ({ title: `Post ${n}` })) },
+  }))
+})
+</pre>
+</section>
+<section id="lado-a-lado"><h2>Caminho B na prática: dividindo o banco com o Laravel</h2>
+<ul>
+<li><strong>Timestamps.</strong> O Eloquent preenche <code>created_at</code> e <code>updated_at</code>. No kastor, <code>defaultNow()</code> preenche o primeiro na criação e <code>.updatedAt()</code> preenche o segundo em cada create e update, mantendo a mesma convenção.</li>
+<li><strong>Soft deletes.</strong> Declare <code>softDelete: &#39;deletedAt&#39;</code> nas tabelas que usam o trait, para que as leituras em TypeScript ignorem registros na lixeira como o Eloquent faz.</li>
+<li><strong>Autenticação.</strong> As sessões do Laravel são criptografadas com a <code>APP_KEY</code> e difíceis de compartilhar. Tokens são mais simples: o Sanctum guarda um hash SHA-256 de cada token, então a API TypeScript consegue validar os tokens emitidos pelo Laravel.</li>
+<li><strong>Conexões.</strong> Os workers do PHP-FPM e o pool do Node seguram conexões. Mantenha a soma abaixo do <code>max_connections</code> do servidor.</li>
+<li><strong>Relações polimórficas.</strong> <code>morphTo</code> guarda um nome de classe e um id sem chave estrangeira; consulte essas colunas com filtros diretos ou com <code>$sql</code>.</li>
+<li><strong>Hashes de senha.</strong> O Laravel grava bcrypt com o prefixo <code>$2y$</code>. Confira se a biblioteca bcrypt que você escolher no Node aceita esse prefixo antes de portar o login.</li>
+</ul>
+<p>A versão em inglês deste guia traz a tabela completa de equivalências e um exemplo de validação de tokens do Sanctum em TypeScript. Para o resto do fluxo, veja o guia de <a href="migracoes-banco-de-dados.html">migrações de banco de dados</a>.</p>
+</section>

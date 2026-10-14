@@ -1,0 +1,225 @@
+<!--meta
+{
+  "slug": "migrate-from-django-orm",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Django to TypeScript, or side by side",
+  "title": "Coming from the Django ORM: kastor for Python developers | kastor",
+  "description": "Coming from the Django ORM: kastor runs in JavaScript runtimes, not Python. Map models, QuerySets, select_related, Q objects, migrations and fixtures, or share the database.",
+  "h1": "Coming from the Django ORM",
+  "crumb": "From Django ORM",
+  "lead": "kastor is a TypeScript ORM for Node.js, Bun, Deno and edge runtimes. It does not run in Python, and it does not replace Django inside a Django project. It does give Django developers a familiar model of the world in TypeScript, and it can work on the same database as a running Django app.",
+  "readTime": "13 min read",
+  "keywords": ["Django ORM TypeScript", "Django ORM equivalent Node.js", "Django to Node.js", "migrate Django to TypeScript", "Django and Node.js same database", "select_related TypeScript"],
+  "howto": {
+    "name": "Use kastor on a database built by Django",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the pg or mysql2 driver", "your Django project"],
+    "steps": [
+      { "name": "Choose the path", "text": "Decide whether a service moves to TypeScript or a TypeScript API runs next to Django on the same database.", "anchor": "paths" },
+      { "name": "Pull the schema Django built", "text": "Run npx kastor init and npx kastor db pull against the database that manage.py migrate created.", "anchor": "pull" },
+      { "name": "Pick the migration owner", "text": "Keep makemigrations and refresh with db pull, or run npx kastor migrate baseline --name init and let kastor own changes.", "anchor": "owner" },
+      { "name": "Translate QuerySets", "text": "Map filter, exclude, select_related, prefetch_related, annotate and transaction.atomic to the kastor client.", "anchor": "queries" },
+      { "name": "Share authentication safely", "text": "Verify Django password hashes or tokens from TypeScript instead of sharing session cookies.", "anchor": "side-by-side" }
+    ]
+  },
+  "faq": [
+    { "q": "Can kastor be used from Python or inside Django?", "a": "No. kastor runs in JavaScript runtimes only: Node.js, Bun, Deno and edge platforms. Django keeps its own ORM. kastor is for TypeScript code, either a service you move out of Django or an API that runs next to it on the same database." },
+    { "q": "What is the kastor version of select_related and prefetch_related?", "a": "Both are <code>include</code>. <code>Post.objects.select_related(&#39;author&#39;).prefetch_related(&#39;tags&#39;)</code> becomes <code>db.posts.findMany(&#123; include: &#123; author: true, tags: true &#125; &#125;)</code>, and kastor loads the whole tree in one statement per call." },
+    { "q": "How do Q objects and double underscore lookups translate?", "a": "Lookups become nested filter objects: <code>title__icontains</code> is <code>title: &#123; contains, mode: &#39;insensitive&#39; &#125;</code>, <code>author__name</code> is a filter on the <code>author</code> relation, and <code>Q(a) | Q(b)</code> is <code>OR: [a, b]</code>." },
+    { "q": "Can Django and a Node.js API share one PostgreSQL database?", "a": "Yes. Pull the schema with <code>npx kastor db pull</code>, keep one side in charge of migrations, and keep Django conventions such as the <code>app_model</code> table names and timestamp columns. Verify users through password hashes or tokens rather than Django session cookies." },
+    { "q": "What replaces fixtures and factory_boy?", "a": "A seed file with <code>defineSeed</code>, run by <code>npx kastor db seed</code>, and the <code>factory()</code> helper for test data typed from the schema." }
+  ],
+  "related": ["migrate-from-laravel-eloquent", "migrate-from-rails-active-record", "fastify-orm"]
+}
+-->
+<section id="paths"><h2>What kastor is, and is not, for a Django team</h2>
+<p>The Django ORM is part of Django, written in Python, and it works best inside a Django project. kastor is written in TypeScript and runs in Node.js, Bun, Deno and edge runtimes such as Cloudflare Workers. There is no Python package, and nothing in this guide makes kastor run inside Django.</p>
+<p>So the useful question for someone coming from the <strong>Django ORM</strong> is narrower: when you write TypeScript, what does the familiar workflow look like? Teams end up here on one of two paths:</p>
+<ul>
+<li><strong>Path A: a service moves to TypeScript.</strong> A real time feature, an edge API or a whole backend is rewritten in Node.js or Bun, and the team wants models, relations, QuerySet style filtering and migrations it recognizes.</li>
+<li><strong>Path B: TypeScript next to Django.</strong> Django and its admin keep running, and a TypeScript API (often a Next.js or mobile backend) uses the same PostgreSQL or MySQL database.</li>
+</ul>
+</section>
+<section id="pull"><h2>Step 1: pull the schema Django built</h2>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p><code>db pull</code> reads the tables <code>manage.py migrate</code> created, including the many to many join tables Django generates, and writes <code>table()</code> definitions plus relations guessed from foreign keys. Django names tables <code>app_model</code>; rename the exports to something readable and keep the table names as they are.</p>
+<pre data-kind="editor" data-lang="python" data-title="blog/models.py">
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+class Post(models.Model):
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts")
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True, null=True)
+    published = models.BooleanField(default=False)
+    views = models.IntegerField(default=0)
+    tags = models.ManyToManyField(Tag, related_name="posts")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["published", "created_at"])]
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor'
+
+export const users = table('auth_user', {
+  id: t.id(),
+  username: t.string(150).unique(),
+  email: t.string(254),
+  password: t.string(128),
+  isActive: t.boolean().map('is_active'),
+  dateJoined: t.datetime().map('date_joined').defaultNow(),
+})
+
+export const tags = table('blog_tag', {
+  id: t.bigId(),
+  name: t.string(50).unique(),
+})
+
+export const posts = table('blog_post', {
+  id: t.bigId(),
+  authorId: t.int().map('author_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+  title: t.string(200),
+  body: t.text().nullable(),
+  published: t.boolean().default(false),
+  views: t.int().default(0),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+  updatedAt: t.datetime().map('updated_at').updatedAt(),
+}, { indexes: (p) =&gt; [index(p.published, p.createdAt)] })
+
+// The join table Django created for ManyToManyField.
+export const postTags = table('blog_post_tags', {
+  id: t.bigId(),
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id, { onDelete: 'cascade' }),
+  tagId: t.bigint().map('tag_id').references(() =&gt; tags.id, { onDelete: 'cascade' }),
+})
+
+export const schema = { users, tags, posts, postTags }
+
+export const relations = ({ users, tags, posts, postTags }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: {
+    author: one(users, { fields: ['authorId'], references: ['id'] }),
+    tags: many(tags, { through: postTags }),
+  },
+  tags: { posts: many(posts, { through: postTags }) },
+})
+</pre>
+<p>Django enforces <code>on_delete</code> in Python, so its foreign keys in the database are plain constraints without a cascade rule. Check what <code>db pull</code> reports: if the database has no <code>ON DELETE CASCADE</code>, keep the reference without <code>onDelete</code> in kastor too, and delete children explicitly, which is what Django does for you.</p>
+</section>
+<section id="owner"><h2>Step 2: pick the migration owner</h2>
+<p>Django records applied migrations in <code>django_migrations</code>; kastor uses <code>_kastor_migrations</code>. They never touch each other's table.</p>
+<ul>
+<li><strong>Django stays in charge</strong> (path B, usually). Keep using <code>makemigrations</code> and <code>migrate</code>, then run <code>npx kastor db pull</code> and commit the refreshed TypeScript schema. Do not run <code>kastor migrate dev</code> against that database.</li>
+<li><strong>kastor takes over</strong> (path A). Baseline once, then change the schema in TypeScript:</li>
+</ul>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate dev --name add_slug_to_posts
+npx kastor migrate deploy
+</pre>
+</section>
+<section id="queries"><h2>Step 3: QuerySets to kastor calls</h2>
+<pre data-kind="editor" data-lang="python" data-title="blog/views.py">
+posts = (
+    Post.objects.filter(published=True, tags__name="python")
+    .exclude(title__icontains="draft")
+    .select_related("author")
+    .prefetch_related("tags")
+    .annotate(n_tags=Count("tags"))
+    .order_by("-created_at")[:20]
+)
+Post.objects.filter(pk=post_id).update(views=F("views") + 1)
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/queries.ts">
+import { db } from '../db'
+
+export const latest = () =&gt;
+  db.posts.findMany({
+    where: {
+      published: true,
+      tags: { some: { name: 'python' } },
+      NOT: { title: { contains: 'draft', mode: 'insensitive' } },
+    },
+    include: {
+      author: { select: { username: true } },
+      tags: true,
+      _count: { select: { tags: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+
+export const bump = (postId: bigint) =&gt;
+  db.posts.update({ where: { id: postId }, data: { views: { increment: 1 } } })
+</pre>
+<table class="spec">
+<thead><tr><th>Django ORM</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>class Post(models.Model)</code></td><td><code>table(&#39;blog_post&#39;, ...)</code></td></tr>
+<tr><td><code>CharField(max_length=n)</code>, <code>TextField</code></td><td><code>t.string(n)</code>, <code>t.text()</code></td></tr>
+<tr><td><code>null=True</code></td><td><code>.nullable()</code></td></tr>
+<tr><td><code>auto_now_add</code>, <code>auto_now</code></td><td><code>defaultNow()</code>, <code>updatedAt()</code></td></tr>
+<tr><td><code>ForeignKey</code>, <code>OneToOneField</code></td><td><code>.references()</code> with <code>one()</code></td></tr>
+<tr><td><code>related_name="posts"</code></td><td><code>many(posts)</code> on the other side</td></tr>
+<tr><td><code>ManyToManyField</code></td><td><code>many(tags, &#123; through: postTags &#125;)</code></td></tr>
+<tr><td><code>filter(a=1)</code>, <code>exclude(...)</code></td><td><code>where: &#123; a: 1 &#125;</code>, <code>NOT</code></td></tr>
+<tr><td><code>__in</code>, <code>__gte</code>, <code>__isnull=True</code></td><td><code>in</code>, <code>gte</code>, <code>null</code></td></tr>
+<tr><td><code>__icontains</code>, <code>__startswith</code></td><td><code>contains</code> with <code>mode</code>, <code>startsWith</code></td></tr>
+<tr><td><code>Q(a) | Q(b)</code>, <code>~Q(a)</code></td><td><code>OR: [a, b]</code>, <code>NOT: a</code></td></tr>
+<tr><td><code>tags__name="x"</code></td><td><code>tags: &#123; some: &#123; name: &#39;x&#39; &#125; &#125;</code></td></tr>
+<tr><td><code>select_related</code>, <code>prefetch_related</code></td><td><code>include</code></td></tr>
+<tr><td><code>values(&#39;id&#39;, &#39;title&#39;)</code>, <code>only()</code></td><td><code>select</code></td></tr>
+<tr><td><code>annotate(Count(...))</code>, <code>aggregate(Sum(...))</code></td><td><code>_count</code>, <code>groupBy</code>, <code>aggregate</code></td></tr>
+<tr><td><code>F(&#39;views&#39;) + 1</code></td><td><code>&#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>get_or_create</code>, <code>update_or_create</code></td><td><code>upsert</code></td></tr>
+<tr><td><code>bulk_create</code></td><td><code>createMany</code></td></tr>
+<tr><td><code>[:20]</code>, <code>Paginator</code></td><td><code>take</code>, <code>skip</code>, <code>findPage</code></td></tr>
+<tr><td><code>transaction.atomic()</code></td><td><code>db.$transaction(async (tx) =&gt; ...)</code></td></tr>
+<tr><td><code>Model.objects.raw(sql)</code>, <code>connection.cursor()</code></td><td><code>db.$sql`...`</code>, <code>db.$execute`...`</code></td></tr>
+<tr><td><code>makemigrations</code> and <code>migrate</code></td><td><code>npx kastor migrate dev</code> and <code>migrate deploy</code></td></tr>
+<tr><td><code>loaddata</code>, factory_boy</td><td><code>npx kastor db seed</code>, <code>factory()</code></td></tr>
+<tr><td>Django admin for browsing data</td><td><code>npx kastor studio</code></td></tr>
+</tbody>
+</table>
+<p>QuerySets are lazy and so are kastor queries: nothing runs until you <code>await</code>. A difference to keep in mind is that a kastor result never fetches more on attribute access. If you did not <code>include</code> a relation, it is not on the object, and the compiler tells you before the code runs. That rules out the N+1 pattern Django leaves to <code>select_related</code> discipline.</p>
+</section>
+<section id="side-by-side"><h2>Path B in practice: sharing the database with Django</h2>
+<ul>
+<li><strong>Sessions stay in Django.</strong> Django signs session cookies and keeps sessions in its own store. Rather than decoding them, verify credentials or tokens from TypeScript.</li>
+<li><strong>Password hashes.</strong> Django's default hasher writes <code>pbkdf2_sha256$iterations$salt$hash</code>, which Node can check with its built in crypto module.</li>
+<li><strong>Signals.</strong> <code>post_save</code> receivers do not fire for TypeScript writes. Move logic that must run for every write into the database (constraints, triggers) or into one service both sides call.</li>
+<li><strong>Time zones.</strong> With <code>USE_TZ = True</code>, Django stores UTC. kastor returns <code>Date</code> objects, which are UTC instants as well.</li>
+</ul>
+<pre data-kind="editor" data-lang="ts" data-title="src/auth/django-password.ts">
+import { pbkdf2Sync, timingSafeEqual } from 'node:crypto'
+import { db } from '../db'
+
+// Checks a password against Django's default pbkdf2_sha256 hasher.
+export async function login(username: string, password: string) {
+  const user = await db.users.findUnique({ where: { username } })
+  if (!user || !user.isActive) return null
+  const [algorithm, iterations, salt, expected] = user.password.split('$')
+  if (algorithm !== 'pbkdf2_sha256' || !iterations || !salt || !expected) return null
+  const actual = pbkdf2Sync(password, salt, Number(iterations), 32, 'sha256').toString('base64')
+  const ok = actual.length === expected.length &amp;&amp; timingSafeEqual(Buffer.from(actual), Buffer.from(expected))
+  return ok ? user : null
+}
+</pre>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Big auto ids.</strong> Recent Django projects use <code>BigAutoField</code>, so ids are <code>t.bigId()</code> and arrive as <code>bigint</code>. Older tables and <code>auth_user</code> may still use 32 bit ids; follow what <code>db pull</code> reports.</li>
+<li><strong>Generic relations.</strong> <code>GenericForeignKey</code> stores a content type id and an object id without a database foreign key. Query those with filters on both columns or with <code>$sql</code>.</li>
+<li><strong>Choices.</strong> <code>choices=</code> lives only in Python. If you want the same guarantee in TypeScript, declare the column as <code>t.enum([...])</code>; that also adds a check when kastor owns migrations.</li>
+<li><strong>Blank strings.</strong> Django stores empty strings for <code>CharField(blank=True)</code> without <code>null=True</code>. Filter on <code>&#39;&#39;</code>, not <code>null</code>.</li>
+<li><strong>Default ordering.</strong> <code>Meta.ordering</code> applies implicitly in Django. kastor never orders implicitly, so add <code>orderBy</code> where order matters.</li>
+</ul>
+<p>The <a href="fastify-orm.html">Fastify</a> and <a href="hono-orm.html">Hono</a> guides are good next steps for an API that runs next to Django, and the <a href="migrate-to-kastor.html">migration hub</a> lists every other path.</p>
+</section>

@@ -1,0 +1,195 @@
+<!--meta
+{
+  "slug": "nuxt-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Nuxt ORM: kastor in Nitro server routes with TypeScript | kastor",
+  "description": "Use kastor as the Nuxt ORM: a client in server/utils reused across hot reloads, typed server routes, runtimeConfig for secrets, a Nitro close hook and migrations on deploy.",
+  "h1": "kastor with Nuxt",
+  "crumb": "Nuxt",
+  "lead": "Nuxt runs your server code in Nitro, its server engine. kastor lives in <code>server/utils</code>, your API lives in <code>server/api</code>, and pages read through <code>useFetch</code>, so the database and its credentials never reach the browser.",
+  "readTime": "10 min read",
+  "keywords": ["Nuxt ORM", "Nuxt database", "Nuxt server routes database", "Nitro ORM", "Nuxt PostgreSQL", "Nuxt TypeScript ORM"],
+  "howto": {
+    "name": "Set up kastor in a Nuxt project",
+    "totalTime": "PT20M",
+    "tools": ["Nuxt 3 or newer", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres, moving the schema to server/db/schema.ts.", "anchor": "structure" },
+      { "name": "Read secrets from runtimeConfig", "text": "Declare databaseUrl in runtimeConfig and set NUXT_DATABASE_URL in the environment.", "anchor": "config" },
+      { "name": "Create the client in server/utils", "text": "Create server/utils/db.ts that reuses the client through globalThis in development.", "anchor": "client" },
+      { "name": "Write server routes", "text": "Use defineEventHandler with getQuery, readBody and getRouterParam to call kastor.", "anchor": "routes" },
+      { "name": "Migrate on deploy", "text": "Run npx kastor migrate deploy in CI before the new Nitro build starts.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "Where should the database client live in Nuxt?", "a": "In <code>server/utils/db.ts</code>. Nitro auto imports everything exported from <code>server/utils</code> into server routes, and nothing in the <code>server</code> folder is bundled for the browser." },
+    { "q": "How do I pass the database URL in Nuxt?", "a": "Declare <code>runtimeConfig: &#123; databaseUrl: &#39;&#39; &#125;</code> in nuxt.config.ts and set <code>NUXT_DATABASE_URL</code> in the environment. Read it with <code>useRuntimeConfig().databaseUrl</code> on the server. Keys outside <code>public</code> never reach the client." },
+    { "q": "Can Nuxt pages query kastor directly?", "a": "No. Vue components can run in the browser. Expose a server route and call it with <code>useFetch</code> or <code>$fetch</code>, which runs on the server during SSR and over HTTP in the browser." },
+    { "q": "Does it work on Cloudflare with Nuxt?", "a": "Yes. With the Cloudflare preset, read the D1 binding from <code>event.context.cloudflare.env.DB</code> and build the client per request with <code>d1()</code>." }
+  ],
+  "related": ["nextjs-app-router-orm", "sveltekit-orm", "cloudflare-workers-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>Nuxt separates the Vue app from the server engine, Nitro. Database code belongs entirely in the <code>server</code> folder, which Nuxt never ships to the browser. That gives kastor a natural home in a <strong>Nuxt</strong> project:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+nuxt.config.ts            runtimeConfig with databaseUrl
+server/
+  db/schema.ts            tables and relations
+  utils/db.ts             the client, auto imported in server routes
+  api/posts.get.ts        GET /api/posts
+  api/posts.post.ts       POST /api/posts
+  api/posts/[id].get.ts   GET /api/posts/:id
+  plugins/db-close.ts     closes the pool when Nitro shuts down
+pages/posts.vue           reads through useFetch
+kastor.config.ts          used by the CLI
+kastor/migrations/        SQL files
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+</pre>
+<p>Move the starter schema to <code>server/db/schema.ts</code> and set <code>schema: &#39;./server/db/schema.ts&#39;</code> in <code>kastor.config.ts</code>, so the app and the CLI read the same file.</p>
+</section>
+<section id="config"><h2>Secrets through runtimeConfig</h2>
+<p>Nuxt reads runtime configuration from the environment at startup. A key declared at the top level of <code>runtimeConfig</code> is server only and is filled from a variable named <code>NUXT_</code> plus the key in upper snake case.</p>
+<pre data-kind="editor" data-lang="ts" data-title="nuxt.config.ts">
+export default defineNuxtConfig({
+  runtimeConfig: {
+    // Filled from NUXT_DATABASE_URL at runtime. Not under "public", so it stays on the server.
+    databaseUrl: '',
+  },
+})
+</pre>
+<p>The kastor CLI does not read <code>runtimeConfig</code>; it reads <code>DATABASE_URL</code> from the environment or from <code>.env</code> next to the config. Set both names in <code>.env</code> during development, or point the config at <code>NUXT_DATABASE_URL</code>.</p>
+</section>
+<section id="client"><h2>The client in server/utils</h2>
+<p>Nitro reloads the server bundle when you edit server files in development. Keep the client on <code>globalThis</code> outside production so each reload reuses the same pool instead of opening another one.</p>
+<pre data-kind="editor" data-lang="ts" data-title="server/utils/db.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from '../db/schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: useRuntimeConfig().databaseUrl, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="server/plugins/db-close.ts">
+import { db } from '../utils/db'
+
+export default defineNitroPlugin((nitroApp) =&gt; {
+  nitroApp.hooks.hook('close', async () =&gt; {
+    await db.$disconnect()
+  })
+})
+</pre>
+</section>
+<section id="routes"><h2>Typed server routes</h2>
+<p>Files in <code>server/api</code> become routes, and the HTTP method comes from the file name. Exports from <code>server/utils</code> are auto imported, so <code>db</code> is available without an import; the explicit import below works too and keeps editors happy outside Nuxt's generated types.</p>
+<pre data-kind="editor" data-lang="ts" data-title="server/api/posts.get.ts">
+import { db } from '../utils/db'
+
+export default defineEventHandler(async (event) =&gt; {
+  const { q, take } = getQuery(event)
+  return db.posts.findMany({
+    where: {
+      published: true,
+      ...(q ? { title: { contains: String(q), mode: 'insensitive' as const } } : {}),
+    },
+    include: { author: { select: { name: true } }, tags: true },
+    orderBy: { id: 'desc' },
+    take: Math.min(Number(take ?? 20), 100),
+  })
+})
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="server/api/posts.post.ts">
+import { isKastorError } from 'kastor'
+import { db } from '../utils/db'
+
+export default defineEventHandler(async (event) =&gt; {
+  const body = await readBody&lt;{ title: string; authorId: number; tags?: string[] }&gt;(event)
+  try {
+    const post = await db.posts.create({
+      data: {
+        title: body.title,
+        authorId: body.authorId,
+        tags: { connectOrCreate: (body.tags ?? []).map((name) =&gt; ({ where: { name }, create: { name } })) },
+      },
+      include: { tags: true },
+    })
+    setResponseStatus(event, 201)
+    return post
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'FOREIGN_KEY_VIOLATION') {
+      throw createError({ statusCode: 422, statusMessage: 'Unknown author' })
+    }
+    throw e
+  }
+})
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="server/api/posts/[id].get.ts">
+import { db } from '../../utils/db'
+
+export default defineEventHandler(async (event) =&gt; {
+  const id = Number(getRouterParam(event, 'id'))
+  const post = await db.posts.findUnique({ where: { id }, include: { author: true, tags: true } })
+  if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+  return post
+})
+</pre>
+<p>Pages read through <code>useFetch</code>. During server side rendering the call goes straight to the route handler without HTTP, and the response type is inferred from the handler's return value, which kastor typed from the schema.</p>
+<pre data-kind="editor" data-lang="vue" data-title="pages/posts.vue">
+&lt;script setup lang="ts"&gt;
+const { data: posts } = await useFetch('/api/posts', { query: { take: 10 } })
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;ul&gt;
+    &lt;li v-for="p in posts" :key="p.id"&gt;{{ p.title }} by {{ p.author.name }}&lt;/li&gt;
+  &lt;/ul&gt;
+&lt;/template&gt;
+</pre>
+</section>
+<section id="deploy"><h2>Migrations in CI and deploy</h2>
+<p>Nitro builds a standalone server in <code>.output</code>. Run migrations before that server starts serving the new code. In CI:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npx nuxi typecheck
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+- run: npx nuxi build
+</pre>
+<p>On a single server, running <code>npx kastor migrate deploy &amp;&amp; node .output/server/index.mjs</code> in the start script also works. On serverless presets (Vercel, Netlify), use the CI step and the pooled connection string for the app. On the Cloudflare preset, read <code>event.context.cloudflare.env.DB</code> in a handler, create the client with <code>d1()</code> per request, and apply migrations with wrangler as the <a href="cloudflare-workers-orm.html">Workers guide</a> describes.</p>
+</section>
+<section id="patterns"><h2>Transactions and shared queries</h2>
+<p>Server routes that write several rows should wrap them in <code>db.$transaction(async (tx) =&gt; ...)</code>; the callback commits when it resolves and rolls back when it throws, including when you throw <code>createError</code>. Queries used by several routes fit naturally in more files under <code>server/utils</code>, which Nitro also auto imports, so a function like <code>publishedFeed()</code> is available everywhere on the server.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The client lives in <code>server/utils</code> and nothing under <code>pages</code> or <code>components</code> imports it.</li>
+<li>Production sets <code>NUXT_DATABASE_URL</code> for the app and <code>DATABASE_URL</code> for the migration step.</li>
+<li>The Nitro close hook disconnects the pool, so rolling restarts do not leave connections behind.</li>
+<li>Serverless presets use a pooled URL and a pool <code>max</code> of 1 to 5.</li>
+<li>CI runs <code>npx nuxi typecheck</code>, which checks every query against the schema, before <code>migrate deploy</code>.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Importing from components.</strong> Never import <code>server/utils/db.ts</code> from a <code>.vue</code> file or a composable. Go through a server route.</li>
+<li><strong>Bigint and Date over JSON.</strong> Server routes serialize responses as JSON. Dates become strings on the client; <code>bigint</code> values fail, so convert <code>t.bigId()</code> keys with <code>String(id)</code>.</li>
+<li><strong>Pool size on serverless.</strong> Each function instance has its own pool; keep <code>max</code> low and use a pooler URL.</li>
+<li><strong>Two env names.</strong> The app reads <code>NUXT_DATABASE_URL</code> through runtimeConfig while the CLI reads <code>DATABASE_URL</code>. Set both in every environment where you run migrations.</li>
+</ul>
+<p>The <a href="sveltekit-orm.html">SvelteKit guide</a> shows the same ideas with load functions, and the <a href="api.html">API reference</a> lists every query option used here.</p>
+</section>

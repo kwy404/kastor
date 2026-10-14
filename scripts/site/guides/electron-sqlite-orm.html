@@ -1,0 +1,186 @@
+<!--meta
+{
+  "slug": "electron-sqlite-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Electron SQLite ORM: kastor in the main process with IPC | kastor",
+  "description": "Use kastor as the Electron SQLite ORM: better-sqlite3 in the main process, the database in userData, typed IPC through a preload bridge, migrations on startup and packaging.",
+  "h1": "kastor with Electron and SQLite",
+  "crumb": "Electron SQLite",
+  "lead": "A desktop app keeps its data on the user's machine, and SQLite is the natural store. In Electron the database belongs to the main process; the renderer asks for data over IPC. kastor gives the main process typed queries, and applies the migrations you ship with each release when the app starts.",
+  "readTime": "11 min read",
+  "keywords": ["Electron SQLite ORM", "Electron database", "Electron better-sqlite3", "Electron TypeScript ORM", "Electron IPC database", "desktop app SQLite migrations"],
+  "howto": {
+    "name": "Use kastor with SQLite in an Electron app",
+    "totalTime": "PT45M",
+    "tools": ["Electron", "kastor", "better-sqlite3", "@electron/rebuild or an Electron build tool"],
+    "steps": [
+      { "name": "Install and rebuild the native driver", "text": "Install kastor and better-sqlite3, then rebuild better-sqlite3 for your Electron version.", "anchor": "structure" },
+      { "name": "Open the database in userData", "text": "Create the client in the main process with a file under app.getPath('userData').", "anchor": "main" },
+      { "name": "Apply shipped migrations on startup", "text": "Call deploy from kastor/migrate with the bundled migrations folder before creating windows.", "anchor": "main" },
+      { "name": "Expose typed IPC", "text": "Register ipcMain.handle channels and expose them through contextBridge in a preload script.", "anchor": "ipc" },
+      { "name": "Package the app", "text": "Unpack the native module from asar and ship kastor/migrations as an extra resource.", "anchor": "packaging" }
+    ]
+  },
+  "faq": [
+    { "q": "Should Electron renderers access SQLite directly?", "a": "No. Keep the database in the main process and expose narrow IPC channels through a preload script with <code>contextBridge</code>. The renderer stays sandboxed and never holds a file handle." },
+    { "q": "How do I run migrations in a desktop app?", "a": "Ship the <code>kastor/migrations</code> folder with the app and call <code>deploy(adapter, dir)</code> from <code>kastor/migrate</code> at startup. It applies only the migrations that the user's database has not seen, so updates upgrade the schema in place." },
+    { "q": "Why does better-sqlite3 fail to load in Electron?", "a": "It is a native module compiled for a specific Node ABI. Rebuild it for your Electron version with <code>@electron/rebuild</code>, or let electron-builder or Electron Forge do it during packaging." },
+    { "q": "Where should the database file live?", "a": "Under <code>app.getPath(&#39;userData&#39;)</code>, which is per user and survives app updates. Never inside the app bundle, which is read only and replaced on update." }
+  ],
+  "related": ["bun-orm", "database-migrations-explained", "database-seeding-typescript"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>An <strong>Electron</strong> app has a main process (Node.js, full system access), preload scripts (a bridge) and renderer processes (web pages). SQLite and kastor live in the main process only.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/main/
+  db/schema.ts            tables and relations
+  db/index.ts             opens the file, migrates, creates the client
+  ipc.ts                  ipcMain.handle channels
+  main.ts                 app lifecycle and windows
+src/preload/index.ts      contextBridge API for the renderer
+src/renderer/             the UI, calls window.api
+kastor.config.ts          for migrate dev during development
+kastor/migrations/        shipped with the app
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor better-sqlite3
+npm install -D electron @electron/rebuild
+npx electron-rebuild -f -w better-sqlite3
+npx kastor init --db sqlite
+</pre>
+<p><code>better-sqlite3</code> is a native module. The rebuild step compiles it for Electron's Node version; Electron Forge and electron-builder can run it for you during packaging. Recent Electron versions also ship <code>node:sqlite</code>, which the kastor <code>sqlite</code> adapter accepts and which needs no rebuild; check that your Electron version includes it before relying on it.</p>
+</section>
+<section id="main"><h2>Open, migrate, then create the client</h2>
+<p>The database file goes in the user data folder, which belongs to the user and survives updates. At startup the main process opens it, applies any migrations shipped with this version, and only then creates the client and the windows. <code>deploy</code> from <code>kastor/migrate</code> is the same engine as <code>kastor migrate deploy</code>: it records applied migrations in the database and skips them next time.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/main/db/index.ts">
+import { join } from 'node:path'
+import Database from 'better-sqlite3'
+import { app } from 'electron'
+import { kastor } from 'kastor'
+import { sqlite } from 'kastor/sqlite'
+import { deploy } from 'kastor/migrate'
+import { schema, relations } from './schema'
+
+const create = (file: string) =&gt; {
+  const handle = new Database(file)
+  handle.pragma('journal_mode = WAL')
+  const adapter = sqlite(handle)
+  return { adapter, db: kastor({ adapter, schema, relations }) }
+}
+
+export type Db = ReturnType&lt;typeof create&gt;['db']
+let current: Db | undefined
+
+export async function openDatabase(): Promise&lt;Db&gt; {
+  const { adapter, db } = create(join(app.getPath('userData'), 'app.db'))
+  // In a packaged app the migrations ship in resources/, next to app.asar.
+  const dir = app.isPackaged ? join(process.resourcesPath, 'migrations') : join(app.getAppPath(), 'kastor', 'migrations')
+  const { applied } = await deploy(adapter, dir)
+  if (applied.length) console.log(`applied ${applied.length} migration(s)`)
+  current = db
+  return db
+}
+
+export const getDb = (): Db =&gt; {
+  if (!current) throw new Error('openDatabase() has not run yet')
+  return current
+}
+</pre>
+<p>Back up the file before migrating if the data is precious: copying <code>app.db</code> to <code>app.db.bak</code> before <code>deploy</code> gives users a way back if a migration fails halfway.</p>
+</section>
+<section id="ipc"><h2>Typed IPC through a preload bridge</h2>
+<p>The renderer should not see the database, only a small API. Register handlers in the main process, then expose matching functions with <code>contextBridge</code>. Sharing the handler types keeps both sides in sync.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/main/ipc.ts">
+import { ipcMain } from 'electron'
+import { getDb } from './db'
+
+export const handlers = {
+  'notes:list': (search: string) =&gt;
+    getDb().posts.findMany({
+      where: search ? { title: { contains: search, mode: 'insensitive' } } : {},
+      include: { tags: true },
+      orderBy: { id: 'desc' },
+      take: 100,
+    }),
+  'notes:create': (title: string, body: string) =&gt;
+    getDb().posts.create({ data: { title, body, author: { connectOrCreate: { where: { email: 'me@local' }, create: { email: 'me@local' } } } } }),
+  'notes:delete': (id: number) =&gt; getDb().posts.delete({ where: { id } }),
+}
+
+export type Handlers = typeof handlers
+
+export function registerIpc() {
+  for (const [channel, fn] of Object.entries(handlers)) {
+    ipcMain.handle(channel, (_event: unknown, ...args: unknown[]) =&gt; (fn as (...a: unknown[]) =&gt; unknown)(...args))
+  }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/preload/index.ts">
+import { contextBridge, ipcRenderer } from 'electron'
+import type { Handlers } from '../main/ipc'
+
+type Api = { [K in keyof Handlers]: (...args: Parameters&lt;Handlers[K]&gt;) =&gt; Promise&lt;Awaited&lt;ReturnType&lt;Handlers[K]&gt;&gt;&gt; }
+
+const api: Api = {
+  'notes:list': (search) =&gt; ipcRenderer.invoke('notes:list', search),
+  'notes:create': (title, body) =&gt; ipcRenderer.invoke('notes:create', title, body),
+  'notes:delete': (id) =&gt; ipcRenderer.invoke('notes:delete', id),
+}
+
+contextBridge.exposeInMainWorld('api', api)
+export type { Api }
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/main/main.ts">
+import { app, BrowserWindow } from 'electron'
+import { join } from 'node:path'
+import { openDatabase, getDb } from './db'
+import { registerIpc } from './ipc'
+
+app.whenReady().then(async () =&gt; {
+  await openDatabase()
+  registerIpc()
+  const win = new BrowserWindow({ webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true } })
+  await win.loadFile(join(__dirname, '../renderer/index.html'))
+})
+
+app.on('will-quit', () =&gt; {
+  void getDb().$disconnect()
+})
+</pre>
+<p>IPC uses structured clone, which carries <code>Date</code>, <code>bigint</code> and <code>Uint8Array</code> values, so kastor results reach the renderer with their types intact.</p>
+</section>
+<section id="packaging"><h2>Packaging and updates</h2>
+<p>Two things need care when you package. The native module must sit outside the asar archive so it can be loaded, and the migrations folder must ship as a plain folder the main process can read. With electron-builder:</p>
+<pre data-kind="editor" data-lang="yaml" data-title="electron-builder.yml">
+appId: com.example.notes
+asarUnpack:
+  - node_modules/better-sqlite3/**
+extraResources:
+  - from: kastor/migrations
+    to: migrations
+</pre>
+<p>During development, change the schema and run <code>npx kastor migrate dev --name what_changed</code> against a development file configured in <code>kastor.config.ts</code>. Commit the generated SQL; the next release applies it on every user's machine at startup. Never edit a migration that already shipped: kastor checks checksums and reports modified files, and users who already applied the old version would never get the change.</p>
+</section>
+<section id="updates"><h2>Schema changes across app versions</h2>
+<p>Users skip versions. Someone may update from version 1.2 straight to 1.9, so the app must apply every migration in between, in order, on their machine. That is exactly what <code>deploy</code> does: it reads the shipped folder, compares it with the history stored in the user's database, and applies what is missing. Keep every migration that ever shipped in <code>kastor/migrations</code>, even when it looks obsolete.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The database file lives in <code>userData</code>, never inside the app bundle.</li>
+<li>better-sqlite3 is rebuilt for Electron and unpacked from asar.</li>
+<li><code>kastor/migrations</code> ships as an extra resource and runs through <code>deploy</code> at startup.</li>
+<li>The renderer only sees the preload API, with context isolation and the sandbox on.</li>
+<li>Shipped migration files are never edited; new changes get new files.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Destructive migrations.</strong> On a server you can inspect data before dropping a column; on thousands of desktops you cannot. Prefer additive changes, and copy data forward in the same migration when you rename.</li>
+<li><strong>Several windows.</strong> All windows share the main process client through IPC. Do not open the file from a second process.</li>
+<li><strong>Blocking the main process.</strong> better-sqlite3 is synchronous. Keep queries small and indexed, or move heavy work to a utility process with its own connection.</li>
+<li><strong>Seeding first run data.</strong> Insert defaults in a migration or right after <code>deploy</code> with an <code>upsert</code>, so reruns are harmless.</li>
+</ul>
+</section>

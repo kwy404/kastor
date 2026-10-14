@@ -1,0 +1,233 @@
+<!--meta
+{
+  "slug": "migrate-from-typeorm",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Entities and repositories to table()",
+  "title": "Migrate from TypeORM to kastor: entities, repositories, migrations | kastor",
+  "description": "Migrate from TypeORM to kastor: decorated entities to table(), repositories and QueryBuilder to findMany and include, relations, transactions and migration history.",
+  "h1": "Migrate from TypeORM to kastor",
+  "crumb": "From TypeORM",
+  "lead": "TypeORM describes tables with decorated classes and queries them through repositories and a query builder. kastor replaces the classes with a plain TypeScript schema whose types are inferred, and the repositories with one typed client. Your tables and rows stay exactly where they are.",
+  "readTime": "13 min read",
+  "keywords": ["migrate from TypeORM", "TypeORM alternative", "TypeORM to kastor", "replace TypeORM", "TypeORM entities to schema", "TypeORM migrations"],
+  "howto": {
+    "name": "Migrate a project from TypeORM to kastor",
+    "totalTime": "PT3H",
+    "tools": ["Node.js 18 or newer", "kastor", "the database driver TypeORM already uses"],
+    "steps": [
+      { "name": "Install kastor and turn off synchronize", "text": "Install kastor next to TypeORM and make sure synchronize is false in every environment.", "anchor": "prepare" },
+      { "name": "Pull the schema from the database", "text": "Run npx kastor init and npx kastor db pull to get table() definitions and relations from the live tables.", "anchor": "schema" },
+      { "name": "Baseline the database", "text": "Run npx kastor migrate baseline --name init so kastor starts from the schema TypeORM migrations produced.", "anchor": "baseline" },
+      { "name": "Replace repositories and query builders", "text": "Rewrite find, findOne, save, QueryBuilder and transaction calls with the kastor client, one service at a time.", "anchor": "queries" },
+      { "name": "Remove TypeORM", "text": "Delete the entities, the DataSource and reflect-metadata, and run npx kastor migrate deploy in CI.", "anchor": "cleanup" }
+    ]
+  },
+  "faq": [
+    { "q": "Do I keep my entity classes with kastor?", "a": "No. Tables are declared with <code>table()</code> and row types come from <code>InferSelect&lt;typeof users&gt;</code>. If other code relies on class instances, map rows into those classes at the edge, but most projects only used entities as types, which the inferred types replace." },
+    { "q": "What happens to the TypeORM migrations table?", "a": "kastor does not read the <code>migrations</code> table. Run <code>npx kastor migrate baseline --name init</code> to record the current database as the starting point; the old table stays in place and can be dropped after the move." },
+    { "q": "Is there an equivalent of eager relations?", "a": "kastor never loads relations implicitly. Ask for them with <code>include</code> on the query that needs them. They load in one statement per call, so explicit includes cost less than eager or lazy relations that fire extra queries." },
+    { "q": "Do I still need reflect-metadata and emitDecoratorMetadata?", "a": "Not for kastor. It uses no decorators and no runtime type metadata. Frameworks such as NestJS may still need them for their own dependency injection." },
+    { "q": "How do I replace entity listeners and subscribers?", "a": "Call the logic from the function that performs the write, or wrap the write in a small service. For logging and timing, the <code>log</code> option of <code>kastor()</code> receives every statement with its duration." }
+  ],
+  "related": ["migrate-from-sequelize", "nestjs-orm", "database-migrations-explained"]
+}
+-->
+<section id="overview"><h2>Why the move is mostly deletion</h2>
+<p>A TypeORM project carries three layers of description for the same table: the entity class with its decorators, the migration files, and the database itself. When you <strong>migrate from TypeORM</strong> to kastor, the class layer goes away. The schema is a plain TypeScript value, the row type is inferred from it, and the client gives you one typed accessor per table instead of a repository per entity.</p>
+<p>The database is untouched. kastor reads the tables TypeORM created, records them as its starting point, and from then on generates readable SQL migrations from changes to the TypeScript schema. While you move services one by one, both libraries talk to the same database.</p>
+</section>
+<section id="prepare"><h2>Step 1: install kastor and freeze synchronize</h2>
+<p>Before anything else, check that <code>synchronize</code> is <code>false</code> in every <code>DataSource</code>. With synchronize on, TypeORM alters tables at startup to match the entities, which would undo changes kastor makes later.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor
+npx kastor init --db postgres
+</pre>
+<p>Keep the driver you already have (<code>pg</code>, <code>mysql2</code>, <code>mariadb</code>, <code>better-sqlite3</code>, <code>mssql</code>, <code>oracledb</code> or <code>mongodb</code>). Set <code>DATABASE_URL</code> in the <code>.env</code> that <code>init</code> wrote to the database the DataSource points at.</p>
+</section>
+<section id="schema"><h2>Step 2: entities become a TypeScript schema</h2>
+<p>Run <code>db pull</code> to get the schema from the live database rather than translating decorators by hand. It reads column types, nullability, defaults, unique constraints, indexes and foreign keys, and guesses relations from the keys.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="TypeORM: src/entities/User.ts (before)">
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, ManyToOne, JoinColumn, Index } from 'typeorm'
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn() id!: number
+  @Column({ length: 255, unique: true }) email!: string
+  @Column({ type: 'text', nullable: true }) name!: string | null
+  @Column({ type: 'enum', enum: ['user', 'admin'], default: 'user' }) role!: 'user' | 'admin'
+  @CreateDateColumn({ name: 'created_at' }) createdAt!: Date
+  @OneToMany(() =&gt; Post, (p) =&gt; p.author) posts!: Post[]
+}
+
+@Entity('posts')
+export class Post {
+  @PrimaryGeneratedColumn() id!: number
+  @Column({ length: 200 }) title!: string
+  @Column({ default: false }) published!: boolean
+  @Index() @Column({ name: 'author_id' }) authorId!: number
+  @ManyToOne(() =&gt; User, (u) =&gt; u.posts, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'author_id' }) author!: User
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor'
+import type { InferSelect, InferInsert } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.text().nullable(),
+  role: t.enum(['user', 'admin']).default('user'),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  authorId: t.int().map('author_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, { indexes: (p) =&gt; [index(p.authorId)] })
+
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+})
+
+// What the entity classes were used for, as types.
+export type User = InferSelect&lt;typeof users&gt;
+export type NewUser = InferInsert&lt;typeof users&gt;
+</pre>
+<table class="spec">
+<thead><tr><th>TypeORM</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>@Entity(&#39;users&#39;)</code> class</td><td><code>table(&#39;users&#39;, ...)</code></td></tr>
+<tr><td><code>@PrimaryGeneratedColumn()</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>@PrimaryGeneratedColumn(&#39;uuid&#39;)</code></td><td><code>t.uuid().primaryKey().defaultRandom()</code></td></tr>
+<tr><td><code>@Column(&#123; nullable: true &#125;)</code></td><td><code>.nullable()</code></td></tr>
+<tr><td><code>@Column(&#123; name: &#39;author_id&#39; &#125;)</code></td><td><code>.map(&#39;author_id&#39;)</code></td></tr>
+<tr><td><code>@CreateDateColumn()</code></td><td><code>t.datetime().defaultNow()</code></td></tr>
+<tr><td><code>@UpdateDateColumn()</code></td><td><code>t.datetime().updatedAt()</code></td></tr>
+<tr><td><code>@DeleteDateColumn()</code></td><td><code>softDelete: &#39;deletedAt&#39;</code> table option</td></tr>
+<tr><td><code>@OneToMany</code>, <code>@ManyToOne</code></td><td><code>many()</code>, <code>one()</code> in <code>relations</code></td></tr>
+<tr><td><code>@ManyToMany</code> with <code>@JoinTable</code></td><td>a join table plus <code>many(tags, &#123; through: postTags &#125;)</code></td></tr>
+<tr><td><code>@Index()</code>, <code>@Unique()</code></td><td><code>index()</code>, <code>uniqueIndex()</code>, <code>.unique()</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Step 3: baseline the existing database</h2>
+<p>TypeORM tracks applied migrations in its <code>migrations</code> table. kastor keeps its own history in <code>_kastor_migrations</code>, so it needs to know where to start. A baseline writes one migration that matches the current database and marks it as applied without running it:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate status
+</pre>
+<p>Run the baseline once in every environment before the first <code>npx kastor migrate deploy</code> there. Until TypeORM is gone, make schema changes with only one tool: either keep writing TypeORM migrations and run <code>db pull</code> afterwards, or switch to <code>npx kastor migrate dev</code> right away and stop generating TypeORM migrations.</p>
+</section>
+<section id="queries"><h2>Step 4: repositories and query builders become client calls</h2>
+<p>Create the client once, next to the schema. Each table key becomes an accessor: <code>dataSource.getRepository(User)</code> turns into <code>db.users</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+  schema,
+  relations,
+})
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="TypeORM: src/posts/service.ts (before)">
+import { In, ILike } from 'typeorm'
+import { dataSource } from '../data-source'
+import { Post } from '../entities/Post'
+import { User } from '../entities/User'
+
+const posts = dataSource.getRepository(Post)
+
+export const feed = (authorIds: number[]) =&gt;
+  posts.find({
+    where: { published: true, authorId: In(authorIds) },
+    relations: { author: true },
+    order: { id: 'DESC' },
+    take: 20,
+  })
+
+export const search = (q: string) =&gt;
+  dataSource.getRepository(User).find({ where: { email: ILike(`%${q}%`) } })
+
+export const transfer = (postId: number, toUserId: number) =&gt;
+  dataSource.transaction(async (manager) =&gt; {
+    const post = await manager.findOneByOrFail(Post, { id: postId })
+    post.authorId = toUserId
+    return manager.save(post)
+  })
+
+export const busiest = () =&gt;
+  posts.createQueryBuilder('p')
+    .select('p.author_id', 'authorId').addSelect('COUNT(*)', 'n')
+    .groupBy('p.author_id').orderBy('n', 'DESC').limit(5).getRawMany()
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { db } from '../db'
+
+export const feed = (authorIds: number[]) =&gt;
+  db.posts.findMany({
+    where: { published: true, authorId: { in: authorIds } },
+    include: { author: true },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+
+export const search = (q: string) =&gt;
+  db.users.findMany({ where: { email: { contains: q, mode: 'insensitive' } } })
+
+export const transfer = (postId: number, toUserId: number) =&gt;
+  db.$transaction(async (tx) =&gt; {
+    await tx.posts.findUniqueOrThrow({ where: { id: postId } })
+    return tx.posts.update({ where: { id: postId }, data: { authorId: toUserId } })
+  })
+
+export const busiest = () =&gt;
+  db.posts.groupBy({
+    by: 'authorId',
+    _count: { _all: true },
+    orderBy: { _count: { _all: 'desc' } },
+    take: 5,
+  })
+</pre>
+<table class="spec">
+<thead><tr><th>TypeORM</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>repo.find(&#123; where, relations, order, take, skip &#125;)</code></td><td><code>db.x.findMany(&#123; where, include, orderBy, take, skip &#125;)</code></td></tr>
+<tr><td><code>repo.findOneBy</code>, <code>findOneByOrFail</code></td><td><code>findUnique</code>, <code>findUniqueOrThrow</code>, <code>findFirst</code></td></tr>
+<tr><td><code>In</code>, <code>Not</code>, <code>LessThan</code>, <code>MoreThan</code>, <code>Between</code></td><td><code>in</code>, <code>not</code>, <code>lt</code>, <code>gt</code>, <code>gte</code> with <code>lte</code></td></tr>
+<tr><td><code>Like</code>, <code>ILike</code>, <code>IsNull</code></td><td><code>contains</code> with <code>mode</code>, <code>null</code></td></tr>
+<tr><td><code>repo.save(entity)</code></td><td><code>create</code>, <code>update</code> or <code>upsert</code>, said explicitly</td></tr>
+<tr><td><code>repo.insert</code>, <code>update</code>, <code>delete</code></td><td><code>createMany</code>, <code>updateMany</code>, <code>deleteMany</code></td></tr>
+<tr><td><code>repo.softDelete</code>, <code>restore</code></td><td><code>delete</code> and <code>restore</code> on a soft delete table</td></tr>
+<tr><td><code>repo.count</code>, <code>increment</code></td><td><code>count</code>, <code>update</code> with <code>&#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>dataSource.transaction(fn)</code></td><td><code>db.$transaction(fn)</code></td></tr>
+<tr><td><code>dataSource.query(sql, params)</code></td><td><code>db.$sql`...`</code> with interpolated values</td></tr>
+<tr><td><code>createQueryBuilder</code> joins</td><td><code>include</code>, relation filters, <code>groupBy</code>, or <code>$sql</code></td></tr>
+</tbody>
+</table>
+<p>The biggest behavioral change is <code>save()</code>. TypeORM decides between insert and update by loading the entity first. kastor asks you to say which one you mean, which removes a hidden read and makes the SQL predictable. If you relied on cascading saves of related entities, use nested writes: <code>db.users.create(&#123; data: &#123; email, posts: &#123; create: [...] &#125; &#125; &#125;)</code> inserts the user and the posts in one transaction.</p>
+</section>
+<section id="cleanup"><h2>Step 5: remove TypeORM</h2>
+<p>When no service imports a repository any more, delete the entity classes, the DataSource file and the TypeORM CLI scripts. If nothing else needs decorators, remove <code>reflect-metadata</code> and turn off <code>emitDecoratorMetadata</code>. In CI, replace <code>typeorm migration:run</code> with <code>npx kastor migrate deploy</code>. Use <a href="nestjs-orm.html">the NestJS guide</a> if your project injects repositories through <code>TypeOrmModule</code>.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Lazy and eager relations.</strong> Code that awaited <code>user.posts</code> as a promise, or expected eager relations to be present, needs an explicit <code>include</code>. The types tell you: a row without the include has no <code>posts</code> property.</li>
+<li><strong>Column naming strategies.</strong> A custom naming strategy produced the database names; <code>db pull</code> writes them as <code>.map()</code> calls so your TypeScript names stay camelCase.</li>
+<li><strong>Decimal and bigint.</strong> kastor returns decimals as strings and bigint columns as <code>bigint</code>, never as lossy numbers. TypeORM returned strings for both on most drivers, so check arithmetic.</li>
+<li><strong>Listeners.</strong> <code>@BeforeInsert</code> and subscribers do not exist in kastor. Move that logic into the function that writes, and use a JavaScript default such as <code>.default(() =&gt; crypto.randomUUID())</code> for generated values.</li>
+<li><strong>Enums on MySQL and SQL Server.</strong> TypeORM may have stored enums as plain strings on databases without a native enum. <code>db pull</code> reports what the database really has; switch the column to <code>t.enum([...])</code> only if you also want the constraint.</li>
+</ul>
+</section>

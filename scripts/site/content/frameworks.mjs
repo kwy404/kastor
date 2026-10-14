@@ -55,7 +55,7 @@ export default async function Posts() {
   )
 }`],
     ],
-    guide: 'nextjs-postgres-orm.html',
+    guides: [['nextjs-app-router-orm.html', 'Read the full Next.js App Router guide'], ['nextjs-postgres-orm.html', 'Next.js with PostgreSQL providers']],
   },
   {
     id: 'nuxt',
@@ -64,7 +64,9 @@ export default async function Posts() {
     intro: 'Put the client in server/utils so Nitro auto imports it in every server route. Pages fetch through useFetch, so the database never reaches the browser bundle.',
     files: [
       ['server/utils/db.ts', 'ts', PG_DB.replace("'./schema'", "'../db/schema'")],
-      ['server/api/posts.get.ts', 'ts', `export default defineEventHandler(async (event) => {
+      ['server/api/posts.get.ts', 'ts', `import { db } from '../utils/db'
+
+export default defineEventHandler(async (event) => {
   const { take } = getQuery(event)
   return db.posts.findMany({
     where: { published: true },
@@ -73,6 +75,7 @@ export default async function Posts() {
   })
 })`],
     ],
+    guides: [['nuxt-orm.html', 'Read the full Nuxt guide']],
   },
   {
     id: 'sveltekit',
@@ -94,6 +97,52 @@ export const actions = {
   },
 }`],
     ],
+    guides: [['sveltekit-orm.html', 'Read the full SvelteKit guide']],
+  },
+  {
+    id: 'remix',
+    name: 'Remix and React Router',
+    tag: 'loaders and actions in framework mode',
+    intro: 'Keep the client in a .server module so the bundler never ships it, read in loaders and write in actions. The same code works in React Router 7 framework mode and in Remix 2.',
+    files: [
+      ['app/db.server.ts', 'ts', PG_DB.replace("'./schema'", "'./db/schema'")],
+      ['app/routes/posts.tsx', 'tsx', `import { redirect, useLoaderData, type ActionFunctionArgs } from 'react-router'
+import { db } from '../db.server'
+
+export async function loader() {
+  return { posts: await db.posts.findMany({ where: { published: true }, include: { author: true }, take: 20 }) }
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const form = await request.formData()
+  const post = await db.posts.create({ data: { title: String(form.get('title')), authorId: 1 } })
+  return redirect('/posts/' + post.id)
+}
+
+export default function Posts() {
+  const { posts } = useLoaderData<typeof loader>()
+  return <ul>{posts.map((p) => <li key={p.id}>{p.title} by {p.author.email}</li>)}</ul>
+}`],
+    ],
+    guides: [['remix-react-router-orm.html', 'Read the full Remix and React Router guide']],
+  },
+  {
+    id: 'astro',
+    name: 'Astro',
+    tag: 'on-demand pages and endpoints',
+    intro: 'With a server adapter, pages marked prerender = false and API endpoints run per request. Query kastor in the frontmatter or the endpoint; secrets without the PUBLIC_ prefix stay on the server.',
+    files: [
+      ['src/pages/api/posts.ts', 'ts', `import type { APIRoute } from 'astro'
+import { db } from '../../db'
+
+export const prerender = false
+
+export const GET: APIRoute = async ({ url }) => {
+  const take = Number(url.searchParams.get('take') ?? 20)
+  return Response.json(await db.posts.findMany({ where: { published: true }, include: { tags: true }, take }))
+}`],
+    ],
+    guides: [['astro-orm.html', 'Read the full Astro guide']],
   },
   {
     id: 'express',
@@ -122,6 +171,7 @@ app.use((err, req, res, next) => {
 
 app.listen(3000)`],
     ],
+    guides: [['express-orm.html', 'Read the full Express guide']],
   },
   {
     id: 'fastify',
@@ -145,36 +195,49 @@ app.post<{ Body: { title: string; authorId: number } }>('/posts', async (req, re
 
 await app.listen({ port: 3000 })`],
     ],
+    guides: [['fastify-orm.html', 'Read the full Fastify guide']],
   },
   {
     id: 'nestjs',
     name: 'NestJS',
-    tag: 'a provider and dependency injection',
-    intro: 'Wrap the client in an injectable service. Because kastor infers types from the schema, the service exposes fully typed models without any extra classes.',
+    tag: 'a global module and a provider',
+    intro: 'Register the client as a provider under a token in a global module, close the pool on shutdown, and inject it into services. Types come from the schema, so there are no entity classes or repositories to write.',
     files: [
-      ['src/db/db.service.ts', 'ts', `import { Injectable, OnModuleDestroy } from '@nestjs/common'
-import { db } from './index'
+      ['src/db/db.module.ts', 'ts', `import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common'
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
 
-@Injectable()
-export class DbService implements OnModuleDestroy {
-  readonly client = db
-  async onModuleDestroy() {
-    await db.$disconnect()
+export const KASTOR = Symbol('KASTOR')
+export const createDb = (url: string) =>
+  kastor({ adapter: postgres(new pg.Pool({ connectionString: url, max: 10 })), schema, relations })
+export type Db = ReturnType<typeof createDb>
+
+@Global()
+@Module({
+  providers: [{ provide: KASTOR, useFactory: () => createDb(process.env.DATABASE_URL!) }],
+  exports: [KASTOR],
+})
+export class DbModule implements OnApplicationShutdown {
+  constructor(@Inject(KASTOR) private readonly db: Db) {}
+  async onApplicationShutdown() {
+    await this.db.$disconnect()
   }
 }`],
-      ['src/users/users.controller.ts', 'ts', `import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common'
-import { DbService } from '../db/db.service'
+      ['src/users/users.service.ts', 'ts', `import { Inject, Injectable } from '@nestjs/common'
+import { KASTOR, type Db } from '../db/db.module'
 
-@Controller('users')
-export class UsersController {
-  constructor(private readonly db: DbService) {}
+@Injectable()
+export class UsersService {
+  constructor(@Inject(KASTOR) private readonly db: Db) {}
 
-  @Get(':id')
-  find(@Param('id', ParseIntPipe) id: number) {
-    return this.db.client.users.findUniqueOrThrow({ where: { id }, include: { posts: true } })
+  find(id: number) {
+    return this.db.users.findUniqueOrThrow({ where: { id }, include: { posts: true } })
   }
 }`],
     ],
+    guides: [['nestjs-orm.html', 'Read the full NestJS guide']],
   },
   {
     id: 'hono',
@@ -197,6 +260,36 @@ app.get('/users', async (c) => {
 
 export default app`],
     ],
+    guides: [['hono-orm.html', 'Read the full Hono guide']],
+  },
+  {
+    id: 'adonisjs',
+    name: 'AdonisJS',
+    tag: 'a service module next to or instead of Lucid',
+    intro: 'Validate DATABASE_URL in start/env.ts, export the client from app/services/db.ts and import it through the #services alias in controllers. A provider closes the pool on shutdown.',
+    files: [
+      ['app/services/db.ts', 'ts', `import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import env from '#start/env'
+import { schema, relations } from '../../database/schema'
+
+export default kastor({
+  adapter: postgres(new pg.Pool({ connectionString: env.get('DATABASE_URL') })),
+  schema,
+  relations,
+})`],
+      ['app/controllers/posts_controller.ts', 'ts', `import type { HttpContext } from '@adonisjs/core/http'
+import db from '#services/db'
+
+export default class PostsController {
+  async index({ request }: HttpContext) {
+    const take = Number(request.input('take', 20))
+    return db.posts.findMany({ where: { published: true }, include: { author: true }, take })
+  }
+}`],
+    ],
+    guides: [['adonisjs-orm.html', 'Read the full AdonisJS guide']],
   },
   {
     id: 'bun',
@@ -218,6 +311,7 @@ Bun.serve({
   },
 })`],
     ],
+    guides: [['bun-orm.html', 'Read the full Bun guide']],
   },
   {
     id: 'deno',
@@ -239,6 +333,7 @@ const db = kastor({
 Deno.serve(async () => Response.json(await db.users.count()))`],
       ['Terminal', 'bash', 'deno run --allow-net --allow-env main.ts'],
     ],
+    guides: [['deno-orm.html', 'Read the full Deno guide']],
   },
   {
     id: 'workers',
@@ -263,13 +358,58 @@ export default {
     const db = kastor({ adapter: d1(env.DB), schema, relations })
     const url = new URL(request.url)
     if (request.method === 'POST') {
-      const body = await request.json<{ email: string }>()
+      const body = (await request.json()) as { email: string }
       return Response.json(await db.users.create({ data: { email: body.email } }), { status: 201 })
     }
     return Response.json(await db.users.findMany({ take: Number(url.searchParams.get('take') ?? 20) }))
   },
 }`],
     ],
-    guide: 'cloudflare-d1-orm.html',
+    guides: [['cloudflare-workers-orm.html', 'Read the full Cloudflare Workers guide'], ['cloudflare-d1-orm.html', 'Cloudflare D1 in depth']],
+  },
+  {
+    id: 'electron',
+    name: 'Electron',
+    tag: 'SQLite in the main process, typed IPC',
+    intro: 'Open the SQLite file in the user data folder from the main process, apply the migrations shipped with the app, and expose a few IPC channels to the renderer through a preload bridge.',
+    files: [
+      ['src/main/db.ts', 'ts', `import { join } from 'node:path'
+import Database from 'better-sqlite3'
+import { app, ipcMain } from 'electron'
+import { kastor } from 'kastor'
+import { sqlite } from 'kastor/sqlite'
+import { deploy } from 'kastor/migrate'
+import { schema, relations } from './db/schema'
+
+export async function startDatabase() {
+  const adapter = sqlite(new Database(join(app.getPath('userData'), 'app.db')))
+  await deploy(adapter, join(process.resourcesPath, 'migrations'))
+  const db = kastor({ adapter, schema, relations })
+  ipcMain.handle('posts:list', () => db.posts.findMany({ orderBy: { id: 'desc' }, take: 100 }))
+  return db
+}`],
+    ],
+    guides: [['electron-sqlite-orm.html', 'Read the full Electron guide']],
+  },
+  {
+    id: 'lambda',
+    name: 'AWS Lambda',
+    tag: 'reuse across warm invocations',
+    intro: 'Create the client at module scope so warm invocations reuse its connection, keep the pool at one connection per environment, and put RDS Proxy or another pooler in front of the database.',
+    files: [
+      ['src/handler.ts', 'ts', `import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './db/schema'
+
+// Module scope: created at cold start, reused by warm invocations.
+const db = kastor({ adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 })), schema, relations })
+
+export async function handler() {
+  const posts = await db.posts.findMany({ where: { published: true }, take: 20 })
+  return { statusCode: 200, body: JSON.stringify(posts) }
+}`],
+    ],
+    guides: [['aws-lambda-orm.html', 'Read the full AWS Lambda guide']],
   },
 ];

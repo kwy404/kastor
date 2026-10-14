@@ -1,0 +1,256 @@
+<!--meta
+{
+  "slug": "migrate-from-laravel-eloquent",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Laravel to TypeScript, or side by side",
+  "title": "Coming from Laravel Eloquent: kastor for PHP developers | kastor",
+  "description": "Coming from Laravel Eloquent: kastor runs in Node, Bun, Deno and edge runtimes, not PHP. Map models, relations, scopes, with(), migrations, seeders and factories.",
+  "h1": "Coming from Laravel and Eloquent",
+  "crumb": "From Laravel Eloquent",
+  "lead": "kastor is a TypeScript ORM. It runs in JavaScript runtimes such as Node.js, Bun, Deno and Cloudflare Workers, and it does not run inside PHP. If you know Eloquent, this guide covers the two paths that make sense: moving a Laravel service to TypeScript, or running a TypeScript API next to your Laravel app on the same database.",
+  "readTime": "14 min read",
+  "keywords": ["Laravel Eloquent TypeScript", "Eloquent alternative Node.js", "Laravel to Node.js", "migrate Laravel to TypeScript", "Eloquent ORM equivalent TypeScript", "Laravel and Node.js same database"],
+  "howto": {
+    "name": "Run a TypeScript API with kastor on a Laravel database",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the mysql2 or pg driver", "your Laravel project"],
+    "steps": [
+      { "name": "Choose the path", "text": "Decide whether the service moves to TypeScript or runs next to Laravel on the same database.", "anchor": "paths" },
+      { "name": "Pull the Laravel schema", "text": "Run npx kastor init and npx kastor db pull against the database that php artisan migrate built.", "anchor": "pull" },
+      { "name": "Decide who owns migrations", "text": "Keep Laravel migrations and refresh the schema with db pull, or run npx kastor migrate baseline --name init and let kastor own changes.", "anchor": "owner" },
+      { "name": "Translate models, relations and scopes", "text": "Map Eloquent models to table(), hasMany and belongsTo to many() and one(), scopes to where objects and with() to include.", "anchor": "mapping" },
+      { "name": "Port seeders and factories", "text": "Rewrite DatabaseSeeder with defineSeed and model factories with factory().", "anchor": "seeders" }
+    ]
+  },
+  "faq": [
+    { "q": "Can I use kastor inside a Laravel or PHP project?", "a": "No. kastor is a TypeScript library and runs in JavaScript runtimes: Node.js, Bun, Deno and edge platforms such as Cloudflare Workers. A PHP application keeps using Eloquent. What you can do is run a TypeScript service next to Laravel on the same database, or move a service to TypeScript." },
+    { "q": "Can Laravel and a Node.js API share one database?", "a": "Yes. Run <code>npx kastor db pull</code> against the Laravel database to get a typed schema, pick one side to own migrations, and make the TypeScript side respect Laravel conventions: <code>created_at</code> and <code>updated_at</code>, <code>deleted_at</code> for soft deletes and the same JSON shapes for cast columns." },
+    { "q": "What is the kastor equivalent of Eloquent with()?", "a": "<code>include</code>. <code>Post::with([&#39;author&#39;, &#39;tags&#39;])-&gt;withCount(&#39;comments&#39;)</code> becomes <code>db.posts.findMany(&#123; include: &#123; author: true, tags: true, _count: &#123; select: &#123; comments: true &#125; &#125; &#125; &#125;)</code>, loaded in one statement per call." },
+    { "q": "Are there seeders and factories?", "a": "Yes. A seed file exports <code>defineSeed(async (db) =&gt; ...)</code> and runs with <code>npx kastor db seed</code>. <code>factory(db.users, (&#123; seq &#125;) =&gt; data)</code> builds and creates test rows, and <code>npx kastor migrate reset</code> plays the role of <code>migrate:fresh --seed</code>." },
+    { "q": "Will kastor read my Laravel migrations folder?", "a": "No. It reads the database those migrations built. <code>db pull</code> produces the TypeScript schema, and <code>migrate baseline</code> records the current state if you want kastor to own future changes. Laravel's <code>migrations</code> table is left alone." }
+  ],
+  "related": ["migrate-from-django-orm", "migrate-from-rails-active-record", "express-orm"]
+}
+-->
+<section id="paths"><h2>The honest part first: two runtimes, two paths</h2>
+<p>Eloquent lives in PHP. kastor lives in JavaScript runtimes: Node.js, Bun, Deno, Cloudflare Workers and other edge platforms. There is no PHP extension and no bridge, and this guide will not pretend otherwise. If your whole product is a Laravel monolith and you are happy with it, Eloquent is the right tool there.</p>
+<p>Developers coming from <strong>Laravel Eloquent</strong> usually reach for kastor in one of two situations, and the guide covers both:</p>
+<ul>
+<li><strong>Path A: moving to TypeScript.</strong> A team rewrites a Laravel app or splits a service out into Node.js or Bun, and wants an ORM that feels familiar: models, relations, eager loading, scopes, migrations, seeders and factories.</li>
+<li><strong>Path B: TypeScript next to PHP.</strong> Laravel keeps running, and a new TypeScript API (a mobile backend, a real time service, a Next.js frontend with server code) reads and writes the same database.</li>
+</ul>
+<p>Both start the same way: kastor reads the database Laravel built.</p>
+</section>
+<section id="pull"><h2>Step 1: pull the schema Laravel migrations built</h2>
+<p>In a new TypeScript project, install kastor and the driver for your database. Most Laravel apps run MySQL or MariaDB, so that is the example here; PostgreSQL works the same with <code>pg</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor mysql2
+npx kastor init --db mysql
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p>Before the pull, set <code>DATABASE_URL</code> in the <code>.env</code> that <code>init</code> wrote to the Laravel database, for example <code>mysql://forge:secret@127.0.0.1:3306/laravel</code>. <code>db pull</code> then introspects tables, columns, defaults, indexes and foreign keys created by <code>php artisan migrate</code>, and writes <code>table()</code> definitions with relations guessed from the keys. Laravel uses snake case columns, so the pulled schema keeps database names with <code>.map()</code> while your TypeScript reads camelCase. Here is a Laravel migration and model next to the kastor schema:</p>
+<pre data-kind="editor" data-lang="php" data-title="database/migrations/2024_01_01_create_posts_table.php">
+Schema::create('posts', function (Blueprint $table) {
+    $table-&gt;id();
+    $table-&gt;foreignId('user_id')-&gt;constrained()-&gt;cascadeOnDelete();
+    $table-&gt;string('title', 200);
+    $table-&gt;boolean('published')-&gt;default(false);
+    $table-&gt;json('meta')-&gt;nullable();
+    $table-&gt;timestamps();
+    $table-&gt;softDeletes();
+});
+</pre>
+<pre data-kind="editor" data-lang="php" data-title="app/Models/Post.php">
+class Post extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $fillable = ['title', 'published', 'meta'];
+    protected $casts = ['published' =&gt; 'boolean', 'meta' =&gt; 'array'];
+
+    public function author() { return $this-&gt;belongsTo(User::class, 'user_id'); }
+    public function tags() { return $this-&gt;belongsToMany(Tag::class); }
+    public function comments() { return $this-&gt;hasMany(Comment::class); }
+
+    public function scopePublished($query) { return $query-&gt;where('published', true); }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.bigId(),
+  name: t.string(),
+  email: t.string().unique(),
+  password: t.string(),
+  createdAt: t.datetime().map('created_at').nullable().defaultNow(),
+  updatedAt: t.datetime().map('updated_at').nullable().updatedAt(),
+})
+
+export const posts = table('posts', {
+  id: t.bigId(),
+  userId: t.bigint().map('user_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  meta: t.json&lt;{ tags?: string[]; cover?: string }&gt;().nullable(),
+  createdAt: t.datetime().map('created_at').nullable().defaultNow(),
+  updatedAt: t.datetime().map('updated_at').nullable().updatedAt(),
+  deletedAt: t.datetime().map('deleted_at').nullable(),
+}, { softDelete: 'deletedAt' })
+
+export const tags = table('tags', {
+  id: t.bigId(),
+  name: t.string().unique(),
+})
+
+export const postTag = table('post_tag', {
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id, { onDelete: 'cascade' }),
+  tagId: t.bigint().map('tag_id').references(() =&gt; tags.id, { onDelete: 'cascade' }),
+}, { primaryKey: (c) =&gt; [c.postId, c.tagId] })
+
+export const comments = table('comments', {
+  id: t.bigId(),
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id, { onDelete: 'cascade' }),
+  body: t.text(),
+  createdAt: t.datetime().map('created_at').nullable().defaultNow(),
+})
+
+export const schema = { users, posts, tags, postTag, comments }
+
+export const relations = ({ users, posts, tags, postTag, comments }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: {
+    author: one(users, { fields: ['userId'], references: ['id'] }),
+    tags: many(tags, { through: postTag }),
+    comments: many(comments),
+  },
+  comments: { post: one(posts, { fields: ['postId'], references: ['id'] }) },
+})
+</pre>
+<p>Laravel's <code>$table-&gt;id()</code> is an unsigned big integer, so ids are <code>t.bigId()</code> and come back as JavaScript <code>bigint</code>. That is exact for every value MySQL can hold. If you prefer numbers in JSON responses, convert at the edge with <code>Number(id)</code> for ids you know stay small.</p>
+</section>
+<section id="owner"><h2>Step 2: decide who owns migrations</h2>
+<p>On path A, kastor takes over. Record the current database as the first kastor migration, then make every change in <code>src/db/schema.ts</code>:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate dev --name add_slug_to_posts
+npx kastor migrate deploy
+</pre>
+<p>On path B, keep Laravel as the owner while PHP is the main application. Run <code>php artisan migrate</code> as before, then <code>npx kastor db pull</code> to refresh the TypeScript schema and commit it with the change. Never run <code>kastor migrate dev</code> against that database while Laravel owns it, or the two histories drift apart. Later, when the TypeScript side becomes primary, baseline and switch owners in one step.</p>
+<div class="callout"><p>Laravel keeps its history in the <code>migrations</code> table and kastor in <code>_kastor_migrations</code>. They never touch each other's table, so switching owners later is safe.</p></div>
+</section>
+<section id="mapping"><h2>Step 3: Eloquent to kastor, concept by concept</h2>
+<table class="spec">
+<thead><tr><th>Eloquent and Laravel</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>class Post extends Model</code></td><td><code>table(&#39;posts&#39;, ...)</code>, rows typed by <code>InferSelect</code></td></tr>
+<tr><td><code>$fillable</code>, <code>$guarded</code></td><td>the create and update types, checked at compile time</td></tr>
+<tr><td><code>$casts</code> boolean, array, datetime</td><td><code>t.boolean()</code>, <code>t.json&lt;T&gt;()</code>, <code>t.datetime()</code></td></tr>
+<tr><td><code>belongsTo</code>, <code>hasOne</code></td><td><code>one()</code></td></tr>
+<tr><td><code>hasMany</code></td><td><code>many()</code></td></tr>
+<tr><td><code>belongsToMany</code> with a pivot</td><td><code>many(tags, &#123; through: postTag &#125;)</code></td></tr>
+<tr><td><code>scopePublished</code></td><td>a typed where object you spread</td></tr>
+<tr><td><code>with([&#39;author&#39;])</code>, <code>withCount</code></td><td><code>include</code>, <code>_count</code></td></tr>
+<tr><td><code>whereHas</code>, <code>whereDoesntHave</code></td><td><code>some</code>, <code>none</code> relation filters</td></tr>
+<tr><td><code>SoftDeletes</code>, <code>withTrashed</code>, <code>restore</code></td><td><code>softDelete</code> option, <code>withDeleted: true</code>, <code>restore</code></td></tr>
+<tr><td><code>paginate(15)</code>, <code>cursorPaginate</code></td><td><code>take</code> and <code>skip</code> with <code>count</code>, <code>findPage</code></td></tr>
+<tr><td><code>firstOrCreate</code>, <code>updateOrCreate</code></td><td><code>upsert</code></td></tr>
+<tr><td><code>increment(&#39;views&#39;)</code></td><td><code>&#123; views: &#123; increment: 1 &#125; &#125;</code></td></tr>
+<tr><td><code>DB::transaction(fn)</code></td><td><code>db.$transaction(fn)</code></td></tr>
+<tr><td><code>DB::select($sql, $bindings)</code></td><td><code>db.$sql`...`</code></td></tr>
+<tr><td><code>php artisan migrate</code>, <code>migrate:status</code></td><td><code>npx kastor migrate deploy</code>, <code>migrate status</code></td></tr>
+<tr><td><code>migrate:fresh --seed</code>, <code>db:seed</code></td><td><code>npx kastor migrate reset</code>, <code>db seed</code></td></tr>
+<tr><td><code>php artisan tinker</code> for data</td><td><code>npx kastor studio</code></td></tr>
+</tbody>
+</table>
+<p>Eager loading is where kastor feels closest to Eloquent, with one improvement: <code>with()</code> runs one extra query per relation, while kastor loads the whole include tree in one statement per call.</p>
+<pre data-kind="editor" data-lang="php" data-title="app/Http/Controllers/PostController.php">
+$posts = Post::published()
+    -&gt;whereHas('tags', fn ($q) =&gt; $q-&gt;where('name', 'laravel'))
+    -&gt;with(['author:id,name', 'tags'])
+    -&gt;withCount('comments')
+    -&gt;latest()
+    -&gt;take(20)
+    -&gt;get();
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/list.ts">
+import { db } from '../db'
+
+// Was: scopePublished
+const published = { published: true } as const
+
+export const latestTagged = (tag: string) =&gt;
+  db.posts.findMany({
+    where: { ...published, tags: { some: { name: tag } } },
+    include: {
+      author: { select: { id: true, name: true } },
+      tags: true,
+      _count: { select: { comments: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+</pre>
+<p>Model events and observers have no counterpart. Put that logic in the function that writes, where TypeScript checks it. Accessors such as <code>getFullNameAttribute</code> become plain functions over the row type.</p>
+</section>
+<section id="seeders"><h2>Step 4: seeders and factories</h2>
+<p>The <code>seed</code> entry of <code>kastor.config.ts</code> points at a file like <code>DatabaseSeeder</code>, and <code>factory()</code> covers model factories, including nested records like <code>has()</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
+import { defineSeed, factory } from 'kastor'
+import type { db as client } from './index'
+
+export default defineSeed&lt;typeof client&gt;(async (db) =&gt; {
+  const users = factory(db.users, ({ seq }) =&gt; ({
+    name: `User ${seq}`,
+    email: `user${seq}@example.com`,
+    password: 'not-a-real-hash',
+  }))
+
+  // Was: User::factory()-&gt;count(10)-&gt;has(Post::factory()-&gt;count(3))-&gt;create()
+  await users.createMany(10, (i) =&gt; ({
+    posts: { create: [1, 2, 3].map((n) =&gt; ({ title: `Post ${n} of user ${i + 1}` })) },
+  }))
+})
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor db seed
+npx kastor migrate reset
+</pre>
+</section>
+<section id="side-by-side"><h2>Path B in practice: sharing the database with Laravel</h2>
+<p>When PHP and TypeScript write the same tables, the TypeScript side has to follow the conventions Eloquent applies for you:</p>
+<ul>
+<li><strong>Timestamps.</strong> Eloquent fills <code>created_at</code> and <code>updated_at</code>. In kastor, <code>defaultNow()</code> fills the first on create and <code>.updatedAt()</code> fills the second on every create and update, so TypeScript writes keep the same convention.</li>
+<li><strong>Soft deletes.</strong> Declare <code>softDelete: &#39;deletedAt&#39;</code> on tables that use the trait, so TypeScript reads skip trashed rows exactly like Eloquent does.</li>
+<li><strong>Casts.</strong> A column cast to <code>array</code> holds JSON text. Declare it as <code>t.json&lt;Shape&gt;()</code> and write the same shape PHP expects.</li>
+<li><strong>Auth.</strong> Laravel sessions are encrypted with <code>APP_KEY</code> and are hard to share. Tokens are easier: Sanctum stores a SHA-256 hash of each personal access token, so the TypeScript API can verify the tokens Laravel issues.</li>
+<li><strong>Connections.</strong> PHP-FPM workers and the Node pool both hold connections. Keep their sum under the server's <code>max_connections</code>.</li>
+</ul>
+<pre data-kind="editor" data-lang="ts" data-title="src/auth/sanctum.ts">
+import { createHash } from 'node:crypto'
+import { db } from '../db'
+
+// Verifies a "Bearer 12|plaintext" token issued by Laravel Sanctum.
+export async function userFromToken(header: string | undefined) {
+  const [id, plain] = (header ?? '').replace(/^Bearer\s+/i, '').split('|')
+  if (!id || !plain) return null
+  const hash = createHash('sha256').update(plain).digest('hex')
+  const rows = await db.$sql&lt;{ tokenable_id: string }&gt;`
+    select tokenable_id from personal_access_tokens
+    where id = ${Number(id)} and token = ${hash} and tokenable_type = ${'App\\Models\\User'}
+  `
+  return rows[0] ? db.users.findUnique({ where: { id: BigInt(rows[0].tokenable_id) } }) : null
+}
+</pre>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Morph relations.</strong> <code>morphTo</code> and <code>morphMany</code> store a class name and an id without a foreign key. kastor relations need real keys, so query those with a filter on the type column, or with <code>$sql</code>.</li>
+<li><strong>Tinyint flags.</strong> On MySQL, Laravel booleans are <code>tinyint(1)</code>. Check that the pulled schema typed them as <code>t.boolean()</code> and fix any that came back as integers.</li>
+<li><strong>Password hashes.</strong> Laravel writes bcrypt hashes with the <code>$2y$</code> prefix. Check that the Node bcrypt library you pick accepts it before porting logins.</li>
+<li><strong>Enum columns.</strong> PHP enums are often stored as strings. Use <code>t.enum([...])</code> with the same values so both sides agree.</li>
+<li><strong>Time zones.</strong> Laravel stores timestamps in the app time zone, usually UTC. Make the Node process and the driver use the same zone.</li>
+</ul>
+<p>Once the TypeScript service is running, the <a href="express-orm.html">Express</a>, <a href="fastify-orm.html">Fastify</a> and <a href="adonisjs-orm.html">AdonisJS</a> guides show where the client lives in each framework. AdonisJS in particular will feel familiar to Laravel developers.</p>
+</section>

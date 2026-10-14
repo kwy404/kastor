@@ -1,0 +1,229 @@
+<!--meta
+{
+  "slug": "nextjs-app-router-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Next.js App Router ORM: server components, actions, edge | kastor",
+  "description": "Use kastor as the Next.js App Router ORM: one client across hot reloads, server components, server actions, route handlers, and the edge runtime with Neon, Turso or D1.",
+  "h1": "kastor with the Next.js App Router",
+  "crumb": "Next.js App Router",
+  "lead": "The App Router runs your data code on the server: in server components, server actions and route handlers. kastor fits there as a typed client with no generate step, and the same schema works in the Node.js runtime with <code>pg</code> and in the edge runtime with Neon, Turso or Cloudflare D1.",
+  "readTime": "12 min read",
+  "keywords": ["Next.js App Router ORM", "Next.js ORM", "Next.js server actions database", "Next.js edge runtime database", "Next.js Neon", "Next.js Turso", "Next.js D1"],
+  "howto": {
+    "name": "Set up kastor in a Next.js App Router project",
+    "totalTime": "PT20M",
+    "tools": ["Next.js 14 or newer", "kastor", "pg, @neondatabase/serverless or @libsql/client"],
+    "steps": [
+      { "name": "Install kastor and the driver", "text": "Run npm install kastor pg server-only and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Create one client module", "text": "Create src/db/index.ts that reuses the client through globalThis in development and imports server-only.", "anchor": "client" },
+      { "name": "Query in server components and actions", "text": "Await db calls in async server components and write in server actions with revalidatePath.", "anchor": "server-components" },
+      { "name": "Expose route handlers", "text": "Add app/api route handlers that return Response.json from kastor queries.", "anchor": "route-handlers" },
+      { "name": "Run migrations before deploy", "text": "Run npx kastor migrate deploy in CI or the build command with the direct database URL.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "Where should the kastor client live in a Next.js app?", "a": "In one server only module such as <code>src/db/index.ts</code> that starts with <code>import &#39;server-only&#39;</code>. Server components, server actions and route handlers import it; client components never do." },
+    { "q": "Why does Next.js open too many database connections in development?", "a": "Hot reload evaluates modules again, and each evaluation can create a new pool. Keep the client on <code>globalThis</code> outside production so every reload reuses the same pool." },
+    { "q": "Can I use kastor in the Next.js edge runtime?", "a": "Yes, with a driver that works there: <code>@neondatabase/serverless</code> for Postgres over WebSockets, <code>@libsql/client/web</code> for Turso, or the D1 binding when the app runs on Cloudflare. Create the client per request in edge code." },
+    { "q": "How do I run migrations for a Next.js app on Vercel?", "a": "Run <code>npx kastor migrate deploy</code> before the new build serves traffic, either as a CI step or by prefixing the build command. Use the direct, unpooled connection string for migrations." }
+  ],
+  "related": ["nextjs-postgres-orm", "migrate-from-prisma", "cloudflare-workers-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>The <strong>Next.js App Router</strong> splits code into server and client modules. Everything that touches the database belongs on the server side, and kastor makes that easy to keep straight: one schema file, one client module, and server code that imports the client. A typical layout looks like this:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+app/
+  posts/page.tsx          server component that reads
+  posts/actions.ts        server actions that write
+  api/posts/route.ts      route handler (Node.js runtime)
+  api/edge/route.ts       route handler (edge runtime)
+src/db/
+  schema.ts               tables and relations
+  index.ts                the client, created once
+kastor.config.ts          used by the CLI
+kastor/migrations/        SQL files written by migrate dev
+.env.local                DATABASE_URL, never NEXT_PUBLIC_
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg server-only
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+<p><code>init</code> writes <code>kastor.config.ts</code> and a starter schema in <code>src/db/schema.ts</code>. The CLI reads <code>.env</code> next to the config, while Next.js reads <code>.env.local</code>; either keep the variable in both or point the CLI at the right file in CI. Keep the name without the <code>NEXT_PUBLIC_</code> prefix so it never reaches the browser bundle.</p>
+</section>
+<section id="client"><h2>One client, reused across hot reloads</h2>
+<p>In development, Next.js re-evaluates modules on every change. A module that creates a pool at import time would open a new pool each time and slowly exhaust the database. Keep the client on <code>globalThis</code> outside production, and import <code>server-only</code> so a mistaken import from a client component fails the build instead of leaking credentials.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import 'server-only'
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+
+export type Db = typeof db
+</pre>
+<p>In production on serverless hosts, each function instance gets its own module scope and therefore its own pool. Keep <code>max</code> small and use your provider's pooled connection string (PgBouncer, Supavisor or the Neon pooler) so many instances share a few real connections.</p>
+</section>
+<section id="server-components"><h2>Server components and server actions</h2>
+<p>Server components are async functions that run on the server, so they can await a query directly. The result is typed from the schema, including the included relations.</p>
+<pre data-kind="editor" data-lang="tsx" data-title="app/posts/page.tsx">
+import { db } from '@/db'
+import { publish } from './actions'
+
+export default async function PostsPage() {
+  const posts = await db.posts.findMany({
+    where: { published: false },
+    include: { author: { select: { name: true } } },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+  return (
+    &lt;ul&gt;
+      {posts.map((p) =&gt; (
+        &lt;li key={p.id}&gt;
+          {p.title} by {p.author.name ?? 'anonymous'}
+          &lt;form action={publish}&gt;
+            &lt;input type="hidden" name="id" value={p.id} /&gt;
+            &lt;button&gt;Publish&lt;/button&gt;
+          &lt;/form&gt;
+        &lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+</pre>
+<p>Writes go in server actions. Put them in a file that starts with <code>&#39;use server&#39;</code>, validate the form input, then revalidate the pages that show the data. kastor errors carry a stable <code>code</code>, so turning a unique violation into a form message is one <code>if</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/posts/actions.ts">
+'use server'
+import { revalidatePath } from 'next/cache'
+import { isKastorError } from 'kastor'
+import { db } from '@/db'
+
+export async function publish(formData: FormData) {
+  const id = Number(formData.get('id'))
+  await db.posts.update({ where: { id }, data: { published: true } })
+  revalidatePath('/posts')
+}
+
+export async function createTag(formData: FormData) {
+  try {
+    await db.tags.create({ data: { name: String(formData.get('name')).trim() } })
+    revalidatePath('/tags')
+    return { ok: true }
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') return { ok: false, error: 'That tag already exists.' }
+    throw e
+  }
+}
+</pre>
+</section>
+<section id="route-handlers"><h2>Route handlers</h2>
+<p>Route handlers expose HTTP endpoints for other clients. They run in the Node.js runtime by default, so they share the pooled client above.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/api/posts/route.ts">
+import { db } from '@/db'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const page = await db.posts.findPage({
+    where: { published: true },
+    orderBy: { id: 'desc' },
+    first: 20,
+    after: searchParams.get('after'),
+  })
+  return Response.json(page)
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json()) as { title: string; authorId: number }
+  const post = await db.posts.create({ data: { title: body.title, authorId: body.authorId } })
+  return Response.json(post, { status: 201 })
+}
+</pre>
+</section>
+<section id="edge"><h2>The edge runtime: Neon, Turso or D1</h2>
+<p>Code that sets <code>export const runtime = &#39;edge&#39;</code> runs without Node.js TCP sockets, so the <code>pg</code> pool above is not available there. kastor's core has no Node only imports, so the same schema works with a driver built for the edge. Create the client inside the request: edge isolates do not keep connections between requests the way a Node process does.</p>
+<pre data-kind="editor" data-lang="ts" data-title="app/api/edge/route.ts">
+import { Pool } from '@neondatabase/serverless'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from '@/db/schema'
+
+export const runtime = 'edge'
+
+export async function GET() {
+  // Neon's Pool speaks the pg API over WebSockets, so the postgres adapter takes it.
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  try {
+    const db = kastor({ adapter: postgres(pool), schema, relations })
+    return Response.json(await db.posts.findMany({ where: { published: true }, take: 10 }))
+  } finally {
+    await pool.end()
+  }
+}
+</pre>
+<p>For Turso, use the web build of the libSQL client, which talks HTTP:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/turso.ts">
+import { createClient } from '@libsql/client/web'
+import { kastor } from 'kastor'
+import { libsql } from 'kastor/libsql'
+import { schema, relations } from './schema'
+
+export const tursoDb = () =&gt;
+  kastor({
+    adapter: libsql(createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })),
+    schema,
+    relations,
+  })
+</pre>
+<p>When the whole app runs on Cloudflare through the OpenNext adapter, the D1 binding comes from the Cloudflare context instead of an environment variable. D1 runs batches instead of interactive transactions, so use the array form of <code>$transaction</code> there.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/d1.ts">
+import { getCloudflareContext } from '@opennextjs/cloudflare'
+import { kastor } from 'kastor'
+import { d1 } from 'kastor/d1'
+import { schema, relations } from './schema'
+
+export const d1Db = () =&gt; kastor({ adapter: d1(getCloudflareContext().env.DB), schema, relations })
+</pre>
+</section>
+<section id="deploy"><h2>Environment variables and migrations on deploy</h2>
+<p>Keep two connection strings. The application uses the pooled one; migrations use the direct one, because poolers in transaction mode do not keep the session state a migration needs. On Vercel, set both in the project settings, then run migrations before the new build takes traffic. The simplest option is a CI step:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+name: deploy
+on: { push: { branches: [main] } }
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx kastor migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+</pre>
+<p>If you prefer a single step, set the build command to <code>npx kastor migrate deploy &amp;&amp; next build</code>. Either way there is no generate step: types come from <code>src/db/schema.ts</code> through the compiler, so <code>next build</code> type checks queries against the schema in the same commit.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Client components.</strong> Never import <code>@/db</code> from a file with <code>&#39;use client&#39;</code>. Pass data down as props from a server component, or call a server action.</li>
+<li><strong>Caching.</strong> Next.js may cache route handlers and pages. Queries through kastor are plain function calls, so use <code>revalidatePath</code>, <code>revalidateTag</code> or <code>export const dynamic = &#39;force-dynamic&#39;</code> the way the Next.js docs describe for your version.</li>
+<li><strong>Serializing results.</strong> Data passed from server to client components must be serializable. <code>Date</code> works, <code>bigint</code> does not: convert <code>t.bigId()</code> keys with <code>String(id)</code> first.</li>
+<li><strong>Edge pools.</strong> Do not keep a Neon <code>Pool</code> in module scope on the edge; create it per request and end it, as above.</li>
+</ul>
+<p>The <a href="nextjs-postgres-orm.html">Next.js with PostgreSQL guide</a> goes deeper into managed Postgres providers, and the <a href="migrate-from-prisma.html">Prisma migration guide</a> helps if the app used Prisma before.</p>
+</section>

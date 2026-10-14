@@ -1,0 +1,240 @@
+<!--meta
+{
+  "slug": "nestjs-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "NestJS ORM: a kastor module, provider and typed services | kastor",
+  "description": "Use kastor as the NestJS ORM: a global DbModule with a provider token, ConfigService for the URL, shutdown hooks, typed services, an exception filter and migrations in CI.",
+  "h1": "kastor with NestJS",
+  "crumb": "NestJS",
+  "lead": "NestJS wires everything through modules and providers. kastor fits as one provider that builds the client from configuration, a global module that exports it, and services that inject it with full types inferred from your schema, without entity classes or repositories.",
+  "readTime": "11 min read",
+  "keywords": ["NestJS ORM", "NestJS database module", "NestJS provider database", "NestJS TypeScript ORM", "NestJS PostgreSQL", "NestJS without TypeORM"],
+  "howto": {
+    "name": "Add kastor to a NestJS application",
+    "totalTime": "PT30M",
+    "tools": ["NestJS 10 or newer", "@nestjs/config", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg @nestjs/config and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Create the provider and module", "text": "Create a KASTOR token, a factory provider that reads DATABASE_URL from ConfigService, and a global DbModule that exports it.", "anchor": "module" },
+      { "name": "Close the pool on shutdown", "text": "Implement OnApplicationShutdown and call app.enableShutdownHooks().", "anchor": "shutdown" },
+      { "name": "Inject the client in services", "text": "Use @Inject(KASTOR) with the Db type in services and keep controllers thin.", "anchor": "services" },
+      { "name": "Map errors and run migrations", "text": "Turn KastorError codes into HTTP errors with a filter, and run npx kastor migrate deploy in CI.", "anchor": "errors" }
+    ]
+  },
+  "faq": [
+    { "q": "How do I register kastor in NestJS?", "a": "Create a factory provider under a token such as <code>KASTOR</code> that returns <code>kastor(&#123; adapter, schema, relations &#125;)</code>, put it in a <code>@Global()</code> module, and export it. Services then inject it with <code>@Inject(KASTOR)</code>." },
+    { "q": "Do I need entity classes or repositories?", "a": "No. Row types come from the schema through <code>InferSelect</code> and from each query's return type. A service that wraps the queries for one area plays the role of a repository." },
+    { "q": "How do I close the connection pool when Nest shuts down?", "a": "Call <code>app.enableShutdownHooks()</code> in main.ts and implement <code>OnApplicationShutdown</code> in the module, calling <code>db.$disconnect()</code>." },
+    { "q": "How do I test services that use kastor?", "a": "Override the <code>KASTOR</code> provider in <code>Test.createTestingModule</code> with a client on a test database, or on SQLite in memory for fast unit tests of query logic." }
+  ],
+  "related": ["migrate-from-typeorm", "express-orm", "fastify-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>A <strong>NestJS</strong> app gets one database module, imported once in the root module. Everything else injects the client from it.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  db/db.module.ts         KASTOR token, provider, global module
+  posts/posts.service.ts  queries for posts
+  posts/posts.controller.ts
+  common/kastor-exception.filter.ts
+  app.module.ts
+  main.ts
+kastor.config.ts
+kastor/migrations/
+.env                      DATABASE_URL
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg @nestjs/config
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+</section>
+<section id="module"><h2>The provider and the module</h2>
+<p>A factory provider builds the client from <code>ConfigService</code>, so the URL comes from the environment like every other setting. The exported <code>Db</code> type is the client's inferred type, which services use to annotate the injected value.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/db.module.ts">
+import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+export const KASTOR = Symbol('KASTOR')
+
+export const createDb = (url: string) =&gt;
+  kastor({ adapter: postgres(new pg.Pool({ connectionString: url, max: 10 })), schema, relations })
+
+export type Db = ReturnType&lt;typeof createDb&gt;
+
+@Global()
+@Module({
+  providers: [
+    {
+      provide: KASTOR,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =&gt; createDb(config.getOrThrow&lt;string&gt;('DATABASE_URL')),
+    },
+  ],
+  exports: [KASTOR],
+})
+export class DbModule implements OnApplicationShutdown {
+  constructor(@Inject(KASTOR) private readonly db: Db) {}
+
+  async onApplicationShutdown() {
+    await this.db.$disconnect()
+  }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/app.module.ts">
+import { Module } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
+import { DbModule } from './db/db.module'
+import { PostsController } from './posts/posts.controller'
+import { PostsService } from './posts/posts.service'
+
+@Module({
+  imports: [ConfigModule.forRoot({ isGlobal: true }), DbModule],
+  controllers: [PostsController],
+  providers: [PostsService],
+})
+export class AppModule {}
+</pre>
+</section>
+<section id="shutdown"><h2>Shutdown and hot reload</h2>
+<p>Nest only calls shutdown hooks when you enable them. With them on, <code>SIGTERM</code> from Docker or Kubernetes closes the HTTP server first and then the pool, so in flight queries finish.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/main.ts">
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+import { KastorExceptionFilter } from './common/kastor-exception.filter'
+
+async function main() {
+  const app = await NestFactory.create(AppModule)
+  app.enableShutdownHooks()
+  app.useGlobalFilters(new KastorExceptionFilter())
+  await app.listen(process.env.PORT ?? 3000)
+}
+main()
+</pre>
+<p><code>nest start --watch</code> restarts the whole process on change, so there is no module cache to worry about: the old process closes its pool through the shutdown hook and the new one opens a fresh one. If you use webpack hot module replacement instead, add <code>module.hot.dispose(() =&gt; app.close())</code> as the Nest docs show, which runs the same hook.</p>
+</section>
+<section id="services"><h2>Services and controllers</h2>
+<p>A service injects the client and owns the queries for one area. Because the return types are inferred, the controller's responses are typed too, with no DTO classes for output unless you want them.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/posts.service.ts">
+import { Inject, Injectable } from '@nestjs/common'
+import { KASTOR, type Db } from '../db/db.module'
+
+@Injectable()
+export class PostsService {
+  constructor(@Inject(KASTOR) private readonly db: Db) {}
+
+  list(take = 20) {
+    return this.db.posts.findMany({
+      where: { published: true },
+      include: { author: { select: { name: true } }, tags: true },
+      orderBy: { id: 'desc' },
+      take,
+    })
+  }
+
+  get(id: number) {
+    return this.db.posts.findUniqueOrThrow({ where: { id }, include: { author: true } })
+  }
+
+  create(input: { title: string; authorId: number; tags?: string[] }) {
+    return this.db.posts.create({
+      data: {
+        title: input.title,
+        authorId: input.authorId,
+        tags: { connectOrCreate: (input.tags ?? []).map((name) =&gt; ({ where: { name }, create: { name } })) },
+      },
+      include: { tags: true },
+    })
+  }
+
+  publishAll(authorId: number) {
+    return this.db.$transaction(async (tx) =&gt; {
+      const { count } = await tx.posts.updateMany({ where: { authorId, published: false }, data: { published: true } })
+      await tx.users.update({ where: { id: authorId }, data: { role: 'admin' } })
+      return count
+    })
+  }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/posts.controller.ts">
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs/common'
+import { PostsService } from './posts.service'
+
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly posts: PostsService) {}
+
+  @Get()
+  list(@Query('take') take?: string) {
+    return this.posts.list(take ? Number(take) : undefined)
+  }
+
+  @Get(':id')
+  get(@Param('id', ParseIntPipe) id: number) {
+    return this.posts.get(id)
+  }
+
+  @Post()
+  create(@Body() body: { title: string; authorId: number; tags?: string[] }) {
+    return this.posts.create(body)
+  }
+}
+</pre>
+</section>
+<section id="errors"><h2>Errors, tests and migrations</h2>
+<p>Every kastor failure is a <code>KastorError</code> with a stable code. One exception filter turns them into HTTP responses, so services can use <code>findUniqueOrThrow</code> and let <code>NOT_FOUND</code> become a 404.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/common/kastor-exception.filter.ts">
+import { Catch, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common'
+import { KastorError } from 'kastor'
+
+const STATUS: Record&lt;string, number&gt; = { NOT_FOUND: 404, UNIQUE_VIOLATION: 409, FOREIGN_KEY_VIOLATION: 422, NOT_NULL_VIOLATION: 422 }
+
+@Catch(KastorError)
+export class KastorExceptionFilter implements ExceptionFilter {
+  catch(error: KastorError, host: ArgumentsHost) {
+    const res = host.switchToHttp().getResponse()
+    const status = STATUS[error.code] ?? 500
+    res.status(status).json({ statusCode: status, code: error.code, message: status === 500 ? 'Internal error' : error.message })
+  }
+}
+</pre>
+<p>In tests, override the provider with a client on a test database: <code>Test.createTestingModule(&#123; imports: [AppModule] &#125;).overrideProvider(KASTOR).useValue(createDb(testUrl))</code>. For migrations, keep them out of application startup and run them in the pipeline before the new version starts:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npm run build
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+- run: ./deploy.sh
+</pre>
+</section>
+<section id="structure-at-scale"><h2>Organizing queries as the app grows</h2>
+<p>In a large NestJS codebase, the question is less where the client lives and more where queries live. A good default is one service per feature module (<code>PostsService</code>, <code>BillingService</code>) that owns every query for that area and exposes methods named after what the domain needs, such as <code>listPublished</code> or <code>archiveDrafts</code>. Controllers call services; services call <code>this.db</code>. Because each method's return type is inferred from its query, there is no separate layer of interfaces to keep in sync.</p>
+<p>When one use case spans several services, open the transaction in the outer service and pass the transaction client down. The <code>tx</code> argument of <code>$transaction</code> has the same type as the client, so a method can accept <code>db: Db</code> and work with either. That keeps transactions explicit, instead of hiding them in a request scoped provider.</p>
+<p>Multi tenant applications often need a filter on every query. Rather than intercepting queries, keep a typed where object per tenant (for example <code>&#123; tenantId &#125;</code>) in the service and spread it into each call, or use database row level security set inside a transaction. Both are visible in the code and easy to test.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The <code>KASTOR</code> provider is a singleton exported by a global module.</li>
+<li>Shutdown hooks are enabled, and the module disconnects the pool.</li>
+<li>One exception filter maps <code>KastorError</code> codes to HTTP responses.</li>
+<li>Pool <code>max</code> times the number of replicas stays under the database limit.</li>
+<li>Migrations run in the pipeline, not in <code>onModuleInit</code>.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Request scoped providers.</strong> Do not make the <code>KASTOR</code> provider request scoped; that would build a pool per request. Keep it a singleton, the default.</li>
+<li><strong>Several app instances.</strong> Each replica has its own pool. Size <code>max</code> so replicas times <code>max</code> stays under the database limit.</li>
+<li><strong>Serialization.</strong> Nest serializes responses with <code>JSON.stringify</code>; <code>bigint</code> values throw. Convert <code>t.bigId()</code> keys in the service or with an interceptor.</li>
+<li><strong>Coming from TypeORM.</strong> Remove <code>TypeOrmModule.forRoot</code> once nothing injects repositories. The <a href="migrate-from-typeorm.html">TypeORM migration guide</a> covers entities and migration history.</li>
+</ul>
+</section>

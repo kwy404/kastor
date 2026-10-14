@@ -1,0 +1,177 @@
+<!--meta
+{
+  "slug": "astro-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Astro ORM: kastor in on-demand pages, endpoints and actions | kastor",
+  "description": "Use kastor as the Astro ORM: server rendered pages, API endpoints and Astro Actions with typed queries, a reused client, server only env vars, adapters and migrations.",
+  "h1": "kastor with Astro",
+  "crumb": "Astro",
+  "lead": "Astro renders most pages at build time, but on-demand pages, endpoints and actions run on a server, and that is where a database belongs. kastor gives those server parts typed queries, and works with the Node, Vercel, Netlify and Cloudflare adapters.",
+  "readTime": "10 min read",
+  "keywords": ["Astro ORM", "Astro database", "Astro SSR database", "Astro actions database", "Astro endpoints PostgreSQL", "Astro TypeScript ORM"],
+  "howto": {
+    "name": "Set up kastor in an Astro project",
+    "totalTime": "PT20M",
+    "tools": ["Astro 4 or 5 with a server adapter", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Add a server adapter", "text": "Add @astrojs/node (or another adapter) so pages and endpoints can render on demand.", "anchor": "structure" },
+      { "name": "Create the client", "text": "Create src/lib/db.ts with a client reused through globalThis in development.", "anchor": "client" },
+      { "name": "Query in pages", "text": "Mark pages with prerender = false and query kastor in the frontmatter.", "anchor": "pages" },
+      { "name": "Write through endpoints or actions", "text": "Add src/pages/api endpoints or Astro Actions that call kastor for writes.", "anchor": "endpoints" },
+      { "name": "Migrate on deploy", "text": "Run npx kastor migrate deploy in CI before releasing the server build.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "Can Astro query a database at build time?", "a": "Yes. Prerendered pages run their frontmatter during <code>astro build</code>, so a kastor query there runs once at build. That suits content that changes rarely; the build machine must reach the database." },
+    { "q": "How do I make an Astro page query the database on every request?", "a": "Use a server adapter and export <code>const prerender = false</code> from the page, or set <code>output: &#39;server&#39;</code> so every page renders on demand." },
+    { "q": "Where should DATABASE_URL live in Astro?", "a": "In <code>.env</code> or the host's environment, without the <code>PUBLIC_</code> prefix. Variables without that prefix are only available to server code, so they never reach the browser." },
+    { "q": "Does kastor work with the Cloudflare adapter?", "a": "Yes. Read the D1 binding from <code>Astro.locals.runtime.env.DB</code> in pages, or <code>context.locals.runtime.env.DB</code> in endpoints, and create the client with <code>d1()</code> per request." }
+  ],
+  "related": ["sveltekit-orm", "nextjs-app-router-orm", "cloudflare-workers-orm"]
+}
+-->
+<section id="structure"><h2>Project structure and the adapter</h2>
+<p><strong>Astro</strong> needs a server adapter before any page can query a database per request. With <code>@astrojs/node</code> in standalone mode, the build is a Node server with one long lived process; other adapters turn on-demand routes into functions.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx astro add node
+npm install kastor pg
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+<pre data-kind="output" data-lang="text" data-title="Project">
+astro.config.mjs          adapter: node(), output stays "static" or "server"
+src/db/schema.ts          tables and relations
+src/lib/db.ts             the client
+src/pages/posts.astro     on-demand page (prerender = false)
+src/pages/api/posts.ts    JSON endpoint
+src/actions/index.ts      Astro Actions for forms
+kastor.config.ts
+kastor/migrations/
+.env                      DATABASE_URL
+</pre>
+<pre data-kind="editor" data-lang="js" data-title="astro.config.mjs">
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+
+export default defineConfig({
+  adapter: node({ mode: 'standalone' }),
+})
+</pre>
+</section>
+<section id="client"><h2>One client for the whole server</h2>
+<p>Astro's dev server reloads modules on change, so keep the client on <code>globalThis</code> during development. Server code can read <code>process.env</code> on Node based adapters; <code>import.meta.env</code> also works and is how Astro exposes <code>.env</code> values to server code.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/lib/db.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from '../db/schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: import.meta.env.DATABASE_URL ?? process.env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+</section>
+<section id="pages"><h2>Querying in on-demand pages</h2>
+<p>The frontmatter of an <code>.astro</code> page runs on the server. With <code>prerender = false</code> it runs per request, so the page can read query parameters and always shows fresh rows.</p>
+<pre data-kind="editor" data-lang="astro" data-title="src/pages/posts.astro">
+---
+import { db } from '../lib/db'
+export const prerender = false
+
+const tag = Astro.url.searchParams.get('tag')
+const posts = await db.posts.findMany({
+  where: { published: true, ...(tag ? { tags: { some: { name: tag } } } : {}) },
+  include: { author: { select: { name: true } }, tags: true },
+  orderBy: { id: 'desc' },
+  take: 20,
+})
+---
+&lt;ul&gt;
+  {posts.map((p) =&gt; (
+    &lt;li&gt;{p.title} by {p.author.name} {p.tags.map((t) =&gt; &lt;span&gt;#{t.name}&lt;/span&gt;)}&lt;/li&gt;
+  ))}
+&lt;/ul&gt;
+</pre>
+<p>Leaving out <code>prerender = false</code> on a page with a server adapter in the default static mode runs the query once, at build time. That is a legitimate choice for pages like a list of categories: no database round trip per visitor, at the cost of a rebuild when the data changes.</p>
+</section>
+<section id="endpoints"><h2>Endpoints and actions for writes</h2>
+<p>Files in <code>src/pages/api</code> that export HTTP method handlers become endpoints. They suit JSON clients:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/pages/api/posts.ts">
+import type { APIRoute } from 'astro'
+import { isKastorError } from 'kastor'
+import { db } from '../../lib/db'
+
+export const prerender = false
+
+export const GET: APIRoute = async ({ url }) =&gt; {
+  const posts = await db.posts.findMany({ where: { published: true }, take: Number(url.searchParams.get('take') ?? 20) })
+  return Response.json(posts)
+}
+
+export const POST: APIRoute = async ({ request }) =&gt; {
+  const body = (await request.json()) as { title: string; authorId: number }
+  try {
+    return Response.json(await db.posts.create({ data: body }), { status: 201 })
+  } catch (e) {
+    if (isKastorError(e)) return Response.json({ error: e.message, hint: e.hint }, { status: 400 })
+    throw e
+  }
+}
+</pre>
+<p>For forms on your own pages, Astro Actions validate input and are called like functions. The handler runs on the server, so it can call kastor directly:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/actions/index.ts">
+import { defineAction } from 'astro:actions'
+import { z } from 'astro:schema'
+import { db } from '../lib/db'
+
+export const server = {
+  publishPost: defineAction({
+    accept: 'form',
+    input: z.object({ id: z.coerce.number() }),
+    handler: async ({ id }: { id: number }) =&gt; {
+      const post = await db.posts.update({ where: { id }, data: { published: true } })
+      return { id: post.id, published: post.published }
+    },
+  }),
+}
+</pre>
+</section>
+<section id="deploy"><h2>Environment variables and migrations on deploy</h2>
+<p>Set <code>DATABASE_URL</code> in the host's environment without a <code>PUBLIC_</code> prefix. With the Node adapter, run migrations before starting the server:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm run build
+npx kastor migrate deploy
+node ./dist/server/entry.mjs
+</pre>
+<p>On Vercel and Netlify, on-demand routes are functions: keep <code>max</code> small, use a pooled connection string, and run <code>npx kastor migrate deploy</code> in CI with the direct URL before the deployment goes live. If prerendered pages query the database, the build step itself needs <code>DATABASE_URL</code> and must run after migrations. On Cloudflare, build the client per request from <code>Astro.locals.runtime.env.DB</code> with <code>d1()</code>.</p>
+</section>
+<section id="static-vs-server"><h2>Static, on demand, or both</h2>
+<p>Astro lets each page choose when it runs. A good rule for database backed pages is to prerender what is the same for every visitor and changes rarely, such as documentation or a category list, and render on demand what depends on the visitor or changes often, such as a feed, a search page or an account page. Both kinds can import the same <code>src/lib/db.ts</code>: prerendered pages call it once during the build, on demand pages on every request.</p>
+<p>When a prerendered page queries kastor, the build needs the database: CI must have <code>DATABASE_URL</code> and must run migrations before <code>astro build</code>. When nothing is prerendered from the database, the build can run without any connection, which keeps preview deployments simple.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>A server adapter is installed, and pages that query per request set <code>prerender = false</code>.</li>
+<li><code>DATABASE_URL</code> has no <code>PUBLIC_</code> prefix.</li>
+<li>Islands receive plain, serializable props, never the client.</li>
+<li>Builds that prerender database pages run after migrations and can reach the database.</li>
+<li>Serverless adapters use a pooled URL and a pool <code>max</code> of 1 to 5.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Client scripts.</strong> Code in <code>&lt;script&gt;</code> tags and framework islands (React, Vue, Svelte components with <code>client:*</code>) runs in the browser. Pass data to them as props from the frontmatter, never import the db module there.</li>
+<li><strong>Build time queries.</strong> A static page that queries kastor freezes the data at build time. That is easy to forget when an editor asks why a change does not show.</li>
+<li><strong>Bigint in props.</strong> Props passed to islands are serialized; convert <code>bigint</code> keys with <code>String(id)</code>.</li>
+<li><strong>Pool per function.</strong> Serverless adapters create one pool per instance, so use a pooler.</li>
+</ul>
+</section>

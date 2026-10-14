@@ -1,0 +1,217 @@
+<!--meta
+{
+  "slug": "migrate-from-rails-active-record",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Rails to TypeScript, or side by side",
+  "title": "Coming from Rails Active Record: kastor for Ruby developers | kastor",
+  "description": "Coming from Rails Active Record: kastor runs in JavaScript runtimes, not Ruby. Map models, associations, scopes, includes, migrations and seeds, or share the database.",
+  "h1": "Coming from Rails and Active Record",
+  "crumb": "From Rails Active Record",
+  "lead": "kastor is a TypeScript ORM that runs in Node.js, Bun, Deno and edge runtimes. It does not run in Ruby and it does not replace Active Record inside a Rails app. This guide maps what you know from Active Record to kastor, for a service that moves to TypeScript or an API that shares the Rails database.",
+  "readTime": "13 min read",
+  "keywords": ["Rails Active Record TypeScript", "Active Record equivalent Node.js", "Rails to Node.js", "migrate Rails to TypeScript", "Rails and Node.js same database", "Active Record includes TypeScript"],
+  "howto": {
+    "name": "Use kastor on a database built by Rails",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the pg or mysql2 driver", "your Rails project"],
+    "steps": [
+      { "name": "Choose the path", "text": "Decide whether a service moves to TypeScript or a TypeScript API runs next to Rails on the same database.", "anchor": "paths" },
+      { "name": "Pull the schema Rails built", "text": "Run npx kastor init and npx kastor db pull against the database that rails db:migrate created.", "anchor": "pull" },
+      { "name": "Pick the migration owner", "text": "Keep Rails migrations and refresh with db pull, or run npx kastor migrate baseline --name init and let kastor own changes.", "anchor": "owner" },
+      { "name": "Translate associations, scopes and queries", "text": "Map has_many, belongs_to, scopes, includes and where chains to the kastor client.", "anchor": "queries" },
+      { "name": "Port seeds and keep callbacks explicit", "text": "Rewrite db/seeds.rb with defineSeed and move callbacks into the functions that write.", "anchor": "seeds" }
+    ]
+  },
+  "faq": [
+    { "q": "Can I use kastor in a Ruby or Rails project?", "a": "No. kastor runs only in JavaScript runtimes such as Node.js, Bun, Deno and Cloudflare Workers. Rails keeps Active Record. kastor is for TypeScript code that moves out of Rails or runs next to it on the same database." },
+    { "q": "What is the kastor equivalent of includes and preload?", "a": "<code>include</code>. <code>Post.includes(:author, :tags)</code> becomes <code>db.posts.findMany(&#123; include: &#123; author: true, tags: true &#125; &#125;)</code>, loaded in one statement per call with JSON aggregation, so there is no preload versus eager_load choice to make." },
+    { "q": "How do Active Record scopes translate?", "a": "As typed where objects or small functions that return one. <code>scope :published, -&gt; &#123; where(published: true) &#125;</code> becomes a constant you spread into <code>where</code>, and chaining scopes becomes combining objects or using <code>AND</code>." },
+    { "q": "Can Rails and a Node.js service share a PostgreSQL database?", "a": "Yes. Run <code>npx kastor db pull</code>, keep one side in charge of migrations, and follow Rails conventions on the TypeScript side: set <code>updated_at</code> on writes and keep enum integers or strings in the same format Rails uses." },
+    { "q": "What replaces db/seeds.rb and FactoryBot?", "a": "A seed file with <code>defineSeed</code> run by <code>npx kastor db seed</code>, and <code>factory(db.users, (&#123; seq &#125;) =&gt; data)</code> for test records." }
+  ],
+  "related": ["migrate-from-django-orm", "migrate-from-laravel-eloquent", "hono-orm"]
+}
+-->
+<section id="paths"><h2>Where kastor fits for a Rails team</h2>
+<p>Active Record is woven into Rails and written in Ruby. kastor is a TypeScript library that runs in JavaScript runtimes: Node.js, Bun, Deno and edge platforms such as Cloudflare Workers. There is no gem, and kastor cannot be called from a Rails app.</p>
+<p>What it offers someone coming from <strong>Rails Active Record</strong> is a familiar shape in TypeScript: tables with associations, scopes as reusable conditions, eager loading, schema migrations and seeds. Two paths lead here:</p>
+<ul>
+<li><strong>Path A: moving to TypeScript.</strong> A service or a whole backend moves to Node.js or Bun, and the team wants the Active Record habits to carry over.</li>
+<li><strong>Path B: TypeScript next to Rails.</strong> Rails keeps running, and a TypeScript API, worker or Next.js app uses the same PostgreSQL or MySQL database.</li>
+</ul>
+</section>
+<section id="pull"><h2>Step 1: pull the schema Rails built</h2>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p><code>db pull</code> plays the role of <code>db/schema.rb</code> in reverse: it reads the live database and writes TypeScript. Rails tables are plural and snake case, so the exports come out as <code>users</code>, <code>posts</code> and <code>postsTags</code> style names, and columns keep their database names through <code>.map()</code>.</p>
+<pre data-kind="editor" data-lang="ruby" data-title="app/models/post.rb">
+class Post &lt; ApplicationRecord
+  belongs_to :author, class_name: "User", foreign_key: :user_id
+  has_and_belongs_to_many :tags
+  has_many :comments, dependent: :destroy
+
+  enum :status, { draft: 0, published: 1, archived: 2 }
+
+  scope :visible, -&gt; { where(status: :published) }
+  scope :recent, -&gt; { order(created_at: :desc) }
+
+  validates :title, presence: true, length: { maximum: 200 }
+end
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.bigId(),
+  email: t.string().unique(),
+  name: t.string().nullable(),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+  updatedAt: t.datetime().map('updated_at').updatedAt(),
+})
+
+export const posts = table('posts', {
+  id: t.bigId(),
+  userId: t.bigint().map('user_id').references(() =&gt; users.id),
+  title: t.string(200),
+  // Rails integer enum: 0 draft, 1 published, 2 archived
+  status: t.int().default(0),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+  updatedAt: t.datetime().map('updated_at').updatedAt(),
+})
+
+export const tags = table('tags', {
+  id: t.bigId(),
+  name: t.string().unique(),
+})
+
+// has_and_belongs_to_many join table, no primary key in Rails
+export const postsTags = table('posts_tags', {
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id),
+  tagId: t.bigint().map('tag_id').references(() =&gt; tags.id),
+}, { primaryKey: (c) =&gt; [c.postId, c.tagId] })
+
+export const comments = table('comments', {
+  id: t.bigId(),
+  postId: t.bigint().map('post_id').references(() =&gt; posts.id),
+  body: t.text(),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+})
+
+export const schema = { users, posts, tags, postsTags, comments }
+
+export const relations = ({ users, posts, tags, postsTags, comments }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: {
+    author: one(users, { fields: ['userId'], references: ['id'] }),
+    tags: many(tags, { through: postsTags }),
+    comments: many(comments),
+  },
+  comments: { post: one(posts, { fields: ['postId'], references: ['id'] }) },
+})
+
+export const PostStatus = { draft: 0, published: 1, archived: 2 } as const
+</pre>
+<p>Rails <code>has_and_belongs_to_many</code> join tables have no primary key. kastor declares one over both columns in the schema; if you let kastor own migrations later, add the matching constraint, which also stops duplicate pairs.</p>
+</section>
+<section id="owner"><h2>Step 2: pick the migration owner</h2>
+<p>Rails tracks applied versions in <code>schema_migrations</code>, kastor in <code>_kastor_migrations</code>. While Rails is the main app, keep <code>rails db:migrate</code> as the only way to change the schema and run <code>npx kastor db pull</code> after each migration. When TypeScript takes over, record a baseline and switch:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate dev --name add_slug_to_posts
+npx kastor migrate deploy
+</pre>
+</section>
+<section id="queries"><h2>Step 3: associations, scopes and queries</h2>
+<pre data-kind="editor" data-lang="ruby" data-title="app/controllers/posts_controller.rb">
+@posts = Post.visible.recent
+  .joins(:tags).where(tags: { name: "ruby" })
+  .includes(:author, :tags)
+  .where.not(user_id: blocked_ids)
+  .limit(20)
+
+Post.where(id: post_id).update_counters(views: 1)
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/queries.ts">
+import { db } from '../db'
+import { PostStatus } from '../db/schema'
+
+// scope :visible and scope :recent
+const visible = { status: PostStatus.published }
+const recent = { createdAt: 'desc' } as const
+
+export const rubyPosts = (blockedIds: bigint[]) =&gt;
+  db.posts.findMany({
+    where: { ...visible, tags: { some: { name: 'ruby' } }, userId: { notIn: blockedIds } },
+    include: { author: true, tags: true },
+    orderBy: recent,
+    take: 20,
+  })
+
+export const archive = (id: bigint) =&gt;
+  db.posts.update({ where: { id }, data: { status: PostStatus.archived } })
+</pre>
+<table class="spec">
+<thead><tr><th>Active Record</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>class Post &lt; ApplicationRecord</code></td><td><code>table(&#39;posts&#39;, ...)</code></td></tr>
+<tr><td><code>belongs_to</code>, <code>has_one</code></td><td><code>one()</code></td></tr>
+<tr><td><code>has_many</code></td><td><code>many()</code></td></tr>
+<tr><td><code>has_many :through</code>, <code>habtm</code></td><td><code>many(target, &#123; through: joinTable &#125;)</code></td></tr>
+<tr><td><code>scope :visible</code></td><td>a typed where object</td></tr>
+<tr><td><code>includes</code>, <code>preload</code>, <code>eager_load</code></td><td><code>include</code></td></tr>
+<tr><td><code>joins(:tags).where(tags: ...)</code></td><td><code>tags: &#123; some: ... &#125;</code></td></tr>
+<tr><td><code>where.not</code>, <code>or</code></td><td><code>not</code> or <code>notIn</code>, <code>OR</code></td></tr>
+<tr><td><code>order</code>, <code>limit</code>, <code>offset</code></td><td><code>orderBy</code>, <code>take</code>, <code>skip</code></td></tr>
+<tr><td><code>find</code>, <code>find_by</code>, <code>find_by!</code></td><td><code>findUnique</code>, <code>findFirst</code>, <code>findFirstOrThrow</code></td></tr>
+<tr><td><code>create</code>, <code>insert_all</code>, <code>upsert</code></td><td><code>create</code>, <code>createMany</code>, <code>upsert</code></td></tr>
+<tr><td><code>update</code>, <code>update_all</code>, <code>destroy</code></td><td><code>update</code>, <code>updateMany</code>, <code>delete</code></td></tr>
+<tr><td><code>increment!</code>, <code>update_counters</code></td><td><code>&#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>count</code>, <code>group(:x).count</code>, <code>sum</code></td><td><code>count</code>, <code>groupBy</code>, <code>aggregate</code></td></tr>
+<tr><td><code>ActiveRecord::Base.transaction</code></td><td><code>db.$transaction(async (tx) =&gt; ...)</code></td></tr>
+<tr><td><code>find_by_sql</code>, <code>connection.exec_query</code></td><td><code>db.$sql`...`</code></td></tr>
+<tr><td><code>rails db:migrate</code>, <code>db:rollback</code></td><td><code>npx kastor migrate deploy</code>, a new migration that reverts</td></tr>
+<tr><td><code>rails db:seed</code>, <code>db:reset</code></td><td><code>npx kastor db seed</code>, <code>migrate reset</code></td></tr>
+</tbody>
+</table>
+<p>Rails validations run in Ruby before a save. kastor checks types at compile time and leaves value rules (presence, length, format) to your input validation layer and to database constraints. Validate request bodies at the API boundary, and let <code>t.string(200)</code> and <code>NOT NULL</code> in the database back that up; violations come back as <code>KastorError</code> with codes such as <code>NOT_NULL_VIOLATION</code> and a hint.</p>
+</section>
+<section id="seeds"><h2>Step 4: seeds, factories and callbacks</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/seed.ts">
+import { defineSeed, factory } from 'kastor'
+import type { db as client } from './index'
+
+export default defineSeed&lt;typeof client&gt;(async (db) =&gt; {
+  const ruby = await db.tags.upsert({ where: { name: 'ruby' }, create: { name: 'ruby' }, update: {} })
+  const users = factory(db.users, ({ seq }) =&gt; ({ email: `user${seq}@example.com`, name: `User ${seq}` }))
+
+  for (const user of await users.createMany(3)) {
+    await db.posts.create({
+      data: { userId: user.id, title: `Hello from ${user.name}`, status: 1, tags: { connect: { id: ruby.id } } },
+    })
+  }
+})
+</pre>
+<p>Callbacks such as <code>before_save</code> and <code>after_commit</code> have no counterpart. Put them in the function that writes, after the <code>await</code> for after commit work, so readers see every side effect. <code>dependent: :destroy</code> runs in Ruby; in kastor, use <code>onDelete: &#39;cascade&#39;</code> on the reference when kastor owns migrations, or delete children explicitly inside a <code>$transaction</code>.</p>
+</section>
+<section id="side-by-side"><h2>Path B in practice: sharing the database with Rails</h2>
+<ul>
+<li><strong>Timestamps.</strong> Rails sets <code>created_at</code> and <code>updated_at</code>. With <code>defaultNow()</code> and <code>.updatedAt()</code> on those columns, kastor writes do the same.</li>
+<li><strong>Enums.</strong> Integer enums mean nothing without the Ruby mapping. Keep a shared constant like <code>PostStatus</code> above, or move to string enums on both sides.</li>
+<li><strong>Counter caches.</strong> Columns such as <code>comments_count</code> are maintained by Rails callbacks. Update them in the same transaction when TypeScript inserts or deletes children.</li>
+<li><strong>Sessions and Devise.</strong> Rails cookies are encrypted with <code>secret_key_base</code>. Share authentication through tokens or an auth service rather than decoding cookies in Node.</li>
+<li><strong>Connections.</strong> Puma threads and the Node pool both hold connections, so size them together.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Polymorphic associations.</strong> <code>commentable_type</code> plus <code>commentable_id</code> has no database foreign key. Filter on both columns, or use <code>$sql</code>.</li>
+<li><strong>STI.</strong> Single table inheritance keeps a <code>type</code> column; model it as a string column and filter on it.</li>
+<li><strong>Default scopes.</strong> kastor applies nothing implicitly except soft delete filtering on tables you declare with <code>softDelete</code>. Gems like paranoia or discard map to that option.</li>
+<li><strong>Big integer ids.</strong> Rails uses <code>bigint</code> keys, which arrive as <code>bigint</code> in TypeScript. Serialize them with <code>String(id)</code> in JSON responses.</li>
+</ul>
+<p>Continue with the <a href="hono-orm.html">Hono</a> or <a href="express-orm.html">Express</a> guide for the API itself, or the <a href="migrate-to-kastor.html">migration hub</a> for the other paths.</p>
+</section>

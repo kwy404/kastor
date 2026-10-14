@@ -11,8 +11,8 @@
   "keywords": ["Prisma alternative without codegen", "prisma alternative", "orm without code generation", "prisma vs kastor", "migrate from prisma", "typescript schema orm"],
   "faq": [
     { "q": "Is there a Prisma alternative without a generate step?", "a": "Yes. ORMs that define the schema in TypeScript infer types directly from it, so nothing is generated. kastor does this while keeping a familiar query API with <code>findMany</code>, <code>include</code> and nested writes." },
-    { "q": "Can I migrate from Prisma to kastor without rewriting everything?", "a": "Yes, gradually. Run <code>npx kastor db pull</code> to get a TypeScript schema from the live database, then move queries one module at a time while both clients run side by side. Remove Prisma when nothing imports it anymore." },
-    { "q": "Does kastor read schema.prisma files?", "a": "No. kastor reads the database itself through <code>db pull</code>, which produces a TypeScript schema file. Because Prisma already created the tables, introspection gives you an accurate starting point." },
+    { "q": "Can I migrate from Prisma to kastor without rewriting everything?", "a": "Yes, gradually. Run <code>npx kastor import prisma</code> to turn schema.prisma into a TypeScript schema, record the database with <code>npx kastor migrate baseline --from-prisma prisma/migrations</code>, then move queries one module at a time while both clients run side by side. The <a href=\"migrate-from-prisma.html\">Prisma migration guide</a> walks through every step." },
+    { "q": "Does kastor read schema.prisma files?", "a": "Yes. <code>npx kastor import prisma</code> converts schema.prisma into a TypeScript schema whose table, column and constraint names match the database Prisma Migrate created, and prints a report of anything that behaves differently. <code>npx kastor db pull</code> remains an option that reads the live database instead." },
     { "q": "Do I still need prisma generate in CI after switching?", "a": "Not for code that uses kastor. Types come from the schema file through the TypeScript compiler, so your CI runs the type check and <code>npx kastor migrate deploy</code>, with no client build in between." },
     { "q": "Is Prisma a bad choice?", "a": "No. Prisma is mature, well documented and widely used. Its schema language plus generate step is a deliberate design with real benefits, such as a single readable model file. kastor makes a different trade-off for teams that prefer everything in TypeScript." }
   ],
@@ -125,18 +125,18 @@ export async function register(email: string) {
 <p>You do not need a big rewrite. The safest path keeps both ORMs running against the same database until the last query moves.</p>
 <ol>
 <li><strong>Install kastor and the driver</strong> next to Prisma, for example <code>npm install kastor pg</code>.</li>
-<li><strong>Run <code>npx kastor init</code></strong> to create <code>kastor.config.ts</code>, then set <code>DATABASE_URL</code> in the <code>.env</code> it writes. It also writes a starter schema at <code>src/db/schema.ts</code>, which the next step replaces.</li>
-<li><strong>Run <code>npx kastor db pull</code></strong>. It introspects the live database (the tables Prisma created) and writes a TypeScript schema to the schema path of the config, asking before it overwrites the starter file. The file exports every table plus <code>schema</code> and <code>relations</code>, with relations guessed from the foreign keys. If your models used <code>@map</code> or <code>@@map</code>, the database names are what you will see, so review the names and the relations.</li>
-<li><strong>Pick one owner for migrations.</strong> Keep running <code>prisma migrate</code> until the switch, and do not let both tools write migrations at the same time. Before handing over, run <code>npx kastor migrate dev</code> against a copy of the database: if the pulled schema matches, it reports that the database is already in sync and writes no file.</li>
+<li><strong>Run <code>npx kastor import prisma --config</code></strong>. It reads schema.prisma and writes <code>src/db/schema.ts</code> with the same table, column and constraint names Prisma Migrate created, plus <code>kastor.config.ts</code> for your datasource. Read the report it prints: it lists every field whose behavior differs, such as <code>@updatedAt</code>. (<code>npx kastor db pull</code> is the alternative that reads the live database instead.)</li>
+<li><strong>Run <code>npx kastor migrate baseline --from-prisma prisma/migrations</code></strong>. It records the database as it is and keeps the Prisma migration history, without changing a table. Then <code>npx kastor migrate dev</code> should report that everything is already in sync. From here on, kastor owns migrations: stop running <code>prisma migrate</code>.</li>
 <li><strong>Move queries module by module.</strong> Start with read paths, then writes. Tests that already cover a module tell you when it is done.</li>
 <li><strong>Remove Prisma</strong> once nothing imports it, along with <code>prisma generate</code> in CI and postinstall.</li>
 </ol>
 <pre data-kind="terminal" data-lang="bash" data-title="Terminal">
 npm install kastor pg
-npx kastor init
-npx kastor db pull
-npx kastor doctor
+npx kastor import prisma --config
+npx kastor migrate baseline --from-prisma prisma/migrations
+npx kastor migrate dev
 </pre>
+<p>The <a href="migrate-from-prisma.html">step by step Prisma migration guide</a> shows the generated schema, the report and every Prisma Client call next to its kastor version.</p>
 <p>While both clients run, each one has its own connection pool. Lower the pool sizes so the sum stays under your database's connection limit, which matters most on small managed PostgreSQL plans.</p>
 </section>
 <section id="feature-table"><h2>Feature comparison</h2>

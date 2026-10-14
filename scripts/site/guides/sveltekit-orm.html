@@ -1,0 +1,185 @@
+<!--meta
+{
+  "slug": "sveltekit-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "SvelteKit ORM: kastor in load functions and form actions | kastor",
+  "description": "Use kastor as the SvelteKit ORM: a client in $lib/server, typed load functions, form actions with fail(), +server.ts endpoints, private env vars, adapters and migrations.",
+  "h1": "kastor with SvelteKit",
+  "crumb": "SvelteKit",
+  "lead": "SvelteKit already draws a hard line between server and browser code: anything under <code>$lib/server</code> can never be imported by the client. Put the kastor client there, read in load functions, write in form actions, and the types flow from your schema to the page props.",
+  "readTime": "10 min read",
+  "keywords": ["SvelteKit ORM", "SvelteKit database", "SvelteKit form actions database", "SvelteKit PostgreSQL", "SvelteKit TypeScript ORM", "SvelteKit load function database"],
+  "howto": {
+    "name": "Set up kastor in a SvelteKit project",
+    "totalTime": "PT20M",
+    "tools": ["SvelteKit 2", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg and npx kastor init --db postgres, with the schema in src/lib/server/schema.ts.", "anchor": "structure" },
+      { "name": "Create the client in $lib/server", "text": "Read DATABASE_URL from $env/dynamic/private and reuse the client through globalThis in development.", "anchor": "client" },
+      { "name": "Read in load functions", "text": "Return kastor results from +page.server.ts load functions so the page props are typed.", "anchor": "load" },
+      { "name": "Write in form actions", "text": "Use form actions with fail() for validation and kastor error codes for conflicts.", "anchor": "actions" },
+      { "name": "Run migrations on deploy", "text": "Run npx kastor migrate deploy in CI before the adapter build is released.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "Where should the database client go in SvelteKit?", "a": "In <code>src/lib/server/db.ts</code>. SvelteKit refuses to bundle anything from <code>$lib/server</code> into client code, so the driver and the connection string can never leak." },
+    { "q": "Should I use $env/static/private or $env/dynamic/private?", "a": "Use <code>$env/dynamic/private</code> for the database URL. Static values are inlined at build time, while dynamic ones are read when the server starts, which suits secrets that differ per environment." },
+    { "q": "How do I return a validation error from a form action?", "a": "Return <code>fail(400, &#123; message &#125;)</code> from <code>@sveltejs/kit</code>. Catch <code>KastorError</code> codes such as <code>UNIQUE_VIOLATION</code> and turn them into the same shape." },
+    { "q": "Does kastor work with adapter-cloudflare?", "a": "Yes. Read the D1 binding from <code>platform.env.DB</code> in the load function or action and create the client with <code>d1()</code> per request." }
+  ],
+  "related": ["nuxt-orm", "remix-react-router-orm", "cloudflare-workers-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>In <strong>SvelteKit</strong>, every route can have a server file next to its page: <code>+page.server.ts</code> for load functions and form actions, <code>+server.ts</code> for plain HTTP endpoints. Both run only on the server, and both import the client from <code>$lib/server</code>.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/lib/server/
+  schema.ts                       tables and relations
+  db.ts                           the client
+src/routes/posts/
+  +page.server.ts                 load and actions
+  +page.svelte                    the page
+src/routes/api/posts/+server.ts   JSON endpoint
+kastor.config.ts                  schema: './src/lib/server/schema.ts'
+kastor/migrations/
+.env                              DATABASE_URL
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+<p>Move the starter schema to <code>src/lib/server/schema.ts</code> and update the <code>schema</code> path in <code>kastor.config.ts</code>. SvelteKit and the CLI both read <code>.env</code>, so one <code>DATABASE_URL</code> serves both in development.</p>
+</section>
+<section id="client"><h2>The client in $lib/server</h2>
+<p>Vite reloads server modules during development. Keep one client on <code>globalThis</code> so reloads do not open new pools, and read the URL from <code>$env/dynamic/private</code> so the value comes from the runtime environment rather than being baked into the build.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/lib/server/db.ts">
+import pg from 'pg'
+import { env } from '$env/dynamic/private'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+</section>
+<section id="load"><h2>Reading in load functions</h2>
+<p>Whatever a server load function returns becomes the page's <code>data</code> prop, typed from the return value. Because kastor infers the row types, the page knows that <code>post.author.name</code> is <code>string | null</code> without a single hand written interface.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/posts/+page.server.ts">
+import { fail } from '@sveltejs/kit'
+import { isKastorError } from 'kastor'
+import { db } from '$lib/server/db'
+
+export const load = async ({ url }: { url: URL }) =&gt; {
+  const tag = url.searchParams.get('tag')
+  const posts = await db.posts.findMany({
+    where: { published: true, ...(tag ? { tags: { some: { name: tag } } } : {}) },
+    include: { author: { select: { name: true } }, tags: true },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+  return { posts, tag }
+}
+
+export const actions = {
+  create: async ({ request }: { request: Request }) =&gt; {
+    const form = await request.formData()
+    const title = String(form.get('title') ?? '').trim()
+    if (title.length &lt; 3) return fail(400, { title, message: 'Title is too short.' })
+    try {
+      await db.posts.create({ data: { title, authorId: Number(form.get('authorId')) } })
+    } catch (e) {
+      if (isKastorError(e) &amp;&amp; e.code === 'FOREIGN_KEY_VIOLATION') return fail(422, { title, message: 'Unknown author.' })
+      throw e
+    }
+    return { created: true }
+  },
+  publish: async ({ request }: { request: Request }) =&gt; {
+    const id = Number((await request.formData()).get('id'))
+    await db.posts.update({ where: { id }, data: { published: true } })
+  },
+}
+</pre>
+</section>
+<section id="actions"><h2>Form actions and the page</h2>
+<p>Form actions take plain HTML forms, so the page works before JavaScript loads. <code>use:enhance</code> upgrades them to fetch requests without a full reload. The action above returns <code>fail()</code> with the same shape for both validation errors and database errors, which keeps the page simple:</p>
+<pre data-kind="editor" data-lang="svelte" data-title="src/routes/posts/+page.svelte">
+&lt;script lang="ts"&gt;
+  import { enhance } from '$app/forms'
+  let { data, form } = $props()
+&lt;/script&gt;
+
+&lt;form method="POST" action="?/create" use:enhance&gt;
+  &lt;input name="title" value={form?.title ?? ''} /&gt;
+  &lt;input name="authorId" type="number" value="1" /&gt;
+  &lt;button&gt;Create&lt;/button&gt;
+  {#if form?.message}&lt;p class="error"&gt;{form.message}&lt;/p&gt;{/if}
+&lt;/form&gt;
+
+&lt;ul&gt;
+  {#each data.posts as post (post.id)}
+    &lt;li&gt;{post.title} by {post.author.name ?? 'anonymous'}&lt;/li&gt;
+  {/each}
+&lt;/ul&gt;
+</pre>
+<p>For clients other than your pages, add a <code>+server.ts</code> endpoint that returns JSON:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/api/posts/+server.ts">
+import { json } from '@sveltejs/kit'
+import { db } from '$lib/server/db'
+
+export const GET = async ({ url }: { url: URL }) =&gt; {
+  const page = await db.posts.findPage({
+    where: { published: true },
+    orderBy: { id: 'desc' },
+    first: 20,
+    after: url.searchParams.get('after'),
+  })
+  return json(page)
+}
+</pre>
+</section>
+<section id="deploy"><h2>Adapters, environment variables and migrations</h2>
+<p>With <code>adapter-node</code>, the build in <code>build/</code> is a long running server: one pool per process, created on the first import. Run migrations before starting it, either in CI or in the start script:</p>
+<pre data-kind="editor" data-lang="json" data-title="package.json">
+{
+  "scripts": {
+    "build": "vite build",
+    "start": "kastor migrate deploy &amp;&amp; node build",
+    "check": "svelte-kit sync &amp;&amp; svelte-check"
+  }
+}
+</pre>
+<p>With <code>adapter-vercel</code> or <code>adapter-netlify</code>, routes run as functions. Keep <code>max</code> small, use a pooled connection string, and run <code>npx kastor migrate deploy</code> as a CI step with the direct URL before the deployment is promoted. With <code>adapter-cloudflare</code>, use the binding instead of a URL: <code>kastor(&#123; adapter: d1(platform.env.DB), schema, relations &#125;)</code> inside the load function or action, and apply migrations with wrangler as the <a href="cloudflare-workers-orm.html">Workers guide</a> explains.</p>
+</section>
+<section id="hooks"><h2>Hooks, locals and transactions</h2>
+<p>Some apps want the client on <code>event.locals</code> so every load function and action reads it from the same place. A <code>handle</code> hook in <code>src/hooks.server.ts</code> can set <code>event.locals.db = db</code>, and the <code>App.Locals</code> interface types it. That is optional on Node, where importing <code>$lib/server/db</code> is enough, but it is handy on Cloudflare, where the hook builds the client from <code>event.platform.env.DB</code> once per request.</p>
+<p>Actions that write several rows should use <code>db.$transaction(async (tx) =&gt; ...)</code>. Validate the form first and return <code>fail()</code> before the transaction starts, so no connection is held while the user corrects the input.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The client lives in <code>$lib/server</code>, and only <code>.server</code> files import it.</li>
+<li>The URL comes from <code>$env/dynamic/private</code>, not the static module.</li>
+<li>Actions validate input and return <code>fail()</code> before touching the database.</li>
+<li>Function based adapters use a pooled URL and a small pool.</li>
+<li>CI runs <code>svelte-check</code> and then <code>npx kastor migrate deploy</code> before the release.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Universal load functions.</strong> <code>+page.ts</code> (without <code>.server</code>) also runs in the browser, and SvelteKit will refuse the <code>$lib/server</code> import there. Query only in <code>+page.server.ts</code>, <code>+layout.server.ts</code> and <code>+server.ts</code>.</li>
+<li><strong>Serialization.</strong> Load data travels to the browser through devalue, which handles <code>Date</code> and <code>bigint</code>. Responses from <code>json()</code> do not handle <code>bigint</code>, so convert those keys with <code>String(id)</code>.</li>
+<li><strong>Static env.</strong> <code>$env/static/private</code> inlines the value at build time; a build made with a staging URL then talks to staging forever. Prefer the dynamic module for connection strings.</li>
+<li><strong>Prerendering.</strong> Pages marked <code>prerender = true</code> query the database at build time. Make sure CI can reach it, or leave those pages dynamic.</li>
+</ul>
+</section>

@@ -1,0 +1,200 @@
+<!--meta
+{
+  "slug": "express-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Express ORM: typed queries, error handling and shutdown | kastor",
+  "description": "Use kastor as the Express ORM: one client per process, async routes, an error middleware for KastorError codes, graceful shutdown, env files, Docker and migrations.",
+  "h1": "kastor with Express",
+  "crumb": "Express",
+  "lead": "Express leaves structure to you, so the database setup is yours to get right: one client per process, errors mapped to status codes in one place, and a pool that closes when the process stops. kastor adds typed queries inferred from your schema on top.",
+  "readTime": "10 min read",
+  "keywords": ["Express ORM", "Express TypeScript ORM", "Express PostgreSQL", "Node.js Express database", "Express error handling database", "Express MySQL ORM"],
+  "howto": {
+    "name": "Set up kastor in an Express API",
+    "totalTime": "PT20M",
+    "tools": ["Express 4 or 5", "Node.js 20 or newer", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg express and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Create the client module", "text": "Create src/db/index.ts that builds one client per process from DATABASE_URL.", "anchor": "client" },
+      { "name": "Write async routes", "text": "Query kastor in route handlers; Express 5 forwards rejected promises to the error middleware.", "anchor": "routes" },
+      { "name": "Map errors and shut down cleanly", "text": "Turn KastorError codes into status codes in one middleware and close the pool on SIGTERM.", "anchor": "errors" },
+      { "name": "Migrate before start", "text": "Run npx kastor migrate deploy in CI or in the container entrypoint before node starts.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "Should I create a kastor client per request in Express?", "a": "No. Create one client when the process starts and import it everywhere. It holds a connection pool, and every request borrows a connection for the length of a query." },
+    { "q": "How do I handle database errors in Express?", "a": "Let them reach one error middleware and check <code>isKastorError(err)</code>. Map <code>UNIQUE_VIOLATION</code> to 409, <code>NOT_FOUND</code> to 404 and <code>FOREIGN_KEY_VIOLATION</code> to 422, and log the rest." },
+    { "q": "Do async route handlers need a wrapper?", "a": "Not in Express 5, which forwards a rejected promise to the error middleware. In Express 4, wrap handlers or call <code>next(err)</code> in a catch block." },
+    { "q": "How do I load DATABASE_URL in development?", "a": "Node 20 and newer read env files natively: <code>node --env-file=.env</code>. The kastor CLI reads <code>.env</code> next to <code>kastor.config.ts</code> on its own." }
+  ],
+  "related": ["fastify-orm", "hono-orm", "migrate-from-knex"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p><strong>Express</strong> has no opinion on where a database client lives, which makes it easy to end up with a pool per router file. A small structure avoids that:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  db/index.ts             the one client
+  routes/posts.ts         a router
+  errors.ts               error middleware
+  server.ts               app, listen, shutdown
+kastor.config.ts
+kastor/migrations/
+.env                      DATABASE_URL (not committed)
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg express
+npm install -D tsx @types/express
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+</section>
+<section id="client"><h2>One client per process</h2>
+<p>A Node process imports a module once, so a client created at the top level of <code>src/db/index.ts</code> is shared by every route. In development, <code>tsx watch</code> restarts the whole process on change, so there is no stale module cache to guard against; the shutdown handler below closes the old pool on each restart.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10 })),
+  schema,
+  relations,
+  log: process.env.LOG_SQL === '1',
+})
+</pre>
+<p>The <code>log</code> option prints every statement with its parameters and duration when <code>LOG_SQL=1</code>, which is handy while building routes.</p>
+</section>
+<section id="routes"><h2>Async routes</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/posts.ts">
+import { Router } from 'express'
+import { db } from '../db'
+
+export const posts = Router()
+
+posts.get('/', async (req, res) =&gt; {
+  const page = await db.posts.findPage({
+    where: { published: true },
+    include: { author: { select: { name: true } } },
+    orderBy: { id: 'desc' },
+    first: Math.min(Number(req.query.first ?? 20), 100),
+    after: typeof req.query.after === 'string' ? req.query.after : null,
+  })
+  res.json(page)
+})
+
+posts.get('/:id', async (req, res) =&gt; {
+  const post = await db.posts.findUniqueOrThrow({
+    where: { id: Number(req.params.id) },
+    include: { author: true, tags: true },
+  })
+  res.json(post)
+})
+
+posts.post('/', async (req, res) =&gt; {
+  const { title, authorId, tags = [] } = req.body as { title: string; authorId: number; tags?: string[] }
+  const post = await db.posts.create({
+    data: { title, authorId, tags: { connectOrCreate: tags.map((name) =&gt; ({ where: { name }, create: { name } })) } },
+    include: { tags: true },
+  })
+  res.status(201).json(post)
+})
+
+posts.post('/:id/views', async (req, res) =&gt; {
+  const post = await db.posts.update({ where: { id: Number(req.params.id) }, data: { views: { increment: 1 } } })
+  res.json({ views: post.views })
+})
+</pre>
+<p>In Express 5, a rejected promise in a handler goes straight to the error middleware, so <code>findUniqueOrThrow</code> can simply throw. On Express 4, wrap handlers with a helper that calls <code>next(err)</code>.</p>
+</section>
+<section id="errors"><h2>Errors and graceful shutdown</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/errors.ts">
+import type { NextFunction, Request, Response } from 'express'
+import { isKastorError } from 'kastor'
+
+const STATUS: Record&lt;string, number&gt; = { NOT_FOUND: 404, UNIQUE_VIOLATION: 409, FOREIGN_KEY_VIOLATION: 422, NOT_NULL_VIOLATION: 422 }
+
+export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction) {
+  if (res.headersSent) return next(err)
+  if (isKastorError(err) &amp;&amp; STATUS[err.code]) {
+    return res.status(STATUS[err.code]!).json({ error: err.code, message: err.message, hint: err.hint })
+  }
+  console.error(err)
+  res.status(500).json({ error: 'INTERNAL' })
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/server.ts">
+import express from 'express'
+import { db } from './db'
+import { errorHandler } from './errors'
+import { posts } from './routes/posts'
+
+const app = express()
+app.use(express.json())
+app.use('/posts', posts)
+app.get('/health', async (req, res) =&gt; {
+  await db.$sql`select 1`
+  res.send('ok')
+})
+app.use(errorHandler)
+
+const server = app.listen(Number(process.env.PORT ?? 3000))
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () =&gt; {
+    server.close(async () =&gt; {
+      await db.$disconnect()
+      process.exit(0)
+    })
+  })
+}
+</pre>
+<p>On <code>SIGTERM</code> the server stops accepting connections, finishes in flight requests, then closes the pool. Docker, Kubernetes and most platforms send that signal before stopping a container.</p>
+</section>
+<section id="deploy"><h2>Environment variables, Docker and migrations</h2>
+<p>Run locally with <code>tsx watch --env-file=.env src/server.ts</code>, or <code>node --env-file=.env dist/server.js</code> after a build. In production, the platform provides <code>DATABASE_URL</code>. Apply migrations before the new version starts. In a container, an entrypoint script keeps the order explicit:</p>
+<pre data-kind="editor" data-lang="dockerfile" data-title="Dockerfile">
+FROM node:22-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npx tsc
+CMD ["sh", "-c", "npx kastor migrate deploy &amp;&amp; node dist/server.js"]
+</pre>
+<p>With several replicas, running migrations in every container is safe in the sense that kastor records what it applied, but two containers may race on the same pending migration. A dedicated CI step or a one off release job is cleaner:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npx tsc --noEmit
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+</pre>
+</section>
+<section id="transactions"><h2>Transactions and query modules</h2>
+<p>Route handlers stay readable when queries live in small modules per feature, such as <code>src/posts/queries.ts</code>, that export functions like <code>publishedFeed(cursor)</code>. Each function returns a kastor query, so its result type is inferred and flows into the handler without interfaces. Handlers then deal with HTTP: parsing input, choosing status codes, shaping the response.</p>
+<p>When a request writes to several tables, wrap those writes in <code>db.$transaction(async (tx) =&gt; ...)</code>. The callback receives a client bound to one connection; every call on <code>tx</code> runs in the transaction, which commits when the callback resolves and rolls back when it throws. Because the error middleware already maps <code>KastorError</code> codes, a unique violation thrown halfway rolls back the transaction and still reaches the client as a 409.</p>
+<p>Express also runs on serverless platforms through adapters. The setup stays the same with one change: each function instance has its own pool, so set <code>max</code> to 1 or 2 and connect through a pooler. The <a href="aws-lambda-orm.html">Lambda guide</a> covers that in detail.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>One client module, imported by every router, created once per process.</li>
+<li>One error middleware that maps <code>KastorError</code> codes to status codes and logs the rest.</li>
+<li>A <code>SIGTERM</code> handler that closes the server and then the pool.</li>
+<li>Request bodies validated before they reach <code>create</code> or <code>update</code>.</li>
+<li>Migrations applied by a single CI step or release job before the new containers start.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Pools per router.</strong> Creating <code>kastor()</code> inside a router file or a handler opens a pool each time. Import the shared client.</li>
+<li><strong>Unvalidated bodies.</strong> kastor's types protect your code, not the network. Validate <code>req.body</code> before it reaches <code>create</code>.</li>
+<li><strong>Bigint responses.</strong> <code>res.json</code> cannot serialize <code>bigint</code>. Convert <code>t.bigId()</code> keys, or set an Express JSON replacer.</li>
+<li><strong>Long transactions.</strong> Do not await external HTTP calls inside <code>$transaction</code>; the connection stays checked out the whole time.</li>
+</ul>
+<p>The <a href="fastify-orm.html">Fastify guide</a> shows the same setup as a plugin, and the <a href="migrate-from-knex.html">Knex</a> and <a href="migrate-from-sequelize.html">Sequelize</a> guides cover moving an existing Express API.</p>
+</section>

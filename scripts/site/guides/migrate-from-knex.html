@@ -1,0 +1,204 @@
+<!--meta
+{
+  "slug": "migrate-from-knex",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Query builder to typed client",
+  "title": "Migrate from Knex to kastor: typed queries without a builder | kastor",
+  "description": "Migrate from Knex to kastor: replace the query builder with typed findMany and include, keep raw SQL where it shines, and move knex migrations to a kastor baseline.",
+  "h1": "Migrate from Knex to kastor",
+  "crumb": "From Knex",
+  "lead": "Knex gives you SQL in method form and leaves types to you. kastor gives you a typed client inferred from one TypeScript schema, so rows have types without hand written interfaces, and relations load without joins you assemble yourself. Raw SQL stays one tagged template away.",
+  "readTime": "11 min read",
+  "keywords": ["migrate from Knex", "Knex alternative TypeScript", "Knex to ORM", "Knex query builder types", "knex migrations", "replace knex"],
+  "howto": {
+    "name": "Migrate a project from Knex to kastor",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the driver Knex already uses"],
+    "steps": [
+      { "name": "Install kastor and pull the schema", "text": "Install kastor, run npx kastor init and npx kastor db pull to turn the tables your knex migrations built into a TypeScript schema.", "anchor": "schema" },
+      { "name": "Baseline the database", "text": "Run npx kastor migrate baseline --name init so kastor starts from the current schema and leaves knex_migrations alone.", "anchor": "baseline" },
+      { "name": "Share the driver pool", "text": "Create the kastor client from the same driver settings Knex uses and keep pool sizes in check.", "anchor": "client" },
+      { "name": "Rewrite builder chains", "text": "Turn select, where, join and insert chains into findMany, include, create and updateMany, keeping $sql for reports.", "anchor": "queries" },
+      { "name": "Switch migrations in CI", "text": "Replace knex migrate:latest with npx kastor migrate deploy.", "anchor": "ci" }
+    ]
+  },
+  "faq": [
+    { "q": "Why move from Knex to an ORM at all?", "a": "Mostly for types and relations. Knex results are typed only as far as you annotate them, and loading a parent with its children means writing a join and regrouping rows. kastor infers row types from the schema and loads nested relations with <code>include</code> in one statement." },
+    { "q": "Can I keep some Knex queries?", "a": "Yes. Both libraries can run against the same database indefinitely. Many teams move CRUD and relation loading to kastor and keep a few reporting queries in Knex or rewrite them with <code>db.$sql</code>." },
+    { "q": "What replaces knex.raw?", "a": "<code>db.$sql&lt;Row&gt;`...`</code> for queries that return rows and <code>db.$execute`...`</code> for statements, with every interpolated value sent as a parameter. The <code>sql</code> tag builds fragments you can put inside a kastor <code>where</code>." },
+    { "q": "Do knex seed files have an equivalent?", "a": "Yes. Point <code>seed</code> in <code>kastor.config.ts</code> at a file whose default export is <code>defineSeed(async (db) =&gt; ...)</code> and run <code>npx kastor db seed</code>. The <code>factory()</code> helper builds test data from the same schema." },
+    { "q": "Does kastor support the same databases as Knex?", "a": "kastor supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB. Knex users on Amazon Redshift should check SQL compatibility first, since kastor targets the databases in that list." }
+  ],
+  "related": ["migrate-from-sequelize", "type-safe-sql-typescript", "express-orm"]
+}
+-->
+<section id="overview"><h2>From a builder to a typed client</h2>
+<p>Knex is a good query builder. It writes portable SQL, it has a migration runner, and it stays out of your way. What it does not do is know your schema: <code>knex(&#39;users&#39;).where(...)</code> returns <code>any[]</code> unless you declare an interface for every table and keep it in sync by hand. When you <strong>migrate from Knex</strong> to kastor, the schema becomes a TypeScript value, every result is typed from it, and loading related rows becomes an <code>include</code> instead of a join plus a regrouping loop.</p>
+<p>You keep the database, the data and the driver. Knex migrations already built your tables, so kastor reads them, records a baseline, and takes over from there.</p>
+</section>
+<section id="schema"><h2>Step 1: install kastor and pull the schema</h2>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor
+npx kastor init --db postgres
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p>Compare a knex migration with the kastor table it turns into. The migration described changes; the kastor schema describes the result, which is what your code needs to know.</p>
+<pre data-kind="editor" data-lang="ts" data-title="Knex: migrations/20240101_init.ts (before)">
+import type { Knex } from 'knex'
+
+export async function up(knex: Knex) {
+  await knex.schema.createTable('users', (t) =&gt; {
+    t.increments('id')
+    t.string('email', 255).notNullable().unique()
+    t.string('name').nullable()
+    t.timestamp('created_at').notNullable().defaultTo(knex.fn.now())
+  })
+  await knex.schema.createTable('posts', (t) =&gt; {
+    t.increments('id')
+    t.string('title', 200).notNullable()
+    t.boolean('published').notNullable().defaultTo(false)
+    t.integer('views').notNullable().defaultTo(0)
+    t.integer('user_id').notNullable().references('users.id').onDelete('CASCADE').index()
+  })
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  views: t.int().default(0),
+  userId: t.int().map('user_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, { indexes: (p) =&gt; [index(p.userId)] })
+
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['userId'], references: ['id'] }) },
+})
+</pre>
+<p>Snake case columns keep their database names through <code>.map()</code>, while your code reads <code>createdAt</code> and <code>userId</code>. That replaces the <code>wrapIdentifier</code> and <code>postProcessResponse</code> hooks many Knex projects use for case conversion.</p>
+</section>
+<section id="baseline"><h2>Step 2: baseline instead of knex_migrations</h2>
+<p>Knex records applied files in <code>knex_migrations</code>. kastor does not replay them; it records the current state as its first migration:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate status
+</pre>
+<p>Run it once per environment. After that, schema changes are edits to <code>src/db/schema.ts</code> followed by <code>npx kastor migrate dev --name add_slug</code>, which diffs the schema against the database and writes a readable SQL file. If a change looks like a rename, kastor asks instead of dropping the column.</p>
+</section>
+<section id="client"><h2>Step 3: the client, next to the knex instance</h2>
+<p>Knex creates its own pool from the connection settings, so during the move you have two pools. Lower both <code>max</code> values so their sum stays under the database's connection limit.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import knexFactory from 'knex'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+// Old code keeps using this until it moves.
+export const knex = knexFactory({ client: 'pg', connection: process.env.DATABASE_URL, pool: { min: 0, max: 5 } })
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+  schema,
+  relations,
+})
+</pre>
+</section>
+<section id="queries"><h2>Step 4: rewrite builder chains</h2>
+<pre data-kind="editor" data-lang="ts" data-title="Knex: src/posts/repo.ts (before)">
+import { knex } from '../db'
+
+interface PostRow { id: number; title: string; user_id: number; author_name: string | null }
+
+export async function feed(userIds: number[]) {
+  const rows: PostRow[] = await knex('posts')
+    .join('users', 'users.id', 'posts.user_id')
+    .whereIn('posts.user_id', userIds)
+    .andWhere('posts.published', true)
+    .select('posts.id', 'posts.title', 'posts.user_id', 'users.name as author_name')
+    .orderBy('posts.id', 'desc')
+    .limit(20)
+  return rows
+}
+
+export const bump = (id: number) =&gt; knex('posts').where({ id }).increment('views', 1)
+
+export const topAuthors = () =&gt;
+  knex('posts').select('user_id').count('* as n').groupBy('user_id').orderBy('n', 'desc').limit(5)
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/repo.ts">
+import { db } from '../db'
+
+export const feed = (userIds: number[]) =&gt;
+  db.posts.findMany({
+    where: { userId: { in: userIds }, published: true },
+    select: { id: true, title: true, userId: true, author: { select: { name: true } } },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+
+export const bump = (id: number) =&gt;
+  db.posts.update({ where: { id }, data: { views: { increment: 1 } } })
+
+export const topAuthors = () =&gt;
+  db.posts.groupBy({ by: 'userId', _count: { _all: true }, orderBy: { _count: { _all: 'desc' } }, take: 5 })
+</pre>
+<p>The interface at the top of the Knex version disappears: <code>feed()</code> returns objects typed from the schema, with <code>author</code> nested as an object instead of flattened into <code>author_name</code>. Selecting a nested relation also never multiplies rows, which a join to a one to many relation does.</p>
+<table class="spec">
+<thead><tr><th>Knex</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>knex(&#39;users&#39;).where(&#123; id &#125;).first()</code></td><td><code>db.users.findUnique(&#123; where: &#123; id &#125; &#125;)</code></td></tr>
+<tr><td><code>.where(col, &#39;&gt;&#39;, v)</code>, <code>.whereIn</code>, <code>.whereNull</code></td><td><code>gt</code>, <code>in</code>, <code>null</code> in <code>where</code></td></tr>
+<tr><td><code>.whereILike(&#39;email&#39;, &#39;%x%&#39;)</code></td><td><code>&#123; contains: &#39;x&#39;, mode: &#39;insensitive&#39; &#125;</code></td></tr>
+<tr><td><code>.orWhere</code>, <code>.whereNot</code></td><td><code>OR</code>, <code>NOT</code></td></tr>
+<tr><td><code>.join</code> then regrouping rows</td><td><code>include</code> or nested <code>select</code></td></tr>
+<tr><td><code>.whereExists(subquery)</code></td><td><code>some</code>, <code>none</code>, <code>every</code> relation filters</td></tr>
+<tr><td><code>.limit</code>, <code>.offset</code></td><td><code>take</code>, <code>skip</code>, or <code>findPage</code></td></tr>
+<tr><td><code>.insert(row).returning(&#39;*&#39;)</code></td><td><code>create</code></td></tr>
+<tr><td><code>.insert(rows)</code></td><td><code>createMany</code></td></tr>
+<tr><td><code>.onConflict(&#39;email&#39;).merge()</code></td><td><code>upsert</code></td></tr>
+<tr><td><code>.update</code>, <code>.del()</code></td><td><code>updateMany</code>, <code>deleteMany</code></td></tr>
+<tr><td><code>.increment(&#39;views&#39;, 1)</code></td><td><code>&#123; views: &#123; increment: 1 &#125; &#125;</code></td></tr>
+<tr><td><code>.count()</code>, <code>.sum()</code>, <code>.groupBy()</code></td><td><code>count</code>, <code>aggregate</code>, <code>groupBy</code></td></tr>
+<tr><td><code>knex.transaction(async (trx) =&gt; ...)</code></td><td><code>db.$transaction(async (tx) =&gt; ...)</code></td></tr>
+<tr><td><code>knex.raw(sql, bindings)</code></td><td><code>db.$sql`...`</code>, <code>db.$execute`...`</code></td></tr>
+</tbody>
+</table>
+<p>Reports with window functions, CTEs or vendor specific syntax are a good fit for <code>db.$sql</code>. You get the same parameter safety as Knex bindings and a typed result row:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/reports/signups.ts">
+import { db } from '../db'
+
+export const signupsPerDay = (since: Date) =&gt;
+  db.$sql&lt;{ day: string; signups: number }&gt;`
+    select date(created_at) as day, count(*)::int as signups
+    from users where created_at &gt;= ${since}
+    group by 1 order by 1
+  `
+</pre>
+</section>
+<section id="ci"><h2>Step 5: switch migrations in CI</h2>
+<p>Replace <code>npx knex migrate:latest</code> with <code>npx kastor migrate deploy</code>, and <code>knex seed:run</code> with <code>npx kastor db seed</code>. Remove <code>knexfile</code> and the <code>knex</code> package when nothing imports it.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Two pools.</strong> Each library opens connections. Keep pool sizes small while both run, or route old code through fewer modules first.</li>
+<li><strong>Return shapes.</strong> Knex <code>.insert()</code> returns ids or rows depending on the database. kastor <code>create</code> always returns the full row, typed, on every database.</li>
+<li><strong>Booleans on MySQL and SQLite.</strong> Knex hands back <code>0</code> and <code>1</code> from tinyint and integer columns. kastor decodes <code>t.boolean()</code> to real booleans, so comparisons like <code>row.published === 1</code> need updating.</li>
+<li><strong>Dates.</strong> Columns declared <code>t.datetime()</code> come back as <code>Date</code>, <code>t.date()</code> as a <code>YYYY-MM-DD</code> string. Check code that relied on driver specific parsing.</li>
+<li><strong>Case conversion hooks.</strong> If <code>postProcessResponse</code> converted keys to camelCase, remove it from the shared config before reusing settings, since kastor already maps names with <code>.map()</code>.</li>
+</ul>
+<p>The <a href="type-safe-sql-typescript.html">type safe SQL guide</a> goes deeper into raw queries, and the <a href="express-orm.html">Express guide</a> shows the client in a typical Knex style API server.</p>
+</section>

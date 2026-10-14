@@ -1,0 +1,198 @@
+<!--meta
+{
+  "slug": "aws-lambda-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "AWS Lambda ORM: kastor with connection reuse and RDS Proxy | kastor",
+  "description": "Use kastor as the AWS Lambda ORM: a client reused across warm invocations, small pools behind RDS Proxy, secrets, esbuild bundling with no engine binary and migrations.",
+  "h1": "kastor on AWS Lambda",
+  "crumb": "AWS Lambda",
+  "lead": "Lambda freezes your process between invocations and may run hundreds of copies at once. The rules for a database follow from that: create the client outside the handler so warm invocations reuse it, keep each pool tiny, and put RDS Proxy or another pooler in front. kastor ships no engine binary, so the bundle is just JavaScript.",
+  "readTime": "11 min read",
+  "keywords": ["AWS Lambda ORM", "Lambda PostgreSQL connection reuse", "Lambda RDS Proxy ORM", "serverless ORM TypeScript", "Lambda database connections", "Lambda Node.js ORM"],
+  "howto": {
+    "name": "Use kastor in an AWS Lambda function",
+    "totalTime": "PT45M",
+    "tools": ["AWS Lambda with Node.js 20 or newer", "kastor", "the pg driver", "RDS Proxy (recommended)"],
+    "steps": [
+      { "name": "Create the client outside the handler", "text": "Build the kastor client at module scope with a pool of max 1 or 2 so warm invocations reuse it.", "anchor": "client" },
+      { "name": "Read secrets at cold start", "text": "Read DATABASE_URL from the environment or fetch it from Secrets Manager once per container.", "anchor": "secrets" },
+      { "name": "Write the handler", "text": "Query kastor in the handler and map KastorError codes to HTTP responses.", "anchor": "handler" },
+      { "name": "Bundle with esbuild", "text": "Bundle the function and the driver; there is no engine binary to ship.", "anchor": "bundle" },
+      { "name": "Run migrations before the new version", "text": "Run npx kastor migrate deploy in CI, or from a dedicated migration function using deploy from kastor/migrate.", "anchor": "migrations" }
+    ]
+  },
+  "faq": [
+    { "q": "Should I create the database client inside the Lambda handler?", "a": "No. Create it at module scope. Lambda reuses the execution environment for warm invocations, so a client created outside the handler keeps its connection for the next request instead of reconnecting every time." },
+    { "q": "How many connections should each Lambda use?", "a": "One or two. Each concurrent execution environment has its own pool, so set <code>max: 1</code> or <code>2</code> and let RDS Proxy, PgBouncer or your provider's pooler multiplex them onto the database." },
+    { "q": "Does kastor need a binary or layer on Lambda?", "a": "No. kastor is plain JavaScript with no query engine. Bundle it with esbuild like any dependency; only native drivers would need care, and <code>pg</code>, <code>mysql2</code> and <code>mssql</code> are pure JavaScript." },
+    { "q": "Can I use the Aurora Data API?", "a": "Not directly. kastor talks to databases through drivers such as <code>pg</code> and <code>mysql2</code>, and the Data API is an HTTP service rather than a driver. Connect to Aurora with the regular driver, ideally through RDS Proxy." }
+  ],
+  "related": ["express-orm", "nextjs-app-router-orm", "database-migrations-explained"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>An <strong>AWS Lambda</strong> function is a handler plus everything it imports, bundled into one file. Keeping the database setup in its own module makes the reuse rule visible:</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  db/index.ts             client at module scope, tiny pool
+  handlers/posts.ts       API Gateway handler
+  handlers/migrate.ts     optional: runs migrations on demand
+kastor.config.ts          for the CLI in CI
+kastor/migrations/
+template.yaml             SAM template (or CDK, Serverless Framework, SST)
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+npm install -D esbuild @types/aws-lambda
+npx kastor init --db postgres
+</pre>
+</section>
+<section id="client"><h2>A client that survives warm invocations</h2>
+<p>Code at module scope runs once per execution environment, at cold start. Everything created there, including the pool and its open connection, is reused by later invocations on the same environment. The pool should be tiny: each concurrent environment holds its own, and a burst of traffic multiplies them.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,
+  idleTimeoutMillis: 60_000,
+  connectionTimeoutMillis: 5_000,
+})
+
+export const db = kastor({ adapter: postgres(pool), schema, relations })
+</pre>
+<p>Put RDS Proxy (or PgBouncer, or the pooler of Neon or Supabase) between Lambda and the database. It holds a small set of real connections and lends them to whichever environments are active, so a spike to 500 concurrent invocations does not become 500 database connections. With RDS Proxy in front, <code>max: 1</code> per environment is usually enough.</p>
+</section>
+<section id="secrets"><h2>Environment variables and secrets</h2>
+<p>The simplest setup passes <code>DATABASE_URL</code> as an encrypted environment variable. If the credentials live in Secrets Manager, fetch them once at cold start with top level await, which Node.js Lambda runtimes support for ES modules, and build the client after:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/secret.ts">
+import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager'
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const sm = new SecretsManagerClient({})
+const secret = await sm.send(new GetSecretValueCommand({ SecretId: process.env.DB_SECRET_ARN }))
+const { username, password, host, port, dbname } = JSON.parse(secret.SecretString ?? '{}') as Record&lt;string, string&gt;
+
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ user: username, password, host, port: Number(port), database: dbname, max: 1, ssl: { rejectUnauthorized: true } })),
+  schema,
+  relations,
+})
+</pre>
+</section>
+<section id="handler"><h2>The handler</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/handlers/posts.ts">
+import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
+import { isKastorError } from 'kastor'
+import { db } from '../db'
+
+const json = (statusCode: number, body: unknown): APIGatewayProxyResultV2 =&gt; ({
+  statusCode,
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body),
+})
+
+export async function handler(event: APIGatewayProxyEventV2): Promise&lt;APIGatewayProxyResultV2&gt; {
+  try {
+    if (event.requestContext.http.method === 'GET') {
+      const posts = await db.posts.findMany({
+        where: { published: true },
+        include: { author: { select: { name: true } } },
+        orderBy: { id: 'desc' },
+        take: Number(event.queryStringParameters?.take ?? 20),
+      })
+      return json(200, posts)
+    }
+    const body = JSON.parse(event.body ?? '{}') as { title: string; authorId: number }
+    return json(201, await db.posts.create({ data: body }))
+  } catch (e) {
+    if (isKastorError(e)) {
+      const status = e.code === 'UNIQUE_VIOLATION' ? 409 : e.code === 'FOREIGN_KEY_VIOLATION' ? 422 : e.code === 'CONNECTION_FAILED' ? 503 : 400
+      return json(status, { error: e.code, message: e.message })
+    }
+    throw e
+  }
+}
+</pre>
+<p>Do not call <code>db.$disconnect()</code> at the end of the handler; that throws away the connection the next invocation would reuse. When Lambda retires the environment, the connection goes with it, and the pooler cleans up.</p>
+</section>
+<section id="bundle"><h2>Bundling without an engine</h2>
+<p>kastor compiles queries in JavaScript and has no binary to download or ship in a layer. Bundle each handler with esbuild; mark <code>pg-native</code> as external, because <code>pg</code> only loads it when asked:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx esbuild src/handlers/posts.ts --bundle --platform=node --target=node20 --format=esm \
+  --outfile=dist/posts.mjs --external:pg-native --external:@aws-sdk/*
+</pre>
+<pre data-kind="editor" data-lang="yaml" data-title="template.yaml">
+Resources:
+  PostsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: posts.handler
+      CodeUri: dist/
+      MemorySize: 512
+      Timeout: 10
+      Environment:
+        Variables:
+          DATABASE_URL: '{{resolve:secretsmanager:app/db:SecretString:url}}'
+      VpcConfig:
+        SecurityGroupIds: [sg-0123456789abcdef0]
+        SubnetIds: [subnet-0123456789abcdef0, subnet-0fedcba9876543210]
+      Events:
+        Api:
+          Type: HttpApi
+</pre>
+<p>A database in a VPC means the function must run in that VPC too, as above. The AWS SDK v3 is part of the Node.js runtime, which is why it is external.</p>
+</section>
+<section id="migrations"><h2>Migrations before the new version</h2>
+<p>Run migrations from CI before deploying the functions, using a direct (unpooled) URL that can reach the database, for example from a runner inside the VPC:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate deploy
+sam build &amp;&amp; sam deploy
+</pre>
+<p>If CI cannot reach the database, ship a small migration function in the same VPC and invoke it as a deploy step. <code>deploy</code> from <code>kastor/migrate</code> is the engine behind the CLI command. Copy <code>kastor/migrations</code> next to the bundle so the function can read it:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/handlers/migrate.ts">
+import pg from 'pg'
+import { postgres } from 'kastor/postgres'
+import { deploy } from 'kastor/migrate'
+
+export async function handler() {
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_DIRECT_URL, max: 1 })
+  try {
+    const { applied } = await deploy(postgres(pool), './migrations')
+    return { applied: applied.map((m) =&gt; m.id) }
+  } finally {
+    await pool.end()
+  }
+}
+</pre>
+</section>
+<section id="concurrency"><h2>Cold starts and concurrency</h2>
+<p>kastor adds little to cold starts: there is no engine to load, and creating the client does not open a connection until the first query. To keep the first request fast, you can issue a cheap query during initialization, which Lambda runs before the first invocation. With provisioned concurrency, that warm up happens before traffic arrives.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The client is created at module scope, never inside the handler.</li>
+<li>Each pool has <code>max</code> 1 or 2, behind RDS Proxy or another pooler.</li>
+<li>Connection timeouts are shorter than the function timeout.</li>
+<li>Migrations run before the new functions are published.</li>
+<li>The bundle marks <code>pg-native</code> and the AWS SDK as external.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Pools larger than 1 or 2.</strong> Concurrency multiplies them. Without a pooler, a traffic spike exhausts <code>max_connections</code>.</li>
+<li><strong>Long transactions.</strong> A transaction holds its connection; with <code>max: 1</code>, the handler cannot run other queries until it ends. Keep callbacks short.</li>
+<li><strong>Timeouts.</strong> Set <code>connectionTimeoutMillis</code> below the function timeout so a database outage returns a clean <code>CONNECTION_FAILED</code> error instead of a Lambda timeout.</li>
+<li><strong>Bigint in JSON.</strong> <code>JSON.stringify</code> throws on <code>bigint</code>; convert big keys before returning them.</li>
+</ul>
+</section>

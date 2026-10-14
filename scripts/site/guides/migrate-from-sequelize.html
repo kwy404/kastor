@@ -1,0 +1,226 @@
+<!--meta
+{
+  "slug": "migrate-from-sequelize",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Models and Op to inferred types",
+  "title": "Migrate from Sequelize to kastor: models, Op and migrations | kastor",
+  "description": "Migrate from Sequelize to kastor: models to a TypeScript schema with inferred types, Op filters to where objects, include, transactions, scopes, hooks and the migration history.",
+  "h1": "Migrate from Sequelize to kastor",
+  "crumb": "From Sequelize",
+  "lead": "Sequelize grew up in JavaScript, and typing it means declaring every attribute twice. kastor infers row types from one TypeScript schema, keeps <code>include</code> and <code>where</code> as the query vocabulary, and takes over the database Sequelize created without moving a row.",
+  "readTime": "12 min read",
+  "keywords": ["migrate from Sequelize", "Sequelize alternative TypeScript", "Sequelize to kastor", "replace Sequelize", "Sequelize Op to where", "sequelize-cli migrations"],
+  "howto": {
+    "name": "Migrate a project from Sequelize to kastor",
+    "totalTime": "PT3H",
+    "tools": ["Node.js 18 or newer", "kastor", "the driver Sequelize already uses"],
+    "steps": [
+      { "name": "Install kastor and pull the schema", "text": "Install kastor, run npx kastor init and npx kastor db pull to write table() definitions from the live database.", "anchor": "schema" },
+      { "name": "Baseline the database", "text": "Run npx kastor migrate baseline --name init so the SequelizeMeta history stays as is and kastor starts from today.", "anchor": "baseline" },
+      { "name": "Rewrite finders and Op filters", "text": "Replace findAll, findOne, findByPk and Op operators with findMany, findUnique and where objects.", "anchor": "queries" },
+      { "name": "Move scopes and hooks", "text": "Turn scopes into reusable where objects and hooks into explicit code around writes.", "anchor": "scopes" },
+      { "name": "Switch CI and remove Sequelize", "text": "Replace sequelize-cli db:migrate with npx kastor migrate deploy and uninstall Sequelize.", "anchor": "ci" }
+    ]
+  },
+  "faq": [
+    { "q": "Does kastor support Sequelize style include?", "a": "Yes, with the same word. <code>include: [&#123; model: Post &#125;]</code> becomes <code>include: &#123; posts: true &#125;</code>, and nested includes take their own <code>where</code>, <code>orderBy</code> and <code>take</code>. kastor loads the whole tree in one statement per call with JSON aggregation instead of a wide join." },
+    { "q": "What replaces Op.or, Op.in and Op.like?", "a": "Plain keys in the <code>where</code> object: <code>OR: [...]</code>, <code>&#123; in: [...] &#125;</code> and <code>contains</code>, <code>startsWith</code> or <code>endsWith</code>, with <code>mode: &#39;insensitive&#39;</code> for ILIKE style matching on every database." },
+    { "q": "What happens to the SequelizeMeta table?", "a": "Nothing. kastor keeps its own history in <code>_kastor_migrations</code>. After <code>npx kastor migrate baseline --name init</code>, the old table is no longer read and can be dropped once Sequelize is gone." },
+    { "q": "Are there model hooks in kastor?", "a": "No. Hooks run hidden code on every write, which is hard to follow in a typed codebase. Put the logic in the function that writes, use JavaScript defaults for generated values, and the <code>log</code> option of the client for auditing statements." },
+    { "q": "Can I keep paranoid models?", "a": "Yes. A table declared with <code>softDelete: &#39;deletedAt&#39;</code> behaves like a paranoid model: <code>delete</code> sets the timestamp, reads skip deleted rows, and <code>restore</code> and <code>hardDelete</code> do the rest." }
+  ],
+  "related": ["migrate-from-typeorm", "migrate-from-knex", "express-orm"]
+}
+-->
+<section id="overview"><h2>From two declarations to one</h2>
+<p>A typed Sequelize model is written twice: once as a TypeScript class with <code>declare</code> fields or <code>InferAttributes</code>, once as the attribute object passed to <code>init()</code>. When you <strong>migrate from Sequelize</strong> to kastor, both collapse into a single <code>table()</code> call, and the row type comes from it. Queries keep a familiar shape: <code>where</code>, <code>include</code>, <code>order</code> and <code>limit</code> become <code>where</code>, <code>include</code>, <code>orderBy</code> and <code>take</code>.</p>
+<p>Nothing happens to your data. kastor reads the existing tables, records them as its starting point, and both libraries share the database while you move code over.</p>
+</section>
+<section id="schema"><h2>Step 1: install kastor and pull the schema</h2>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor
+npx kastor init --db mysql
+npx kastor db pull --out src/db/schema.ts
+</pre>
+<p>Keep the driver Sequelize already loads: <code>mysql2</code>, <code>pg</code>, <code>mariadb</code> or <code>better-sqlite3</code>. On SQL Server, Sequelize talks to <code>tedious</code> directly while kastor takes a pool from the <code>mssql</code> package, which wraps the same driver. Set <code>DATABASE_URL</code> in the <code>.env</code> that <code>init</code> created. <code>db pull</code> reads tables, keys, indexes and defaults and writes the schema with relations guessed from foreign keys. Here is the before and after for a typical pair of models:</p>
+<pre data-kind="editor" data-lang="ts" data-title="Sequelize: src/models.ts (before)">
+import { DataTypes, Model, type InferAttributes, type InferCreationAttributes, type CreationOptional, type ForeignKey } from 'sequelize'
+import { sequelize } from './sequelize'
+
+export class User extends Model&lt;InferAttributes&lt;User&gt;, InferCreationAttributes&lt;User&gt;&gt; {
+  declare id: CreationOptional&lt;number&gt;
+  declare email: string
+  declare name: string | null
+  declare createdAt: CreationOptional&lt;Date&gt;
+}
+User.init({
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  email: { type: DataTypes.STRING(255), allowNull: false, unique: true },
+  name: { type: DataTypes.STRING, allowNull: true },
+  createdAt: DataTypes.DATE,
+}, { sequelize, tableName: 'users', updatedAt: false })
+
+export class Post extends Model&lt;InferAttributes&lt;Post&gt;, InferCreationAttributes&lt;Post&gt;&gt; {
+  declare id: CreationOptional&lt;number&gt;
+  declare title: string
+  declare published: CreationOptional&lt;boolean&gt;
+  declare userId: ForeignKey&lt;number&gt;
+}
+Post.init({
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  title: { type: DataTypes.STRING(200), allowNull: false },
+  published: { type: DataTypes.BOOLEAN, defaultValue: false },
+}, { sequelize, tableName: 'posts', timestamps: false })
+
+User.hasMany(Post, { foreignKey: 'userId', as: 'posts', onDelete: 'CASCADE' })
+Post.belongsTo(User, { foreignKey: 'userId', as: 'author' })
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  createdAt: t.datetime().defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  userId: t.int().references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, { indexes: (p) =&gt; [index(p.userId)] })
+
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['userId'], references: ['id'] }) },
+})
+</pre>
+<table class="spec">
+<thead><tr><th>Sequelize</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>Model.init(&#123; ... &#125;, &#123; tableName &#125;)</code></td><td><code>table(&#39;name&#39;, &#123; ... &#125;)</code></td></tr>
+<tr><td><code>DataTypes.INTEGER</code> with <code>autoIncrement</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>STRING(n)</code>, <code>TEXT</code>, <code>BOOLEAN</code>, <code>DATE</code></td><td><code>t.string(n)</code>, <code>t.text()</code>, <code>t.boolean()</code>, <code>t.datetime()</code></td></tr>
+<tr><td><code>DECIMAL(p, s)</code>, <code>JSON</code>, <code>ENUM</code></td><td><code>t.decimal(p, s)</code>, <code>t.json&lt;T&gt;()</code>, <code>t.enum([...])</code></td></tr>
+<tr><td><code>allowNull: true</code></td><td><code>.nullable()</code></td></tr>
+<tr><td><code>defaultValue</code>, <code>DataTypes.NOW</code></td><td><code>.default(v)</code>, <code>.defaultNow()</code></td></tr>
+<tr><td><code>field: &#39;user_id&#39;</code>, <code>underscored: true</code></td><td><code>.map(&#39;user_id&#39;)</code></td></tr>
+<tr><td><code>hasMany</code>, <code>belongsTo</code>, <code>hasOne</code></td><td><code>many()</code>, <code>one()</code> in <code>relations</code></td></tr>
+<tr><td><code>belongsToMany</code> with <code>through</code></td><td><code>many(target, &#123; through: joinTable &#125;)</code></td></tr>
+<tr><td><code>paranoid: true</code></td><td><code>softDelete: &#39;deletedAt&#39;</code></td></tr>
+<tr><td><code>InferAttributes&lt;User&gt;</code></td><td><code>InferSelect&lt;typeof users&gt;</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Step 2: baseline instead of replaying history</h2>
+<p><code>sequelize-cli</code> stores the names of applied migration files in <code>SequelizeMeta</code>. kastor does not replay those files. It records the current database as one baseline migration, marked as applied:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate status
+</pre>
+<p>Do this in each environment before its first <code>npx kastor migrate deploy</code>. If any environment still runs <code>sequelize.sync()</code> at startup, remove that call first: <code>sync</code> and <code>sync(&#123; alter: true &#125;)</code> change tables behind every migration tool.</p>
+</section>
+<section id="queries"><h2>Step 3: finders and Op become client calls</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import mysql from 'mysql2/promise'
+import { kastor } from 'kastor'
+import { mysql as mysqlAdapter } from 'kastor/mysql'
+import { schema, relations } from './schema'
+
+const pool = mysql.createPool({ uri: process.env.DATABASE_URL, connectionLimit: 10 })
+
+export const db = kastor({ adapter: mysqlAdapter(pool), schema, relations })
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="Sequelize: src/posts/service.ts (before)">
+import { Op } from 'sequelize'
+import { sequelize } from '../sequelize'
+import { Post, User } from '../models'
+
+export const feed = (userIds: number[]) =&gt;
+  Post.findAll({
+    where: { published: true, userId: { [Op.in]: userIds } },
+    include: [{ model: User, as: 'author', attributes: ['name'] }],
+    order: [['id', 'DESC']],
+    limit: 20,
+  })
+
+export const search = (q: string) =&gt;
+  User.findAll({ where: { [Op.or]: [{ email: { [Op.like]: `%${q}%` } }, { name: { [Op.like]: `%${q}%` } }] } })
+
+export const createWithPosts = (email: string, titles: string[]) =&gt;
+  sequelize.transaction(async (transaction) =&gt; {
+    const user = await User.create({ email }, { transaction })
+    await Post.bulkCreate(titles.map((title) =&gt; ({ title, userId: user.id })), { transaction })
+    return user
+  })
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { db } from '../db'
+
+export const feed = (userIds: number[]) =&gt;
+  db.posts.findMany({
+    where: { published: true, userId: { in: userIds } },
+    include: { author: { select: { name: true } } },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+
+export const search = (q: string) =&gt;
+  db.users.findMany({ where: { OR: [{ email: { contains: q } }, { name: { contains: q } }] } })
+
+export const createWithPosts = (email: string, titles: string[]) =&gt;
+  db.users.create({
+    data: { email, posts: { create: titles.map((title) =&gt; ({ title })) } },
+    include: { posts: true },
+  })
+</pre>
+<table class="spec">
+<thead><tr><th>Sequelize</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>findAll</code>, <code>findOne</code>, <code>findByPk</code></td><td><code>findMany</code>, <code>findFirst</code>, <code>findUnique</code></td></tr>
+<tr><td><code>findAndCountAll</code></td><td><code>$transaction([findMany, count])</code> or <code>findPage</code></td></tr>
+<tr><td><code>attributes: [...]</code></td><td><code>select: &#123; field: true &#125;</code></td></tr>
+<tr><td><code>order: [[&#39;id&#39;, &#39;DESC&#39;]]</code>, <code>limit</code>, <code>offset</code></td><td><code>orderBy: &#123; id: &#39;desc&#39; &#125;</code>, <code>take</code>, <code>skip</code></td></tr>
+<tr><td><code>Op.eq</code>, <code>Op.ne</code>, <code>Op.in</code>, <code>Op.notIn</code></td><td><code>equals</code>, <code>not</code>, <code>in</code>, <code>notIn</code></td></tr>
+<tr><td><code>Op.gt</code>, <code>Op.gte</code>, <code>Op.lt</code>, <code>Op.lte</code>, <code>Op.between</code></td><td><code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code></td></tr>
+<tr><td><code>Op.like</code>, <code>Op.iLike</code>, <code>Op.startsWith</code></td><td><code>contains</code>, <code>mode: &#39;insensitive&#39;</code>, <code>startsWith</code></td></tr>
+<tr><td><code>Op.and</code>, <code>Op.or</code>, <code>Op.not</code></td><td><code>AND</code>, <code>OR</code>, <code>NOT</code></td></tr>
+<tr><td><code>create</code>, <code>bulkCreate</code>, <code>upsert</code></td><td><code>create</code>, <code>createMany</code>, <code>upsert</code></td></tr>
+<tr><td><code>Model.update(values, &#123; where &#125;)</code>, <code>destroy</code></td><td><code>updateMany</code>, <code>deleteMany</code></td></tr>
+<tr><td><code>instance.increment(&#39;views&#39;)</code></td><td><code>update</code> with <code>views: &#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>sequelize.transaction(fn)</code></td><td><code>db.$transaction(fn)</code></td></tr>
+<tr><td><code>sequelize.query(sql, &#123; replacements &#125;)</code></td><td><code>db.$sql`...`</code></td></tr>
+</tbody>
+</table>
+<p>There are no model instances in kastor. A row is a plain object, so <code>user.save()</code> and <code>user.reload()</code> become explicit <code>update</code> and <code>findUnique</code> calls. That makes every round trip visible in the code, and rows serialize to JSON without <code>toJSON()</code> or <code>raw: true</code>.</p>
+</section>
+<section id="scopes"><h2>Step 4: scopes and hooks</h2>
+<p>A Sequelize scope is a named piece of query options. In kastor the same idea is a typed constant you spread into <code>where</code>:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/scopes.ts">
+import { db } from '../db'
+
+// Was: Post.addScope('published', { where: { published: true } })
+const published = { published: true } as const
+
+export const recentPublished = (userId: number) =&gt;
+  db.posts.findMany({ where: { ...published, userId }, orderBy: { id: 'desc' }, take: 10 })
+</pre>
+<p>Hooks such as <code>beforeCreate</code> become code in the function that writes. Hashing a password, normalizing an email or setting a slug belongs next to the <code>create</code> call, where a reader sees it. Generated values can be JavaScript defaults on the column: <code>t.uuid().primaryKey().defaultRandom()</code> or <code>.default(() =&gt; makeSlug())</code>.</p>
+</section>
+<section id="ci"><h2>Step 5: switch CI and remove Sequelize</h2>
+<p>Replace <code>npx sequelize-cli db:migrate</code> with <code>npx kastor migrate deploy</code> in the deploy pipeline. New schema changes come from editing <code>src/db/schema.ts</code> and running <code>npx kastor migrate dev --name what_changed</code>, which writes a readable SQL file you commit. When nothing imports the models, uninstall <code>sequelize</code> and <code>sequelize-cli</code> and delete <code>.sequelizerc</code>.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Automatic timestamps.</strong> Sequelize adds <code>createdAt</code> and <code>updatedAt</code> unless told not to, and fills them itself. In kastor, declare them as <code>t.datetime().defaultNow()</code> and <code>t.datetime().updatedAt()</code>; kastor fills the second on every create and update.</li>
+<li><strong>Pluralized table names.</strong> Without <code>tableName</code>, Sequelize pluralized model names. <code>db pull</code> uses the real table names, so the export for <code>Users</code> is <code>users</code>.</li>
+<li><strong>Case sensitivity of like.</strong> <code>Op.like</code> is case insensitive on MySQL with the default collation and case sensitive on PostgreSQL. kastor's <code>contains</code> is case sensitive everywhere unless you add <code>mode: &#39;insensitive&#39;</code>, so pick the behavior you meant.</li>
+<li><strong>Decimal values.</strong> Sequelize returned decimals as strings on most dialects, and so does kastor. Bigint columns come back as <code>bigint</code>.</li>
+<li><strong>Raw queries.</strong> Replacements written as <code>:name</code> become template values in <code>db.$sql</code>, which are always sent as parameters.</li>
+</ul>
+</section>

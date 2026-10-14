@@ -1,0 +1,195 @@
+<!--meta
+{
+  "slug": "fastify-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Fastify ORM: a kastor plugin with typed decorators | kastor",
+  "description": "Use kastor as the Fastify ORM: a fastify-plugin that decorates the instance with a typed client, onClose cleanup, schema validated routes, error handling and migrations.",
+  "h1": "kastor with Fastify",
+  "crumb": "Fastify",
+  "lead": "Fastify is built around plugins and decorators, so the database belongs in a plugin that decorates the instance with a typed client and closes the pool in the onClose hook. Routes then use <code>app.db</code> with types inferred from your kastor schema.",
+  "readTime": "10 min read",
+  "keywords": ["Fastify ORM", "Fastify database plugin", "Fastify TypeScript ORM", "Fastify PostgreSQL", "fastify-plugin decorate database", "Fastify MySQL"],
+  "howto": {
+    "name": "Add kastor to a Fastify server as a plugin",
+    "totalTime": "PT20M",
+    "tools": ["Fastify 4 or 5", "fastify-plugin", "kastor", "the pg driver"],
+    "steps": [
+      { "name": "Install and scaffold", "text": "Run npm install kastor pg fastify fastify-plugin and npx kastor init --db postgres.", "anchor": "structure" },
+      { "name": "Write the plugin", "text": "Create a fastify-plugin that builds the client, decorates the instance and closes the pool in onClose.", "anchor": "plugin" },
+      { "name": "Type the decorator", "text": "Augment FastifyInstance with a db property typed from the client.", "anchor": "plugin" },
+      { "name": "Write routes", "text": "Register routes that use app.db with JSON schema validation for inputs.", "anchor": "routes" },
+      { "name": "Handle errors and migrate", "text": "Map KastorError codes in setErrorHandler and run npx kastor migrate deploy before start.", "anchor": "deploy" }
+    ]
+  },
+  "faq": [
+    { "q": "How do I share a database client across Fastify plugins?", "a": "Wrap the setup in <code>fastify-plugin</code> so the decorator is not encapsulated, then <code>app.decorate(&#39;db&#39;, db)</code>. Every plugin registered after it sees <code>app.db</code>." },
+    { "q": "How do I type app.db?", "a": "Augment the <code>FastifyInstance</code> interface with <code>declare module &#39;fastify&#39;</code> and set <code>db</code> to the type of your client. The query types then flow into every route." },
+    { "q": "When should the pool close?", "a": "In an <code>onClose</code> hook. <code>app.close()</code> runs it, which happens on graceful shutdown and at the end of tests that use <code>app.inject()</code>." },
+    { "q": "Can I use Fastify's JSON schema validation with kastor?", "a": "Yes. Validate the request with a route schema; kastor then receives values the compiler and the runtime both trust. Use a type provider if you want the schema to type <code>request.body</code> too." }
+  ],
+  "related": ["express-orm", "hono-orm", "nestjs-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p><strong>Fastify</strong> encapsulates plugins: a decorator added inside a plugin is only visible to that plugin's children, unless the plugin is wrapped with <code>fastify-plugin</code>. A database plugin should be wrapped, so the whole app shares one client.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  plugins/db.ts           creates the client, decorates app.db, closes on onClose
+  routes/posts.ts         routes using app.db
+  app.ts                  builds the instance (used by tests too)
+  server.ts               listen and signals
+kastor.config.ts
+kastor/migrations/
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg fastify fastify-plugin
+npx kastor init --db postgres
+npx kastor migrate dev --name init
+</pre>
+</section>
+<section id="plugin"><h2>The plugin and its type</h2>
+<p>The plugin builds the client, decorates the instance and registers an <code>onClose</code> hook. The module augmentation tells TypeScript what <code>app.db</code> is, so routes get the full query types.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/plugins/db.ts">
+import fp from 'fastify-plugin'
+import type { FastifyInstance } from 'fastify'
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from '../db/schema'
+
+export const createDb = (url: string) =&gt;
+  kastor({ adapter: postgres(new pg.Pool({ connectionString: url, max: 10 })), schema, relations })
+
+export type Db = ReturnType&lt;typeof createDb&gt;
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    db: Db
+  }
+}
+
+export default fp(async (app: FastifyInstance, opts: { url: string }) =&gt; {
+  const db = createDb(opts.url)
+  app.decorate('db', db)
+  app.addHook('onClose', async () =&gt; {
+    await db.$disconnect()
+  })
+}, { name: 'kastor' })
+</pre>
+</section>
+<section id="routes"><h2>Routes with validation</h2>
+<p>Route schemas validate input before the handler runs and speed up serialization of the response. Inside the handler, <code>app.db</code> is the typed client.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/routes/posts.ts">
+import type { FastifyInstance } from 'fastify'
+
+export async function postRoutes(app: FastifyInstance) {
+  app.get&lt;{ Querystring: { take?: number } }&gt;('/posts', async (req) =&gt;
+    app.db.posts.findMany({
+      where: { published: true },
+      include: { author: { select: { name: true } }, tags: true },
+      orderBy: { id: 'desc' },
+      take: Math.min(req.query.take ?? 20, 100),
+    }),
+  )
+
+  app.post&lt;{ Body: { title: string; authorId: number } }&gt;('/posts', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['title', 'authorId'],
+        properties: { title: { type: 'string', minLength: 3 }, authorId: { type: 'integer' } },
+      },
+    },
+  }, async (req, reply) =&gt; {
+    const post = await app.db.posts.create({ data: req.body })
+    reply.code(201)
+    return post
+  })
+
+  app.get('/authors/top', async () =&gt;
+    app.db.users.findMany({
+      include: { _count: { select: { posts: true } } },
+      orderBy: { posts: { _count: 'desc' } },
+      take: 5,
+    }),
+  )
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/app.ts">
+import Fastify from 'fastify'
+import { isKastorError } from 'kastor'
+import db from './plugins/db'
+import { postRoutes } from './routes/posts'
+
+const STATUS: Record&lt;string, number&gt; = { NOT_FOUND: 404, UNIQUE_VIOLATION: 409, FOREIGN_KEY_VIOLATION: 422 }
+
+export function buildApp(url = process.env.DATABASE_URL!) {
+  const app = Fastify({ logger: true })
+  app.register(db, { url })
+  app.register(postRoutes)
+  app.setErrorHandler((error, req, reply) =&gt; {
+    if (isKastorError(error) &amp;&amp; STATUS[error.code]) {
+      return reply.code(STATUS[error.code]!).send({ error: error.code, message: error.message })
+    }
+    reply.send(error)
+  })
+  return app
+}
+</pre>
+</section>
+<section id="deploy"><h2>Shutdown, tests and migrations</h2>
+<p>Fastify's <code>close()</code> runs the <code>onClose</code> hook, so signals and tests clean up the pool the same way:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/server.ts">
+import { buildApp } from './app'
+
+const app = buildApp()
+await app.listen({ port: Number(process.env.PORT ?? 3000), host: '0.0.0.0' })
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, async () =&gt; {
+    await app.close()
+    process.exit(0)
+  })
+}
+</pre>
+<p>In tests, build the app against a test database, call <code>app.inject()</code>, and <code>await app.close()</code> in <code>afterAll</code> so the test runner does not hang on open connections. Migrations run before the server starts, in CI or a release step:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npx tsc --noEmit
+- run: npx vitest run
+  env:
+    DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+</pre>
+<p>For development, <code>tsx watch --env-file=.env src/server.ts</code> restarts the process on change; the signal handler closes the old pool first.</p>
+</section>
+<section id="why-plugin"><h2>Why a plugin instead of a plain import</h2>
+<p>You could import the client from a module, as the Express guide does, and it would work. The plugin buys three things in a Fastify codebase. First, lifecycle: the <code>onClose</code> hook ties the pool to the instance, so every way of stopping the app (signals, tests, <code>app.close()</code> in a script) closes connections without extra code. Second, configuration: the plugin takes its options from <code>register</code>, so tests can build an app against a different database without touching environment variables or module mocks. Third, ordering: Fastify loads plugins in sequence and awaits each one, so the client exists before any route plugin runs.</p>
+<p>Encapsulation is the part that surprises people. Fastify gives each plugin its own context; decorators added inside are visible to that plugin and its children only. Wrapping the database plugin with <code>fastify-plugin</code> opts out of that, which is right for shared infrastructure like a client. Route plugins, on the other hand, should stay encapsulated so their hooks and decorators do not leak into each other.</p>
+</section>
+<section id="transactions"><h2>Transactions inside a request</h2>
+<p>A handler that writes to several tables should do it in one transaction: <code>app.db.$transaction(async (tx) =&gt; ...)</code> runs every call on one connection, commits when the callback resolves and rolls back when it throws. Keep the callback free of slow work such as HTTP calls to other services, because the connection stays checked out until it returns. When the writes do not depend on each other's results, the array form, <code>app.db.$transaction([a, b])</code>, is shorter and holds the connection for less time.</p>
+<p>Running Fastify on a serverless platform, for example behind an adapter on AWS Lambda, changes only the pool size. Each function instance runs one copy of the app with its own pool, so set <code>max</code> to 1 or 2 and put a pooler in front of the database, as the <a href="aws-lambda-orm.html">Lambda guide</a> explains.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The database plugin is wrapped with <code>fastify-plugin</code> and registered before routes.</li>
+<li><code>FastifyInstance</code> is augmented, so <code>app.db</code> is typed.</li>
+<li>The <code>onClose</code> hook disconnects the pool.</li>
+<li>Routes declare body and response schemas.</li>
+<li>Tests call <code>app.close()</code>, and CI runs migrations before release.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Forgetting fastify-plugin.</strong> Without it, <code>app.db</code> exists only inside the plugin's own scope, and sibling route plugins see <code>undefined</code>.</li>
+<li><strong>Response schemas and bigint.</strong> Fastify's serializer drops fields missing from a response schema and cannot write <code>bigint</code>. Declare the fields you return and convert big keys to strings.</li>
+<li><strong>Registering order.</strong> Register the db plugin before the routes that use it; Fastify loads plugins in order.</li>
+<li><strong>Pool size.</strong> Fastify handles many concurrent requests on one process; size <code>max</code> for your real concurrency and the database limit, not the request rate.</li>
+</ul>
+</section>

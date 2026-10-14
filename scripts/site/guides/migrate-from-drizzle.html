@@ -1,0 +1,245 @@
+<!--meta
+{
+  "slug": "migrate-from-drizzle",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "pgTable to table(), with to include",
+  "title": "Migrate from Drizzle ORM to kastor, step by step | kastor",
+  "description": "Migrate from Drizzle ORM to kastor: map pgTable to table(), eq and and() to where objects, with to include, drizzle-kit to kastor migrate, and keep your data.",
+  "h1": "Migrate from Drizzle ORM to kastor",
+  "crumb": "From Drizzle",
+  "lead": "Drizzle and kastor both keep the schema in TypeScript and infer types from it, so the move is mostly vocabulary: <code>pgTable</code> becomes <code>table()</code>, operator functions become <code>where</code> objects, and <code>drizzle-kit</code> hands migrations to <code>kastor migrate</code>.",
+  "readTime": "12 min read",
+  "keywords": ["migrate from Drizzle", "Drizzle to kastor", "drizzle orm alternative", "drizzle-kit migrate", "drizzle relational queries", "replace drizzle orm"],
+  "howto": {
+    "name": "Migrate a project from Drizzle ORM to kastor",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the database driver you already use"],
+    "steps": [
+      { "name": "Install kastor next to Drizzle", "text": "Run npm install kastor and keep the driver you already have, such as pg or better-sqlite3.", "anchor": "install" },
+      { "name": "Pull a kastor schema from the database", "text": "Run npx kastor init, then npx kastor db pull to write src/db/schema.ts from the tables drizzle-kit created.", "anchor": "schema" },
+      { "name": "Adopt the database with a baseline", "text": "Run npx kastor migrate baseline --name init so kastor records the current schema as applied without running it.", "anchor": "baseline" },
+      { "name": "Rewrite queries module by module", "text": "Replace select builders and relational queries with findMany, include and the write methods, one module at a time.", "anchor": "queries" },
+      { "name": "Remove drizzle-kit from CI", "text": "Swap drizzle-kit migrate for npx kastor migrate deploy and delete the Drizzle packages when nothing imports them.", "anchor": "ci" }
+    ]
+  },
+  "faq": [
+    { "q": "Can I keep my drizzle-kit migration history?", "a": "Keep the <code>drizzle</code> folder in git as a record, but let kastor start from a baseline. <code>npx kastor migrate baseline --name init</code> writes one migration that matches the live database and marks it applied, so <code>migrate deploy</code> never replays the Drizzle files. New changes after that come from <code>npx kastor migrate dev</code>." },
+    { "q": "Does kastor have an equivalent of Drizzle relational queries?", "a": "Yes. <code>db.query.users.findMany({ with: { posts: true } })</code> becomes <code>db.users.findMany({ include: { posts: true } })</code>. Nested includes take their own <code>where</code>, <code>orderBy</code> and <code>take</code>, and load in one statement per call through JSON aggregation." },
+    { "q": "Can Drizzle and kastor run on the same database at the same time?", "a": "Yes. Both are thin layers over your driver. You can even pass the same <code>pg.Pool</code> to both, which keeps the connection count where it was while you move modules one by one." },
+    { "q": "Is there a replacement for the eq, and, or helpers?", "a": "kastor uses plain objects: <code>eq(users.email, x)</code> is <code>{ email: x }</code>, <code>and(a, b)</code> is two keys in one object or <code>AND: [a, b]</code>, <code>or()</code> is <code>OR</code> and <code>inArray</code> is <code>{ in: [...] }</code>. For anything else, the <code>sql</code> tag works inside <code>where</code>." },
+    { "q": "Do I lose the SQL like builder?", "a": "kastor has no chained select builder. Its object API covers filters, relations, aggregates and grouping, and <code>db.$sql</code> runs any SQL with bound parameters and a typed row. If a module is a large reporting query, it is fine to leave it on Drizzle or move it to <code>$sql</code>." }
+  ],
+  "related": ["drizzle-alternative", "migrate-from-prisma", "database-migrations-explained"]
+}
+-->
+<section id="overview"><h2>What changes and what stays</h2>
+<p>If you are planning to <strong>migrate from Drizzle</strong>, you already have the hard part done: your schema lives in TypeScript, your types are inferred from it, and nothing is generated. kastor works the same way, so the move does not change how your project builds. What changes is the query surface. Drizzle gives you two APIs, a SQL shaped builder (<code>db.select().from(users).where(eq(...))</code>) and the relational query API (<code>db.query.users.findMany</code>). kastor has one object API that looks like the relational one, and covers writes, nested writes, aggregates and grouping with the same shapes.</p>
+<p>Your database and your data stay where they are. Nothing in this guide copies rows or recreates tables. The order is always the same: get a kastor schema that matches the live database, record it as the starting point of kastor migrations, then move queries one module at a time while both libraries run side by side.</p>
+</section>
+<section id="install"><h2>Step 1: install kastor next to Drizzle</h2>
+<p>kastor ships no driver, so you keep the one Drizzle already uses. A Postgres project keeps <code>pg</code> (or <code>postgres</code>), a SQLite project keeps <code>better-sqlite3</code>, a Turso project keeps <code>@libsql/client</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor
+npx kastor init --db postgres
+</pre>
+<p><code>init</code> writes <code>kastor.config.ts</code>, a starter schema at <code>src/db/schema.ts</code>, a seed file and a <code>.env</code> with <code>DATABASE_URL</code>. Point that variable at the same database <code>drizzle.config.ts</code> uses. If your Drizzle schema already lives in <code>src/db/schema.ts</code>, pick another path for kastor, for example <code>src/db/kastor-schema.ts</code>, in the config's <code>schema</code> field until the move is done.</p>
+</section>
+<section id="schema"><h2>Step 2: get a kastor schema from the database</h2>
+<p>You could translate the Drizzle schema by hand, and the mapping table below shows how. The faster way is to let kastor read the database that <code>drizzle-kit</code> created: <code>db pull</code> introspects tables, columns, defaults, indexes and foreign keys and writes a TypeScript file with every table, a <code>schema</code> object and a <code>relations</code> function guessed from the foreign keys.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor db pull --out src/db/kastor-schema.ts
+</pre>
+<p>Here is a typical Drizzle schema and what the kastor version looks like after you tidy the export names:</p>
+<pre data-kind="editor" data-lang="ts" data-title="Drizzle: src/db/schema.ts (before)">
+import { pgTable, serial, varchar, text, boolean, integer, timestamp, pgEnum, index } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+
+export const role = pgEnum('role', ['user', 'admin'])
+
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  name: text('name'),
+  role: role('role').notNull().default('user'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+export const posts = pgTable('posts', {
+  id: serial('id').primaryKey(),
+  title: varchar('title', { length: 200 }).notNull(),
+  published: boolean('published').notNull().default(false),
+  authorId: integer('author_id').notNull().references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, (t) =&gt; [index('posts_author_idx').on(t.authorId)])
+
+export const usersRelations = relations(users, ({ many }) =&gt; ({ posts: many(posts) }))
+export const postsRelations = relations(posts, ({ one }) =&gt; ({
+  author: one(users, { fields: [posts.authorId], references: [users.id] }),
+}))
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/kastor-schema.ts">
+import { table, t, index, one, many } from 'kastor'
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.text().nullable(),
+  role: t.enum(['user', 'admin']).default('user'),
+  createdAt: t.datetime().map('created_at').defaultNow(),
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  authorId: t.int().map('author_id').references(() =&gt; users.id, { onDelete: 'cascade' }),
+}, { indexes: (p) =&gt; [index(p.authorId).name('posts_author_idx')] })
+
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+})
+</pre>
+<p>Two habits flip. Drizzle columns are nullable unless you write <code>.notNull()</code>; kastor columns are required unless you write <code>.nullable()</code>. And the Drizzle column name argument becomes <code>.map('db_name')</code>, which you only need when the database name differs from the TypeScript key.</p>
+<table class="spec">
+<thead><tr><th>Drizzle</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>pgTable</code>, <code>mysqlTable</code>, <code>sqliteTable</code></td><td><code>table()</code>, the same on every database</td></tr>
+<tr><td><code>serial().primaryKey()</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>varchar(&#39;x&#39;, ...)</code>, <code>text()</code>, <code>integer()</code></td><td><code>t.string(len)</code>, <code>t.text()</code>, <code>t.int()</code></td></tr>
+<tr><td><code>timestamp().defaultNow()</code></td><td><code>t.datetime().defaultNow()</code></td></tr>
+<tr><td><code>uuid().defaultRandom()</code></td><td><code>t.uuid().defaultRandom()</code></td></tr>
+<tr><td><code>pgEnum</code></td><td><code>t.enum([...])</code></td></tr>
+<tr><td>no <code>.notNull()</code></td><td><code>.nullable()</code></td></tr>
+<tr><td><code>index().on(...)</code>, <code>uniqueIndex()</code></td><td><code>index(...)</code>, <code>uniqueIndex(...)</code> in <code>indexes</code></td></tr>
+<tr><td><code>relations(users, ...)</code></td><td><code>relations</code> function on the client</td></tr>
+<tr><td><code>typeof users.$inferSelect</code></td><td><code>InferSelect&lt;typeof users&gt;</code></td></tr>
+<tr><td><code>drizzle-kit generate</code> and <code>migrate</code></td><td><code>npx kastor migrate dev</code> and <code>migrate deploy</code></td></tr>
+<tr><td><code>drizzle-kit push</code>, <code>pull</code>, <code>studio</code></td><td><code>npx kastor db push</code>, <code>db pull</code>, <code>studio</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Step 3: adopt the database with a baseline</h2>
+<p>Drizzle records applied migrations in its own table (<code>__drizzle_migrations</code>) and journal. kastor does not read that history. It starts from a baseline instead: one migration that describes the database exactly as it is today, recorded as applied without being run.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate status
+npx kastor migrate dev --create-only --name check
+</pre>
+<p><code>migrate status</code> should list the baseline as applied and nothing pending. The last command is a safety check against a copy of the database: if the pulled schema matches, kastor reports that the database is already in sync and writes no file. If it writes a file, read it, because it shows where the schema file and the database disagree. Run the baseline once per environment (development, staging, production) before the first <code>migrate deploy</code> there.</p>
+<div class="callout"><p>Pick one owner for schema changes during the move. Until you remove drizzle-kit, keep generating migrations with it and run <code>db pull</code> again afterwards; once kastor owns migrations, stop running drizzle-kit entirely so the two never fight over the same tables.</p></div>
+</section>
+<section id="client"><h2>Step 4: one client, sharing the pool</h2>
+<p>Both libraries wrap a driver instance, so you can hand them the same pool. That keeps the number of open connections unchanged while both are in use.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './kastor-schema'
+
+export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10 })
+
+// Old code keeps importing this until it moves.
+export const drizzleDb = drizzle(pool)
+
+export const db = kastor({ adapter: postgres(pool), schema, relations })
+</pre>
+</section>
+<section id="queries"><h2>Step 5: rewrite queries side by side</h2>
+<p>The relational API maps almost word for word. <code>with</code> becomes <code>include</code>, <code>columns</code> becomes <code>select</code>, and operator functions become keys of the <code>where</code> object.</p>
+<pre data-kind="editor" data-lang="ts" data-title="Drizzle: src/posts/queries.ts (before)">
+import { and, desc, eq, ilike, inArray, sql } from 'drizzle-orm'
+import { drizzleDb as db } from '../db'
+import { posts, users } from '../db/schema'
+
+export const feed = (authorIds: number[]) =&gt;
+  db.query.posts.findMany({
+    where: and(eq(posts.published, true), inArray(posts.authorId, authorIds)),
+    with: { author: { columns: { name: true } } },
+    orderBy: [desc(posts.id)],
+    limit: 20,
+  })
+
+export const search = (q: string) =&gt;
+  db.select().from(users).where(ilike(users.email, `%${q}%`))
+
+export const publish = (id: number) =&gt;
+  db.update(posts).set({ published: true }).where(eq(posts.id, id)).returning()
+
+export const countByAuthor = () =&gt;
+  db.select({ authorId: posts.authorId, n: sql&lt;number&gt;`count(*)` }).from(posts).groupBy(posts.authorId)
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/queries.ts">
+import { db } from '../db'
+
+export const feed = (authorIds: number[]) =&gt;
+  db.posts.findMany({
+    where: { published: true, authorId: { in: authorIds } },
+    include: { author: { select: { name: true } } },
+    orderBy: { id: 'desc' },
+    take: 20,
+  })
+
+export const search = (q: string) =&gt;
+  db.users.findMany({ where: { email: { contains: q, mode: 'insensitive' } } })
+
+export const publish = (id: number) =&gt;
+  db.posts.update({ where: { id }, data: { published: true } })
+
+export const countByAuthor = () =&gt;
+  db.posts.groupBy({ by: 'authorId', _count: { _all: true } })
+</pre>
+<table class="spec">
+<thead><tr><th>Drizzle</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>eq(col, v)</code>, <code>ne</code></td><td><code>&#123; col: v &#125;</code>, <code>&#123; col: &#123; not: v &#125; &#125;</code></td></tr>
+<tr><td><code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code></td><td><code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code> keys</td></tr>
+<tr><td><code>inArray</code>, <code>notInArray</code></td><td><code>in</code>, <code>notIn</code></td></tr>
+<tr><td><code>like</code>, <code>ilike</code></td><td><code>contains</code>, <code>startsWith</code>, <code>endsWith</code>, with <code>mode: &#39;insensitive&#39;</code></td></tr>
+<tr><td><code>isNull</code>, <code>isNotNull</code></td><td><code>&#123; col: null &#125;</code>, <code>&#123; col: &#123; not: null &#125; &#125;</code></td></tr>
+<tr><td><code>and</code>, <code>or</code>, <code>not</code></td><td><code>AND</code>, <code>OR</code>, <code>NOT</code></td></tr>
+<tr><td><code>exists(subquery)</code></td><td>relation filters <code>some</code>, <code>every</code>, <code>none</code>, <code>is</code></td></tr>
+<tr><td><code>limit</code>, <code>offset</code></td><td><code>take</code>, <code>skip</code>, or <code>findPage</code> for cursors</td></tr>
+<tr><td><code>insert().values().returning()</code></td><td><code>create</code>, <code>createManyAndReturn</code></td></tr>
+<tr><td><code>onConflictDoUpdate</code></td><td><code>upsert</code></td></tr>
+<tr><td><code>db.transaction(async (tx) =&gt; ...)</code></td><td><code>db.$transaction(async (tx) =&gt; ...)</code></td></tr>
+<tr><td><code>db.execute(sql`...`)</code></td><td><code>db.$sql`...`</code> or <code>db.$execute`...`</code></td></tr>
+</tbody>
+</table>
+<p>Writes with relations are where kastor saves the most code. Drizzle inserts the parent, reads the id and inserts the children inside a transaction you write yourself. kastor does that in one call:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/users/register.ts">
+import { db } from '../db'
+
+export const register = (email: string) =&gt;
+  db.users.create({
+    data: { email, posts: { create: [{ title: 'Hello' }, { title: 'Second post' }] } },
+    include: { posts: true },
+  })
+</pre>
+<p>Raw SQL keeps working. The <code>sql</code> tag from <code>kastor</code> builds fragments for <code>where</code>, and <code>db.$sql&lt;Row&gt;</code> runs a full statement with every interpolated value sent as a parameter.</p>
+</section>
+<section id="ci"><h2>Step 6: switch CI and remove Drizzle</h2>
+<p>Once a module has no Drizzle import left, delete its old file. When the last one goes, remove <code>drizzle-orm</code>, <code>drizzle-kit</code> and <code>drizzle.config.ts</code>, and replace the migrate step in your pipeline:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npx tsc --noEmit
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+</pre>
+<p>Nothing else changes in the build, because neither tool generates code.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Nullability flips.</strong> A Drizzle column without <code>.notNull()</code> is nullable. If you translate by hand, add <code>.nullable()</code> to every such column, or the kastor types will promise values that can be null.</li>
+<li><strong>Names come from the database.</strong> <code>db pull</code> names exports after tables in camelCase. If you used the Drizzle <code>casing</code> option, columns come back with <code>.map()</code> calls; that is correct, keep them.</li>
+<li><strong>Timestamps and numerics.</strong> Drizzle can return timestamps as strings with <code>mode: &#39;string&#39;</code>. kastor always returns <code>Date</code> for <code>t.datetime()</code>, a <code>YYYY-MM-DD</code> string for <code>t.date()</code> and a string for <code>t.decimal()</code>, so check code that formats them.</li>
+<li><strong>$onUpdate.</strong> For timestamps, use <code>t.datetime().updatedAt()</code>, which kastor fills on every create and update. Other computed values belong in the function that writes, or in a database trigger.</li>
+<li><strong>Prepared statements.</strong> Drizzle's <code>.prepare()</code> has no direct counterpart; the driver still caches statements where it supports that.</li>
+<li><strong>Two migration owners.</strong> Never run <code>drizzle-kit push</code> after the baseline. It would change the database behind kastor's history and the next <code>migrate dev</code> would try to undo it.</li>
+</ul>
+<p>The <a href="drizzle-alternative.html">Drizzle alternative guide</a> compares the two designs in more depth, and the <a href="./#playground">playground</a> shows the SQL each kastor query compiles to on your database.</p>
+</section>

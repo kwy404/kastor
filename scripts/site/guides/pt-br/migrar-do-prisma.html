@@ -1,0 +1,197 @@
+<!--meta
+{
+  "slug": "migrar-do-prisma",
+  "lang": "pt-BR",
+  "alt": "migrate-from-prisma",
+  "section": "migrate",
+  "title": "Migrar do Prisma para o kastor: schema, chamadas e histórico | kastor",
+  "description": "Como migrar do Prisma para o kastor passo a passo: kastor import prisma converte o schema.prisma, as chamadas mudam pouco e o migrate baseline preserva dados e histórico.",
+  "h1": "Como migrar do Prisma para o kastor",
+  "crumb": "Migrar do Prisma",
+  "lead": "O kastor mantém a API de consultas que o Prisma popularizou e elimina a etapa de geração. <code>npx kastor import prisma</code> transforma o schema.prisma em um schema TypeScript para o mesmo banco, <code>npx kastor migrate baseline --from-prisma</code> preserva o histórico de migrações e a maioria das chamadas só troca a primeira palavra.",
+  "readTime": "14 min de leitura",
+  "keywords": ["migrar do Prisma", "Prisma para kastor", "alternativa ao Prisma", "schema.prisma para TypeScript", "prisma migrate baseline", "substituir Prisma Client"],
+  "howto": {
+    "name": "Migrar um projeto do Prisma para o kastor",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 ou mais novo", "kastor", "o driver do seu banco (pg, mysql2, better-sqlite3, mssql ou mongodb)"],
+    "steps": [
+      { "name": "Instalar o kastor e o driver", "text": "Rode npm install kastor e o driver do provider, por exemplo pg para postgresql.", "anchor": "instalar" },
+      { "name": "Converter o schema.prisma", "text": "Rode npx kastor import prisma --config para gerar src/db/schema.ts e kastor.config.ts, e leia o relatório.", "anchor": "importar" },
+      { "name": "Preservar dados e histórico", "text": "Rode npx kastor migrate baseline --from-prisma prisma/migrations e confirme com npx kastor migrate dev que está tudo em sincronia.", "anchor": "baseline" },
+      { "name": "Criar o cliente", "text": "Troque new PrismaClient() por kastor({ adapter, schema, relations }) em um único módulo.", "anchor": "cliente" },
+      { "name": "Migrar as chamadas", "text": "Reescreva prisma.model como db.model, $queryRaw como $sql e middlewares ou extensions como funções comuns.", "anchor": "consultas" },
+      { "name": "Ajustar o CI e remover o Prisma", "text": "Tire o prisma generate, rode npx kastor migrate deploy no CI e desinstale prisma e @prisma/client.", "anchor": "ci" }
+    ]
+  },
+  "faq": [
+    { "q": "O kastor lê o schema.prisma?", "a": "Sim. <code>npx kastor import prisma</code> lê o schema.prisma (ou uma pasta com vários arquivos .prisma) e gera um schema TypeScript com os mesmos nomes de tabelas, colunas, índices e constraints que o Prisma Migrate criou, inclusive as tabelas implícitas de muitos para muitos como <code>_PostToTag</code>. Com <code>--config</code> ele também escreve o <code>kastor.config.ts</code>." },
+    { "q": "Vou perder o histórico de migrações do Prisma?", "a": "Não. <code>npx kastor migrate baseline --from-prisma prisma/migrations</code> registra cada migração que a tabela <code>_prisma_migrations</code> marca como concluída, mais uma migração de baseline. Os arquivos do Prisma e a tabela <code>_prisma_migrations</code> não são alterados." },
+    { "q": "Preciso renomear prisma.user?", "a": "Não. O import nomeia cada tabela pelo model em camelCase, então <code>prisma.user.findMany</code> vira <code>db.user.findMany</code>. Se preferir nomes no plural, renomeie os exports depois." },
+    { "q": "O que substitui middlewares e client extensions?", "a": "O kastor não tem API de extensões. Log e tempo de consulta usam a opção <code>log</code>, soft delete é uma opção da tabela, campos calculados são funções sobre o tipo da linha e métodos customizados são funções em um módulo." },
+    { "q": "Prisma e kastor podem rodar juntos?", "a": "Sim, no mesmo banco, enquanto você migra os módulos. Cada um tem seu pool de conexões, então reduza os dois, e deixe só uma ferramenta criando migrações: depois do baseline, o kastor." }
+  ],
+  "related": ["orm-typescript", "migracoes-banco-de-dados", "nextjs-postgres-orm"]
+}
+-->
+<section id="visao-geral"><h2>O que muda e o que fica</h2>
+<p>Quase tudo em um projeto Prisma sobrevive à troca. O banco continua o mesmo, cada linha continua no lugar, o histórico de migrações é preservado e o estilo das consultas também: o kastor usa <code>findMany</code>, <code>where</code>, <code>include</code>, <code>select</code>, escritas aninhadas e <code>$transaction</code> com os mesmos formatos. O que muda é o que está em volta. O schema vira um módulo TypeScript em vez de um arquivo <code>.prisma</code>, os tipos são inferidos pelo compilador em vez de gerados, e as consultas passam pelo driver que você instala em vez do engine do Prisma.</p>
+<p>Este guia segue a ordem que mantém a produção segura: converter o schema, adotar o banco sem alterá-lo, criar o cliente e só então migrar as chamadas, um módulo por vez, enquanto o Prisma continua atendendo o resto. A versão em inglês tem a tabela completa de equivalências e um exemplo maior de serviço antes e depois.</p>
+</section>
+<section id="instalar"><h2>Passo 1: instalar o kastor e o driver</h2>
+<p>O kastor não traz driver embutido. Instale o que combina com o <code>provider</code> do seu datasource: <code>pg</code> para <code>postgresql</code> (inclusive Neon, Supabase e Vercel Postgres) e <code>cockroachdb</code>, <code>mysql2</code> para <code>mysql</code> (inclusive PlanetScale), <code>better-sqlite3</code> para <code>sqlite</code>, <code>mssql</code> para <code>sqlserver</code> e <code>mongodb</code> para <code>mongodb</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+</pre>
+</section>
+<section id="importar"><h2>Passo 2: converter o schema.prisma com kastor import prisma</h2>
+<p>Rode o import na raiz do projeto. Ele encontra o schema pela flag <code>--schema</code>, pela chave <code>prisma.schema</code> do package.json, por <code>prisma/schema.prisma</code> ou por uma pasta <code>prisma/schema</code>, nessa ordem. <code>--out</code> define o arquivo de saída (padrão <code>src/db/schema.ts</code>) e <code>--config</code> também escreve o <code>kastor.config.ts</code> lendo a mesma variável de ambiente do <code>url = env("...")</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor import prisma --schema prisma/schema.prisma --out src/db/schema.ts --config
+</pre>
+<p>O comando imprime um relatório. Itens em <em>Not mapped exactly</em> pedem uma decisão sua; itens em <em>Good to know</em> explicam diferenças de comportamento, como ids gerados por <code>cuid()</code> ou <code>uuid()</code>, que viram funções JavaScript no topo do arquivo gerado. O <code>@updatedAt</code> vira <code>.updatedAt()</code>, que o kastor preenche em cada create e update.</p>
+<pre data-kind="output" data-lang="text" data-title="Saída">
+kastor / import prisma
+
+  Prisma schema  prisma/schema.prisma
+  Provider       postgresql (kastor/postgres)
+
+ok    Wrote src/db/schema.ts: 4 models, 1 join table, 1 enum, 6 relation fields.
+ok    Wrote kastor.config.ts for postgres, reading DATABASE_URL.
+ok    Every model, field and relation mapped exactly.
+</pre>
+<p>O arquivo gerado declara cada model como uma tabela com o nome que o Prisma usou no banco, e as relações ficam na função <code>relations</code>. Um trecho, para um schema com usuários e posts:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor';
+
+export const Role = ['USER', 'ADMIN'] as const;
+
+export const user = table('User', {
+  id: t.id(),
+  email: t.text().unique(),
+  name: t.text().nullable(),
+  role: t.enum(Role, 'Role').default('USER'),
+  createdAt: t.datetime().nativeType('timestamp(3)').defaultNow(),
+  updatedAt: t.datetime().nativeType('timestamp(3)').updatedAt(),
+});
+
+export const post = table('Post', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  views: t.int().default(0),
+  authorId: t.int().references(() =&gt; user.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+}, {
+  indexes: (c) =&gt; [index(c.authorId)],
+});
+
+export const schema = { user, post };
+
+export const relations = ({ user, post }: typeof schema) =&gt; ({
+  user: { posts: many(post, { fields: ['id'], references: ['authorId'] }) },
+  post: { author: one(user, { fields: ['authorId'], references: ['id'] }) },
+});
+</pre>
+<table class="spec">
+<thead><tr><th>schema.prisma</th><th>schema do kastor</th></tr></thead>
+<tbody>
+<tr><td><code>model User</code></td><td><code>export const user = table(&#39;User&#39;, ...)</code></td></tr>
+<tr><td><code>Int @id @default(autoincrement())</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>String?</code>, <code>@unique</code>, <code>@default(now())</code></td><td><code>.nullable()</code>, <code>.unique()</code>, <code>.defaultNow()</code></td></tr>
+<tr><td><code>@map</code>, <code>@@map</code>, <code>@db.VarChar(200)</code></td><td><code>.map()</code>, o nome da tabela, <code>t.string(200)</code></td></tr>
+<tr><td><code>enum Role</code></td><td><code>t.enum(Role, &#39;Role&#39;)</code></td></tr>
+<tr><td><code>@relation(fields, references)</code>, <code>posts Post[]</code></td><td><code>one()</code> e <code>many()</code> em <code>relations</code></td></tr>
+<tr><td>muitos para muitos implícito</td><td>a tabela <code>_AToB</code> e <code>many(..., &#123; through &#125;)</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Passo 3: preservar dados e histórico</h2>
+<p>O Prisma Migrate guarda arquivos SQL em <code>prisma/migrations</code> e registra cada um na tabela <code>_prisma_migrations</code>. O kastor guarda os dele em <code>kastor/migrations</code> e na tabela <code>_kastor_migrations</code>. O baseline conecta os dois mundos sem mexer nos dados nem nos registros do Prisma:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --from-prisma prisma/migrations
+npx kastor migrate dev
+npx kastor migrate status
+</pre>
+<p>Três coisas acontecem. Cada migração do Prisma marcada como concluída é registrada como histórico; as que nunca rodaram ou falharam aparecem no relatório em vez de serem registradas. Uma migração de baseline é escrita com o SQL que cria o schema atual e marcada como aplicada sem ser executada. E o kastor compara o schema importado com o banco: quando o <code>migrate dev</code> responde <em>Already in sync</em>, você tem a prova de que o import ficou exato.</p>
+<p>Faça commit de <code>kastor/migrations</code>. Em cada outro ambiente (banco de um colega, staging, produção) rode o mesmo comando uma vez: ele encontra o baseline commitado e só o marca como aplicado. Em um banco novo e vazio, <code>npx kastor migrate deploy</code> executa o baseline e cria tudo.</p>
+<div class="callout"><p>A partir daqui o kastor é dono do schema. Pare de rodar <code>prisma migrate dev</code> e <code>prisma db push</code>, que alterariam tabelas por fora do histórico do kastor. Mudanças novas são edições em <code>src/db/schema.ts</code> seguidas de <code>npx kastor migrate dev --name o_que_mudou</code>.</p></div>
+</section>
+<section id="cliente"><h2>Passo 4: um único cliente no lugar do PrismaClient</h2>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+<p>O truque do <code>globalThis</code> é o mesmo que você usava com o Prisma: mantém um único pool entre recarregamentos em desenvolvimento. Enquanto os dois clientes convivem, cada um segura as próprias conexões, então reduza o <code>connection_limit</code> do Prisma e o <code>max</code> do kastor.</p>
+</section>
+<section id="consultas"><h2>Passo 5: migrar as chamadas do Prisma Client</h2>
+<p>Como o import mantém os nomes dos models, na maioria das chamadas só a primeira palavra muda:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { isKastorError } from 'kastor'
+import { db } from '../db'
+
+// Antes: prisma.post.findMany({ where, include, orderBy, take })
+export const feed = (authorId: number) =&gt;
+  db.post.findMany({
+    where: { published: true, author: { role: 'ADMIN' }, authorId },
+    include: { author: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+
+// Antes: prisma.user.create com escrita aninhada
+export const signUp = (email: string) =&gt;
+  db.user.create({ data: { email, posts: { create: [{ title: 'Olá' }] } }, include: { posts: true } })
+
+// Antes: prisma.$queryRaw
+export const topAuthors = () =&gt;
+  db.$sql&lt;{ authorId: number; n: number }&gt;`select "authorId", count(*)::int as n from "Post" group by 1 order by 2 desc limit ${5}`
+
+// Antes: Prisma.PrismaClientKnownRequestError com código P2002
+export async function register(email: string) {
+  try {
+    return await db.user.create({ data: { email } })
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') return null
+    throw e
+  }
+}
+</pre>
+<table class="spec">
+<thead><tr><th>Prisma Client</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>findMany</code>, <code>findUnique</code>, <code>findFirst</code>, <code>...OrThrow</code></td><td>os mesmos nomes</td></tr>
+<tr><td><code>where</code>, <code>include</code>, <code>select</code>, <code>orderBy</code>, <code>take</code>, <code>skip</code>, <code>cursor</code></td><td>os mesmos formatos, mais <code>findPage</code></td></tr>
+<tr><td>escritas aninhadas, <code>upsert</code>, <code>createMany</code>, <code>increment</code></td><td>os mesmos formatos</td></tr>
+<tr><td><code>$transaction</code> em array ou callback</td><td><code>db.$transaction</code>, com <code>isolationLevel</code></td></tr>
+<tr><td><code>$queryRaw</code>, <code>$executeRaw</code>, <code>Prisma.sql</code></td><td><code>$sql</code>, <code>$execute</code>, <code>sql</code></td></tr>
+<tr><td>erros <code>P2002</code>, <code>P2003</code>, <code>P2025</code></td><td><code>UNIQUE_VIOLATION</code>, <code>FOREIGN_KEY_VIOLATION</code>, <code>NOT_FOUND</code></td></tr>
+<tr><td><code>$use</code> e <code>$extends</code></td><td>opção <code>log</code>, <code>softDelete</code> e funções comuns</td></tr>
+</tbody>
+</table>
+</section>
+<section id="ci"><h2>Passo 6: ajustar o CI e remover o Prisma</h2>
+<p>Quando nenhum módulo importar mais <code>@prisma/client</code>, desinstale <code>prisma</code> e <code>@prisma/client</code>, tire o <code>prisma generate</code> do <code>postinstall</code> e do build, e troque o <code>prisma migrate deploy</code> do pipeline por <code>npx kastor migrate deploy</code>. Não existe etapa de geração: os tipos vêm do schema pelo compilador, então o <code>tsc</code> do CI já confere cada consulta.</p>
+</section>
+<section id="cuidados"><h2>Cuidados</h2>
+<ul>
+<li><strong>updatedAt fora do kastor.</strong> O <code>.updatedAt()</code> é preenchido pelo kastor em cada escrita, como o Prisma Client fazia. Escritas por SQL puro ou por outros programas não atualizam a coluna; use um trigger se isso importar.</li>
+<li><strong>Ids gerados no cliente.</strong> <code>cuid()</code> e <code>uuid()</code> são gerados em JavaScript, não pelo banco. Linhas inseridas por outras ferramentas continuam precisando de id.</li>
+<li><strong>Tabelas antigas de muitos para muitos.</strong> Bancos criados com Prisma 5 ou anterior usam um índice único em vez de chave primária; siga a dica do relatório se o <code>migrate dev</code> propuser mudança.</li>
+<li><strong>Datas no SQLite.</strong> O Prisma grava <code>DateTime</code> como milissegundos e o kastor como texto ISO. O relatório traz o <code>UPDATE</code> que converte as linhas antigas.</li>
+<li><strong>Decimal.</strong> O kastor devolve <code>t.decimal()</code> como string exata, não como objeto <code>Decimal</code>.</li>
+</ul>
+<p>Depois, conecte o cliente ao seu framework. O guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra server components, server actions e migrações no deploy.</p>
+</section>

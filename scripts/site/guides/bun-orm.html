@@ -1,0 +1,157 @@
+<!--meta
+{
+  "slug": "bun-orm",
+  "lang": "en",
+  "section": "frameworks",
+  "title": "Bun ORM: kastor with bun:sqlite, Postgres and Bun.serve | kastor",
+  "description": "Use kastor as the Bun ORM: bun:sqlite with no driver to install, Postgres through pg, Bun.serve routes, --hot safe client reuse, .env loading and migrations with the CLI.",
+  "h1": "kastor with Bun",
+  "crumb": "Bun",
+  "lead": "Bun ships SQLite in the runtime, loads <code>.env</code> by itself and serves HTTP without a framework. kastor takes a <code>bun:sqlite</code> database directly, so a typed data layer needs no driver install at all, and Postgres or MySQL work through the usual drivers.",
+  "readTime": "9 min read",
+  "keywords": ["Bun ORM", "bun:sqlite ORM", "Bun SQLite TypeScript", "Bun Postgres ORM", "Bun.serve database", "Bun TypeScript ORM"],
+  "howto": {
+    "name": "Use kastor in a Bun server",
+    "totalTime": "PT15M",
+    "tools": ["Bun 1.2 or newer", "kastor", "Node.js for the CLI"],
+    "steps": [
+      { "name": "Install kastor", "text": "Run bun add kastor, and bun add -d better-sqlite3 for the CLI if you use SQLite.", "anchor": "structure" },
+      { "name": "Create the client from bun:sqlite", "text": "Pass a bun:sqlite Database to the sqlite adapter and keep it on globalThis for bun --hot.", "anchor": "client" },
+      { "name": "Serve routes", "text": "Use Bun.serve with routes that call kastor.", "anchor": "server" },
+      { "name": "Configure the CLI", "text": "Point kastor.config.ts at the same database file through a driver Node can load.", "anchor": "migrations" },
+      { "name": "Migrate before start", "text": "Run kastor migrate deploy before bun run in production.", "anchor": "migrations" }
+    ]
+  },
+  "faq": [
+    { "q": "Does kastor support bun:sqlite?", "a": "Yes. The <code>sqlite</code> adapter from <code>kastor/sqlite</code> detects a <code>bun:sqlite</code> Database, as well as better-sqlite3 and node:sqlite, and uses the same SQLite dialect for all three." },
+    { "q": "Can I use Postgres with kastor on Bun?", "a": "Yes. Bun runs the <code>pg</code> and <code>mysql2</code> packages, so the <code>postgres</code> and <code>mysql</code> adapters work the same way they do on Node." },
+    { "q": "Why does the kastor CLI need a different SQLite driver?", "a": "The CLI is a Node.js program, and Node cannot load <code>bun:sqlite</code>. Point <code>kastor.config.ts</code> at the same database file through better-sqlite3 (or node:sqlite), and the app keeps using bun:sqlite at runtime." },
+    { "q": "How do I avoid reopening the database with bun --hot?", "a": "<code>bun --hot</code> reloads modules in the same process. Keep the client on <code>globalThis</code> so reloads reuse it instead of opening another handle." }
+  ],
+  "related": ["hono-orm", "deno-orm", "electron-sqlite-orm"]
+}
+-->
+<section id="structure"><h2>Project structure</h2>
+<p>A <strong>Bun</strong> server can be a single file, but a database deserves its own module. With SQLite, the database is a file next to the app.</p>
+<pre data-kind="output" data-lang="text" data-title="Project">
+src/
+  db/schema.ts            tables and relations
+  db/index.ts             the client, from bun:sqlite
+  server.ts               Bun.serve and routes
+kastor.config.ts          for the CLI, through better-sqlite3
+kastor/migrations/
+data/app.db               the SQLite file
+.env                      loaded by Bun automatically
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+bun add kastor
+bun add -d better-sqlite3
+bunx kastor init --db sqlite
+</pre>
+</section>
+<section id="client"><h2>The client from bun:sqlite</h2>
+<p>Pass a <code>bun:sqlite</code> Database to the <code>sqlite</code> adapter. kastor turns on foreign key enforcement, which SQLite leaves off by default, and WAL mode is worth enabling for concurrent readers. <code>bun --hot</code> keeps the process alive and reloads modules, so store the client on <code>globalThis</code> to reuse one handle.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import { Database } from 'bun:sqlite'
+import { kastor } from 'kastor'
+import { sqlite } from 'kastor/sqlite'
+import { schema, relations } from './schema'
+
+const create = () =&gt; {
+  const file = new Database(process.env.DB_FILE ?? 'data/app.db', { create: true })
+  file.exec('PRAGMA journal_mode = WAL')
+  return kastor({ adapter: sqlite(file), schema, relations })
+}
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+g.db = db
+</pre>
+<p>For Postgres, swap the adapter: <code>postgres(new pg.Pool(&#123; connectionString: process.env.DATABASE_URL &#125;))</code> with <code>bun add pg</code>. Everything else in this guide stays the same.</p>
+</section>
+<section id="server"><h2>Serving routes with Bun.serve</h2>
+<p>Bun's built in router matches paths and passes parameters on <code>req.params</code>. Each handler queries kastor and returns a <code>Response</code>.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/server.ts">
+import { isKastorError } from 'kastor'
+import { db } from './db'
+
+const server = Bun.serve({
+  port: Number(process.env.PORT ?? 3000),
+  routes: {
+    '/posts': {
+      GET: async () =&gt;
+        Response.json(await db.posts.findMany({ where: { published: true }, include: { author: true }, take: 20 })),
+      POST: async (req: Request) =&gt; {
+        const body = (await req.json()) as { title: string; authorId: number }
+        return Response.json(await db.posts.create({ data: body }), { status: 201 })
+      },
+    },
+    '/posts/:id': async (req: Request &amp; { params: { id: string } }) =&gt; {
+      const post = await db.posts.findUnique({ where: { id: Number(req.params.id) }, include: { tags: true } })
+      return post ? Response.json(post) : new Response('Not found', { status: 404 })
+    },
+  },
+  error(err: unknown) {
+    if (isKastorError(err)) return Response.json({ error: err.code, message: err.message }, { status: 400 })
+    return new Response('Internal error', { status: 500 })
+  },
+})
+
+console.log(`listening on ${server.url}`)
+</pre>
+<p>Run it with <code>bun --hot src/server.ts</code> in development. Bun reads <code>.env</code>, <code>.env.local</code> and <code>.env.production</code> on its own, so <code>process.env.DB_FILE</code> or <code>DATABASE_URL</code> are available without a loader.</p>
+</section>
+<section id="migrations"><h2>Migrations with the CLI</h2>
+<p>The kastor CLI runs on Node.js, which cannot import <code>bun:sqlite</code>. Give the CLI its own adapter for the same file through better-sqlite3, installed as a dev dependency above. <code>bunx</code> runs the CLI with Node when Node is installed, as it is on most CI images.</p>
+<pre data-kind="editor" data-lang="ts" data-title="kastor.config.ts">
+import Database from 'better-sqlite3'
+import { defineConfig } from 'kastor'
+import { sqlite } from 'kastor/sqlite'
+
+export default defineConfig({
+  schema: './src/db/schema.ts',
+  adapter: () =&gt; sqlite(new Database(process.env.DB_FILE ?? 'data/app.db')),
+  migrations: './kastor/migrations',
+})
+</pre>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+bunx kastor migrate dev --name init
+bunx kastor migrate deploy
+bun run src/server.ts
+</pre>
+<p>Run <code>kastor migrate deploy</code> before the server starts, against the same file the server will open. With Postgres, the config uses <code>pg</code> like any Node project and nothing Bun specific is involved.</p>
+</section>
+<section id="deploy"><h2>Deploying a Bun app with SQLite</h2>
+<p>SQLite lives on disk, so the server needs a persistent volume and a single writer. That fits a single machine or a container with a mounted volume. If you need several instances, use Postgres, or Turso with the <code>libsql</code> adapter, which works on Bun as well.</p>
+<pre data-kind="editor" data-lang="dockerfile" data-title="Dockerfile">
+FROM oven/bun:1
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+COPY . .
+VOLUME /app/data
+CMD ["bun", "run", "src/server.ts"]
+</pre>
+<p>The official Bun image has no Node.js, and the kastor CLI needs it. Run migrations as a release step instead: a job with Node that mounts the same volume and runs <code>npx kastor migrate deploy</code> before the new container starts. With Postgres, that step is an ordinary CI job with <code>DATABASE_URL</code>. If you prefer migrating inside the container, start from an image that has both runtimes.</p>
+</section>
+<section id="tests"><h2>Testing with bun test</h2>
+<p><code>bun test</code> runs test files with the same runtime, so tests can open an in memory database with <code>new Database(&#39;:memory:&#39;)</code> from <code>bun:sqlite</code>, create the schema by running the migration SQL, and use the same kastor client as the app. Each test file gets a fresh database in milliseconds, which keeps tests independent without cleanup code.</p>
+</section>
+<section id="checklist"><h2>Production checklist</h2>
+<p>Before the first deploy, check these points. Each one prevents a problem that otherwise shows up only under real traffic, usually as exhausted connections, a leaked secret or a schema that does not match the code that is running:</p>
+<ul>
+<li>The client sits on <code>globalThis</code>, so <code>bun --hot</code> never opens a second handle.</li>
+<li>The SQLite file lives on a persistent volume, outside the image.</li>
+<li>The CLI config uses better-sqlite3 or Postgres, which Node can load.</li>
+<li>Migrations run in a release step with Node before the new server starts.</li>
+<li>WAL mode is on for SQLite, so readers do not block the writer.</li>
+</ul>
+</section>
+<section id="pitfalls"><h2>Pitfalls</h2>
+<ul>
+<li><strong>Two drivers, one file.</strong> The app uses <code>bun:sqlite</code> and the CLI uses better-sqlite3 on the same file. Avoid running migrations while the app writes; stop it or migrate before start.</li>
+<li><strong>Interactive transactions.</strong> SQLite allows one writer at a time. Keep <code>$transaction</code> callbacks short so other requests are not blocked.</li>
+<li><strong>Booleans and dates.</strong> SQLite has no boolean or date types; kastor decodes <code>t.boolean()</code> and <code>t.datetime()</code> for you. Raw <code>$sql</code> results come back as stored, as 0 and 1 and ISO strings.</li>
+<li><strong>bun --hot and pools.</strong> Without the <code>globalThis</code> guard, every hot reload opens another handle or pool.</li>
+</ul>
+</section>

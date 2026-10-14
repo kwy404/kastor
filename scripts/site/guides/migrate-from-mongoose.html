@@ -1,0 +1,227 @@
+<!--meta
+{
+  "slug": "migrate-from-mongoose",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "Schemas and populate to include",
+  "title": "Migrate from Mongoose to kastor: schemas, populate, ids | kastor",
+  "description": "Migrate from Mongoose to kastor on the same MongoDB data: Schema to table(), populate to include, ObjectId refs, lean results, middleware, validators and indexes.",
+  "h1": "Migrate from Mongoose to kastor",
+  "crumb": "From Mongoose",
+  "lead": "kastor runs on MongoDB through the official driver, with the same schema and query API it uses on SQL. Moving from Mongoose keeps your collections, your ObjectIds and your documents, and replaces <code>populate</code> with <code>include</code> pipelines that load in one round trip.",
+  "readTime": "12 min read",
+  "keywords": ["migrate from Mongoose", "Mongoose alternative TypeScript", "Mongoose to kastor", "MongoDB ORM TypeScript", "mongoose populate alternative", "typed MongoDB queries"],
+  "howto": {
+    "name": "Migrate a project from Mongoose to kastor",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the mongodb driver", "a MongoDB replica set for transactions"],
+    "steps": [
+      { "name": "Install kastor and the mongodb driver", "text": "Install kastor and mongodb, and connect a MongoClient to the database Mongoose uses.", "anchor": "install" },
+      { "name": "Describe collections with table()", "text": "Run npx kastor db pull to read validators, indexes and sample documents, then tidy the generated table() definitions.", "anchor": "schema" },
+      { "name": "Baseline the database", "text": "Run npx kastor migrate baseline --name init so kastor records the collections and indexes that already exist.", "anchor": "baseline" },
+      { "name": "Replace find and populate", "text": "Rewrite find, findById, populate, save and updateOne calls with findMany, include, create and update.", "anchor": "queries" },
+      { "name": "Move middleware and remove Mongoose", "text": "Turn pre and post hooks into explicit code and uninstall mongoose.", "anchor": "middleware" }
+    ]
+  },
+  "faq": [
+    { "q": "Can kastor read documents written by Mongoose?", "a": "Yes. Both use the official driver and BSON. A <code>t.id()</code> key maps to <code>_id</code> and is read as the ObjectId hex string, and fields declared with <code>.references()</code> to it are stored as ObjectIds, which is how Mongoose stores refs." },
+    { "q": "What replaces populate?", "a": "<code>include</code>. <code>Post.find().populate(&#39;author&#39;)</code> becomes <code>db.posts.findMany(&#123; include: &#123; author: true &#125; &#125;)</code>. kastor compiles includes to <code>$lookup</code> stages inside one aggregate call, instead of one extra query per populated path." },
+    { "q": "How do I store embedded subdocuments?", "a": "Declare them as <code>t.json&lt;Shape&gt;()</code>. The value is stored as an embedded document or array and typed as <code>Shape</code> in your code. Use separate tables with relations for data you query on its own." },
+    { "q": "Do I need a replica set?", "a": "Only for transactions, which MongoDB allows on replica sets and sharded clusters. Atlas is already a replica set. For local development, start a single node replica set." },
+    { "q": "Is there an equivalent of lean()?", "a": "Every kastor result is already a plain object: no documents, no getters, no <code>save()</code>. That is what <code>lean()</code> gave you, without the loss of types." }
+  ],
+  "related": ["mongodb-orm-typescript", "migrate-from-prisma", "multi-database-apps"]
+}
+-->
+<section id="overview"><h2>Same database, different layer</h2>
+<p>Mongoose wraps every document in a model instance with change tracking, getters, middleware and <code>save()</code>. kastor takes the opposite approach on MongoDB, as it does on SQL: a schema in TypeScript, plain objects in and out, and queries compiled to aggregation pipelines. When you <strong>migrate from Mongoose</strong>, your collections and documents stay exactly as they are; you change how the application reads and writes them.</p>
+<p>Two practical wins drive most moves. Results are typed from the schema without the <code>HydratedDocument</code> and <code>InferSchemaType</code> gymnastics, and relations load with one <code>aggregate</code> call per query instead of one query per populated path.</p>
+</section>
+<section id="install"><h2>Step 1: install kastor and connect the driver</h2>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor mongodb
+npx kastor init --db mongodb
+</pre>
+<p>Mongoose bundles the <code>mongodb</code> driver; kastor uses the one you install. Connect a <code>MongoClient</code> to the same URL and pass its <code>Db</code> to the adapter. You can also reuse Mongoose's own connection during the move: <code>mongoose.connection.getClient()</code> returns the driver client.</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import { MongoClient } from 'mongodb'
+import { kastor } from 'kastor'
+import { mongodb } from 'kastor/mongodb'
+import { schema, relations } from './schema'
+
+const client = new MongoClient(process.env.MONGODB_URL ?? 'mongodb://localhost:27017/app?replicaSet=rs0')
+await client.connect()
+
+export const db = kastor({ adapter: mongodb(client.db()), schema, relations })
+</pre>
+</section>
+<section id="schema"><h2>Step 2: Mongoose schemas become table()</h2>
+<p><code>npx kastor db pull</code> reads each collection's validator and indexes, or samples documents when there is no validator, and writes a starting schema. Mongoose rarely sets validators, so expect sampled types: fields missing from some documents become nullable and nested values become <code>t.json()</code>. Tidy the result by hand using your Mongoose schema as the reference.</p>
+<pre data-kind="editor" data-lang="ts" data-title="Mongoose: src/models.ts (before)">
+import mongoose, { Schema, model } from 'mongoose'
+
+const userSchema = new Schema({
+  email: { type: String, required: true, unique: true, maxlength: 255 },
+  name: String,
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  address: { street: String, city: String },
+}, { timestamps: true })
+
+const postSchema = new Schema({
+  title: { type: String, required: true, maxlength: 200 },
+  published: { type: Boolean, default: false },
+  author: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+}, { timestamps: true })
+
+export const User = model('User', userSchema)
+export const Post = model('Post', postSchema)
+export { mongoose }
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+import { table, t, index, one, many } from 'kastor'
+
+type Address = { street?: string; city?: string }
+
+export const users = table('users', {
+  id: t.id(),
+  email: t.string(255).unique(),
+  name: t.string().nullable(),
+  role: t.enum(['user', 'admin']).default('user'),
+  address: t.json&lt;Address&gt;().nullable(),
+  createdAt: t.datetime().defaultNow(),
+  updatedAt: t.datetime().updatedAt(),
+})
+
+export const posts = table('posts', {
+  id: t.id(),
+  title: t.string(200),
+  published: t.boolean().default(false),
+  authorId: t.int().map('author').references(() =&gt; users.id),
+  createdAt: t.datetime().defaultNow(),
+  updatedAt: t.datetime().updatedAt(),
+}, { indexes: (p) =&gt; [index(p.authorId)] })
+
+export const schema = { users, posts }
+
+export const relations = ({ users, posts }: typeof schema) =&gt; ({
+  users: { posts: many(posts) },
+  posts: { author: one(users, { fields: ['authorId'], references: ['id'] }) },
+})
+</pre>
+<p>A few details make the two line up. Mongoose pluralizes model names into collection names, so <code>model(&#39;User&#39;)</code> lives in <code>users</code>. The ref field is called <code>author</code> in the documents, so the kastor column keeps that stored name with <code>.map(&#39;author&#39;)</code> and frees the name <code>author</code> for the relation. With the default <code>mongodb(db)</code> ids, <code>t.id()</code> keys and every column that references one are typed as <code>string</code>: the ObjectId as hex. The <code>t.int()</code> on the reference only matters on SQL.</p>
+<table class="spec">
+<thead><tr><th>Mongoose</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>new Schema(&#123; ... &#125;)</code> and <code>model()</code></td><td><code>table(&#39;collection&#39;, &#123; ... &#125;)</code></td></tr>
+<tr><td><code>_id: ObjectId</code></td><td><code>id: t.id()</code>, read as a string</td></tr>
+<tr><td><code>type: ObjectId, ref: &#39;User&#39;</code></td><td><code>.references(() =&gt; users.id)</code> plus <code>one()</code></td></tr>
+<tr><td><code>required: true</code></td><td>the default; <code>.nullable()</code> otherwise</td></tr>
+<tr><td><code>String</code>, <code>maxlength</code>, <code>enum</code></td><td><code>t.string(n)</code>, <code>t.enum([...])</code></td></tr>
+<tr><td><code>Number</code>, <code>Boolean</code>, <code>Date</code></td><td><code>t.int()</code> or <code>t.float()</code>, <code>t.boolean()</code>, <code>t.datetime()</code></td></tr>
+<tr><td><code>Decimal128</code>, <code>Buffer</code></td><td><code>t.decimal(p, s)</code>, <code>t.bytes()</code></td></tr>
+<tr><td>nested object, subdocument array</td><td><code>t.json&lt;T&gt;()</code></td></tr>
+<tr><td><code>unique: true</code>, <code>index: true</code></td><td><code>.unique()</code>, <code>index()</code></td></tr>
+<tr><td><code>timestamps: true</code></td><td><code>createdAt</code> with <code>defaultNow()</code>, <code>updatedAt</code> with <code>updatedAt()</code></td></tr>
+<tr><td><code>InferSchemaType</code></td><td><code>InferSelect&lt;typeof users&gt;</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Step 3: baseline the collections</h2>
+<p>kastor migrations on MongoDB are JSON database commands: create a collection with a <code>$jsonSchema</code> validator, create indexes, rename or unset fields. Your collections already exist, so record them as the starting point:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --name init
+npx kastor migrate status
+</pre>
+<p>The baseline is marked as applied without running, so no validator is added to live collections behind your back. When you later want validators, which reject documents that break the schema, add them in a reviewed migration after checking that existing documents pass. Mongoose builds indexes at startup with <code>autoIndex</code>; turn that off before the switch so index changes go through migrations only.</p>
+</section>
+<section id="queries"><h2>Step 4: queries side by side</h2>
+<pre data-kind="editor" data-lang="ts" data-title="Mongoose: src/posts/service.ts (before)">
+import { Post, User } from '../models'
+
+export const feed = (authorIds: string[]) =&gt;
+  Post.find({ published: true, author: { $in: authorIds } })
+    .populate('author', 'name')
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .lean()
+
+export const search = (q: string) =&gt;
+  User.find({ email: { $regex: q, $options: 'i' } }).lean()
+
+export async function publish(id: string) {
+  const post = await Post.findById(id)
+  if (!post) throw new Error('not found')
+  post.published = true
+  return post.save()
+}
+
+export const perAuthor = () =&gt;
+  Post.aggregate([{ $group: { _id: '$author', n: { $sum: 1 } } }])
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { db } from '../db'
+
+export const feed = (authorIds: string[]) =&gt;
+  db.posts.findMany({
+    where: { published: true, authorId: { in: authorIds } },
+    include: { author: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+
+export const search = (q: string) =&gt;
+  db.users.findMany({ where: { email: { contains: q, mode: 'insensitive' } } })
+
+export const publish = (id: string) =&gt;
+  db.posts.update({ where: { id }, data: { published: true } })
+
+export const perAuthor = () =&gt;
+  db.posts.groupBy({ by: 'authorId', _count: { _all: true } })
+</pre>
+<table class="spec">
+<thead><tr><th>Mongoose</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>find</code>, <code>findOne</code>, <code>findById</code></td><td><code>findMany</code>, <code>findFirst</code>, <code>findUnique</code></td></tr>
+<tr><td><code>populate(&#39;author&#39;)</code></td><td><code>include: &#123; author: true &#125;</code></td></tr>
+<tr><td><code>select(&#39;name email&#39;)</code></td><td><code>select: &#123; name: true, email: true &#125;</code></td></tr>
+<tr><td><code>sort</code>, <code>limit</code>, <code>skip</code></td><td><code>orderBy</code>, <code>take</code>, <code>skip</code></td></tr>
+<tr><td><code>$in</code>, <code>$nin</code>, <code>$gt</code>, <code>$lte</code></td><td><code>in</code>, <code>notIn</code>, <code>gt</code>, <code>lte</code></td></tr>
+<tr><td><code>$regex</code> with <code>i</code></td><td><code>contains</code> with <code>mode: &#39;insensitive&#39;</code> (input escaped)</td></tr>
+<tr><td><code>$or</code>, <code>$and</code>, <code>$not</code></td><td><code>OR</code>, <code>AND</code>, <code>NOT</code></td></tr>
+<tr><td><code>new Model(doc).save()</code>, <code>create</code></td><td><code>create</code></td></tr>
+<tr><td><code>updateOne</code>, <code>updateMany</code>, <code>$inc</code></td><td><code>update</code>, <code>updateMany</code>, <code>&#123; increment: 1 &#125;</code></td></tr>
+<tr><td><code>deleteOne</code>, <code>deleteMany</code></td><td><code>delete</code>, <code>deleteMany</code></td></tr>
+<tr><td><code>countDocuments</code>, <code>aggregate($group)</code></td><td><code>count</code>, <code>groupBy</code>, <code>aggregate</code></td></tr>
+<tr><td><code>session.withTransaction</code></td><td><code>db.$transaction(async (tx) =&gt; ...)</code></td></tr>
+</tbody>
+</table>
+<p>For pipeline stages kastor does not model, such as <code>$geoNear</code> or Atlas Search, keep calling the driver directly on the same <code>Db</code>. That is the MongoDB counterpart of raw SQL, since <code>$sql</code> does not exist on MongoDB.</p>
+</section>
+<section id="middleware"><h2>Step 5: middleware, virtuals and methods</h2>
+<p>Mongoose middleware (<code>pre(&#39;save&#39;)</code>, <code>post(&#39;findOneAndUpdate&#39;)</code>) runs hidden code around operations. kastor has no hooks: put the logic in the function that writes, where it is visible and typed. Virtuals become plain functions over the row type, and instance methods become functions in a module:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/users/model.ts">
+import type { InferSelect } from 'kastor'
+import { users } from '../db/schema'
+import { db } from '../db'
+
+type User = InferSelect&lt;typeof users&gt;
+
+// Was: userSchema.virtual('displayName')
+export const displayName = (u: User) =&gt; u.name ?? u.email.split('@')[0]
+
+// Was: userSchema.pre('save', ...) lowercasing the email
+export const createUser = (email: string, name?: string) =&gt;
+  db.users.create({ data: { email: email.trim().toLowerCase(), name } })
+</pre>
+<p>When nothing imports a model any more, uninstall <code>mongoose</code>. Keep the <code>mongodb</code> driver, which kastor uses.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>Missing fields versus null.</strong> Mongoose leaves unset fields out of the document. kastor writes <code>null</code> for nullable columns you leave out, and its <code>null</code> filters match missing fields too, so mixed collections work, but code that checks <code>&#39;name&#39; in doc</code> will see the difference.</li>
+<li><strong>The __v field.</strong> Mongoose adds a version key. Leave it out of the kastor schema and it is simply ignored on reads; drop it later with a migration if you like.</li>
+<li><strong>Casting.</strong> Mongoose casts <code>&#39;42&#39;</code> to a number and strings to ObjectIds silently. kastor's types reject the wrong type at compile time, and the adapter converts id strings to ObjectIds for you.</li>
+<li><strong>Cascades.</strong> MongoDB has no foreign keys. kastor emulates <code>onDelete</code> for its own writes; data written by other programs is not checked.</li>
+<li><strong>Discriminators.</strong> A collection holding several shapes with a <code>kind</code> field maps to one table with an enum column and nullable fields per shape, or to several tables if you can split the data.</li>
+</ul>
+<p>The <a href="mongodb-orm-typescript.html">MongoDB guide</a> covers ids, <code>$lookup</code> includes and transactions in depth.</p>
+</section>

@@ -1,0 +1,447 @@
+<!--meta
+{
+  "slug": "migrate-from-prisma",
+  "lang": "en",
+  "section": "migrate",
+  "hubTag": "schema.prisma import, history kept",
+  "title": "Migrate from Prisma to kastor: schema, client calls, history | kastor",
+  "description": "Migrate from Prisma to kastor step by step: kastor import prisma converts schema.prisma, client calls map one to one, and migrate baseline keeps your data and history.",
+  "h1": "Migrate from Prisma to kastor",
+  "crumb": "From Prisma",
+  "lead": "kastor keeps the query API Prisma made popular and drops the generate step. <code>npx kastor import prisma</code> turns schema.prisma into a TypeScript schema for the same database, <code>npx kastor migrate baseline --from-prisma</code> keeps your migration history, and most client calls only change their first word.",
+  "readTime": "16 min read",
+  "keywords": ["migrate from Prisma", "Prisma to kastor", "Prisma alternative", "schema.prisma to TypeScript", "prisma migrate baseline", "replace Prisma Client", "prisma $queryRaw alternative"],
+  "howto": {
+    "name": "Migrate a project from Prisma to kastor",
+    "totalTime": "PT2H",
+    "tools": ["Node.js 18 or newer", "kastor", "the driver for your database (pg, mysql2, better-sqlite3, mssql or mongodb)"],
+    "steps": [
+      { "name": "Install kastor and the driver", "text": "Run npm install kastor plus the driver for the datasource provider, for example pg for postgresql.", "anchor": "install" },
+      { "name": "Convert schema.prisma", "text": "Run npx kastor import prisma --config to write src/db/schema.ts and kastor.config.ts, then read the report it prints.", "anchor": "import" },
+      { "name": "Keep data and migration history", "text": "Run npx kastor migrate baseline --from-prisma prisma/migrations, then npx kastor migrate dev to confirm the database is already in sync.", "anchor": "baseline" },
+      { "name": "Create the client", "text": "Replace new PrismaClient() with kastor({ adapter, schema, relations }) in one db module.", "anchor": "client" },
+      { "name": "Move Prisma Client calls", "text": "Rewrite prisma.model calls as db.model calls, $queryRaw as $sql, and middleware or extensions as plain functions.", "anchor": "queries" },
+      { "name": "Switch CI and remove Prisma", "text": "Drop prisma generate, run npx kastor migrate deploy in CI, and uninstall prisma and @prisma/client.", "anchor": "ci" }
+    ]
+  },
+  "faq": [
+    { "q": "Does kastor read schema.prisma?", "a": "Yes. <code>npx kastor import prisma</code> reads schema.prisma (or a folder of .prisma files) and writes a TypeScript schema whose table, column, index and constraint names match the database Prisma Migrate created, including implicit many to many tables such as <code>_PostToTag</code>. Add <code>--config</code> to also write <code>kastor.config.ts</code> for the datasource." },
+    { "q": "Will I lose my Prisma migration history?", "a": "No. <code>npx kastor migrate baseline --from-prisma prisma/migrations</code> records every Prisma migration that <code>_prisma_migrations</code> marks as finished, under <code>prisma/&lt;folder&gt;</code> in kastor's own table, plus one baseline migration. The Prisma files and the <code>_prisma_migrations</code> table are not touched." },
+    { "q": "Do I have to rename prisma.user to something else?", "a": "No. The import names each table after its model in camelCase, so <code>prisma.user.findMany</code> becomes <code>db.user.findMany</code>. Rename the exports later if you prefer plural names." },
+    { "q": "What replaces Prisma middleware and client extensions?", "a": "kastor has no extension API. Query logging and timing use the <code>log</code> option, soft delete is a table option, computed fields are functions over the row type, and custom model methods are functions in a module. Most extensions turn into less code." },
+    { "q": "Can Prisma and kastor run at the same time?", "a": "Yes, on the same database, while you move modules. Each has its own connection pool, so lower both pool sizes, and keep only one tool creating migrations: after the baseline, that is kastor." },
+    { "q": "Do I still need prisma generate?", "a": "No. kastor infers every type from the schema file with the TypeScript compiler, so CI runs the type check and <code>npx kastor migrate deploy</code> with no generate or postinstall step." }
+  ],
+  "related": ["prisma-alternative-without-codegen", "database-migrations-explained", "nextjs-app-router-orm"]
+}
+-->
+<section id="overview"><h2>What moves, and what stays put</h2>
+<p>Most of a Prisma project survives the move unchanged. The database stays, every row stays, the migration history stays, and the query style stays: kastor uses <code>findMany</code>, <code>where</code>, <code>include</code>, <code>select</code>, nested writes and <code>$transaction</code> with the same shapes. What changes is everything around them. The schema becomes a TypeScript module instead of a <code>.prisma</code> file, types are inferred by the compiler instead of generated, and queries run through the driver you install instead of Prisma's engine.</p>
+<p>This guide follows the order that keeps production safe: convert the schema, adopt the database without changing it, create the client, then move calls one module at a time while Prisma keeps serving the rest. If you are still deciding, the <a href="prisma-alternative-without-codegen.html">Prisma alternative guide</a> compares the two designs.</p>
+</section>
+<section id="install"><h2>Step 1: install kastor and the driver</h2>
+<p>kastor ships no driver. Install the one that matches the <code>provider</code> in your datasource block: <code>pg</code> for <code>postgresql</code> (also Neon, Supabase and Vercel Postgres) and <code>cockroachdb</code>, <code>mysql2</code> for <code>mysql</code> (also PlanetScale), <code>better-sqlite3</code> for <code>sqlite</code>, <code>mssql</code> for <code>sqlserver</code> and <code>mongodb</code> for <code>mongodb</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npm install kastor pg
+</pre>
+</section>
+<section id="import"><h2>Step 2: convert schema.prisma with kastor import prisma</h2>
+<p>Run the import from the project root. It finds the schema through the <code>--schema</code> flag, the <code>prisma.schema</code> entry of package.json, <code>prisma/schema.prisma</code> or a <code>prisma/schema</code> folder, in that order. <code>--out</code> picks the output file (default <code>src/db/schema.ts</code>) and <code>--config</code> also writes <code>kastor.config.ts</code> for your datasource, reading the same environment variable as <code>url = env("...")</code>.</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor import prisma --schema prisma/schema.prisma --out src/db/schema.ts --config
+</pre>
+<p>Here is a typical schema with an enum, a one to one, a one to many and an implicit many to many relation:</p>
+<pre data-kind="editor" data-lang="prisma" data-title="prisma/schema.prisma">
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  posts     Post[]
+  profile   Profile?
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String   @db.VarChar(200)
+  content   String?
+  published Boolean  @default(false)
+  views     Int      @default(0)
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags      Tag[]
+  createdAt DateTime @default(now())
+
+  @@index([authorId])
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+}
+</pre>
+<p>The command prints a report. Lines under <em>Not mapped exactly</em> need a decision from you, and lines under <em>Good to know</em> explain a difference in behavior. For this schema everything maps exactly:</p>
+<pre data-kind="output" data-lang="text" data-title="Output">
+kastor / import prisma
+
+  Prisma schema  prisma/schema.prisma
+  Provider       postgresql (kastor/postgres)
+
+ok    Wrote src/db/schema.ts: 4 models, 1 join table, 1 enum, 6 relation fields.
+ok    Wrote kastor.config.ts for postgres, reading DATABASE_URL.
+ok    Every model, field and relation mapped exactly.
+
+Good to know (2)
+  info Post.id: Ids from uuid(), cuid(), nanoid() and ulid() are made by Prisma Client, not the database; kastor makes them in JS with the same format.
+    The helpers are at the top of the schema file; swap in your own library if you prefer.
+  info _PostToTag: Implicit many-to-many tables get a primary key on (A, B), as Prisma 6 creates them on postgresql.
+    Databases created with Prisma 5 or older have a unique index _AB_unique instead; replace primaryKey with uniqueIndex(c.A, c.B).name(...) in those tables if migrate dev proposes a change.
+</pre>
+<p>And this is the file it writes. Table and constraint names match what Prisma Migrate created (<code>User</code>, <code>_PostToTag</code>, <code>TIMESTAMP(3)</code> columns), so nothing in the database has to change:</p>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/schema.ts">
+// Schema imported from prisma/schema.prisma by kastor import prisma.
+// Prisma provider: postgresql. Table, column and constraint names match the database Prisma created.
+// This file is now the source of truth: edit it, then run kastor migrate dev.
+import { randomBytes } from 'node:crypto';
+import { table, t, index, one, many } from 'kastor';
+
+/** Collision resistant id in the cuid format (Prisma @default(cuid())): 'c', a time part and random base 36 characters. */
+function cuid(length = 25): string {
+  const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
+  const time = Date.now().toString(36).padStart(8, '0');
+  const random = Array.from(randomBytes(length), (b) =&gt; alphabet[b % 36]).join('');
+  return `c${time}${random}`.slice(0, length);
+}
+
+export const Role = ['USER', 'ADMIN'] as const;
+export type Role = (typeof Role)[number];
+
+export const user = table('User', {
+  id: t.id(),
+  email: t.text().unique(),
+  name: t.text().nullable(),
+  role: t.enum(Role, 'Role').default('USER'),
+  createdAt: t.datetime().nativeType('timestamp(3)').defaultNow(),
+  updatedAt: t.datetime().nativeType('timestamp(3)').updatedAt(),
+});
+
+export const profile = table('Profile', {
+  id: t.id(),
+  bio: t.text(),
+  userId: t.int().unique().references(() =&gt; user.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+});
+
+export const post = table('Post', {
+  id: t.text().primaryKey().default(() =&gt; cuid()),
+  title: t.string(200),
+  content: t.text().nullable(),
+  published: t.boolean().default(false),
+  views: t.int().default(0),
+  authorId: t.int().references(() =&gt; user.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  createdAt: t.datetime().nativeType('timestamp(3)').defaultNow(),
+}, {
+  indexes: (c) =&gt; [index(c.authorId)],
+});
+
+export const tag = table('Tag', {
+  id: t.id(),
+  name: t.text().unique(),
+});
+
+/** Join table of the implicit many-to-many relation between Post and Tag, named the way Prisma names it. */
+export const postToTag = table('_PostToTag', {
+  A: t.text().references(() =&gt; post.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  B: t.int().references(() =&gt; tag.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+}, {
+  primaryKey: (c) =&gt; [c.A, c.B],
+  indexes: (c) =&gt; [index(c.B).name('_PostToTag_B_index')],
+});
+
+export const schema = { user, profile, post, tag, postToTag };
+
+export const relations = ({ user, profile, post, tag, postToTag }: typeof schema) =&gt; ({
+  user: {
+    posts: many(post, { fields: ['id'], references: ['authorId'] }),
+    profile: one(profile),
+  },
+  profile: {
+    user: one(user, { fields: ['userId'], references: ['id'] }),
+  },
+  post: {
+    author: one(user, { fields: ['authorId'], references: ['id'] }),
+    tags: many(tag, { through: { table: postToTag, fields: ['A'], references: ['B'] } }),
+  },
+  tag: {
+    posts: many(post, { through: { table: postToTag, fields: ['B'], references: ['A'] } }),
+  },
+});
+</pre>
+<table class="spec">
+<thead><tr><th>schema.prisma</th><th>kastor schema</th></tr></thead>
+<tbody>
+<tr><td><code>model User</code></td><td><code>export const user = table(&#39;User&#39;, ...)</code></td></tr>
+<tr><td><code>@@map("users")</code>, <code>@map("created_at")</code></td><td>the table name, <code>.map(&#39;created_at&#39;)</code></td></tr>
+<tr><td><code>Int @id @default(autoincrement())</code></td><td><code>t.id()</code></td></tr>
+<tr><td><code>@default(uuid())</code>, <code>cuid()</code></td><td><code>t.uuid().defaultRandom()</code>, a <code>cuid()</code> helper as a JS default</td></tr>
+<tr><td><code>String?</code>, <code>@unique</code></td><td><code>.nullable()</code>, <code>.unique()</code></td></tr>
+<tr><td><code>@default(now())</code>, <code>@updatedAt</code></td><td><code>.defaultNow()</code>, <code>.updatedAt()</code></td></tr>
+<tr><td><code>@db.VarChar(200)</code>, other native types</td><td><code>t.string(200)</code>, <code>.nativeType(&#39;...&#39;)</code></td></tr>
+<tr><td><code>enum Role</code></td><td><code>t.enum(Role, &#39;Role&#39;)</code> with a const array</td></tr>
+<tr><td><code>Decimal</code>, <code>BigInt</code>, <code>Json</code>, <code>Bytes</code></td><td><code>t.decimal(p, s)</code> (string), <code>t.bigint()</code>, <code>t.json&lt;T&gt;()</code>, <code>t.bytes()</code></td></tr>
+<tr><td><code>@relation(fields, references, onDelete)</code></td><td><code>.references(..., &#123; onDelete &#125;)</code> plus <code>one()</code></td></tr>
+<tr><td><code>posts Post[]</code></td><td><code>many(post)</code></td></tr>
+<tr><td>implicit <code>tags Tag[]</code> on both sides</td><td>the <code>_PostToTag</code> table plus <code>many(tag, &#123; through &#125;)</code></td></tr>
+<tr><td><code>@@index</code>, <code>@@unique</code>, <code>@@id</code></td><td><code>index()</code>, <code>uniqueIndex()</code>, <code>primaryKey</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="baseline"><h2>Step 3: keep your data and your migration history</h2>
+<p>Prisma Migrate keeps SQL files in <code>prisma/migrations</code> and records them in the <code>_prisma_migrations</code> table. kastor keeps its own files in <code>kastor/migrations</code> and its own table, <code>_kastor_migrations</code>. The baseline connects the two worlds without touching either the data or Prisma's records:</p>
+<pre data-kind="terminal" data-lang="bash" data-title="Terminal">
+npx kastor migrate baseline --from-prisma prisma/migrations
+npx kastor migrate dev
+npx kastor migrate status
+</pre>
+<pre data-kind="output" data-lang="text" data-title="Output">
+kastor / migrate baseline
+
+ok    Found 5 tables
+ok    Recorded 2 Prisma migrations as history. The files in prisma/migrations were not touched.
+ok    Wrote kastor/migrations/20261014101500_baseline/migration.sql (5 steps).
+ok    Recorded it as applied without running it. Nothing in the database changed.
+
+ok    The schema file matches the database: kastor migrate dev has nothing to do.
+</pre>
+<p>Three things happened. Each Prisma migration that <code>_prisma_migrations</code> marks as finished was recorded as history under <code>prisma/&lt;folder&gt;</code>; migrations that never ran or failed are reported instead of recorded. One baseline migration was written with the SQL that creates the current schema, and marked as applied without running. Then kastor compared the imported schema with the live database. <code>migrate dev</code> confirming <em>Already in sync</em> is your proof that the import is exact.</p>
+<p>Commit <code>kastor/migrations</code>. In every other environment (a teammate's database, staging, production) run the same <code>migrate baseline --from-prisma</code> command once: it finds the committed baseline and only marks it as applied there. On a brand new empty database, <code>npx kastor migrate deploy</code> runs the baseline and creates everything. Pass <code>--name init</code> if you prefer that name to <code>baseline</code>.</p>
+<div class="callout"><p>From this point kastor owns the schema. Stop running <code>prisma migrate dev</code> and <code>prisma db push</code>: they would change tables behind kastor's history. New changes are edits to <code>src/db/schema.ts</code> followed by <code>npx kastor migrate dev --name what_changed</code>.</p></div>
+</section>
+<section id="client"><h2>Step 4: replace new PrismaClient() with one kastor client</h2>
+<pre data-kind="editor" data-lang="ts" data-title="Prisma: src/lib/prisma.ts (before)">
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/index.ts">
+import pg from 'pg'
+import { kastor } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations } from './schema'
+
+const create = () =&gt;
+  kastor({
+    adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 })),
+    schema,
+    relations,
+  })
+
+const g = globalThis as unknown as { db?: ReturnType&lt;typeof create&gt; }
+export const db = g.db ?? create()
+if (process.env.NODE_ENV !== 'production') g.db = db
+</pre>
+<p>The <code>globalThis</code> trick is the same one you used for Prisma: it keeps one pool across hot reloads in development. While both clients run, each holds its own connections, so lower Prisma's <code>connection_limit</code> and kastor's <code>max</code> to keep the total under your database limit.</p>
+</section>
+<section id="queries"><h2>Step 5: move Prisma Client calls</h2>
+<p>Because the import keeps model names, the first word of each call changes and the rest usually does not. Here is a service before and after:</p>
+<pre data-kind="editor" data-lang="ts" data-title="Prisma: src/posts/service.ts (before)" data-check="skip">
+import { Prisma } from '@prisma/client'
+import { prisma } from '../lib/prisma'
+
+export const feed = (tag: string, cursor?: string) =&gt;
+  prisma.post.findMany({
+    where: { published: true, tags: { some: { name: tag } }, author: { role: 'ADMIN' } },
+    include: { author: { select: { name: true } }, tags: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  })
+
+export const signUp = (email: string, bio: string) =&gt;
+  prisma.user.create({
+    data: { email, profile: { create: { bio } }, posts: { create: [{ title: 'Hello' }] } },
+    include: { profile: true, posts: true },
+  })
+
+export const publish = (id: string, tags: string[]) =&gt;
+  prisma.post.update({
+    where: { id },
+    data: {
+      published: true,
+      views: { increment: 1 },
+      tags: { connectOrCreate: tags.map((name) =&gt; ({ where: { name }, create: { name } })) },
+    },
+  })
+
+export const moveAll = (from: number, to: number) =&gt;
+  prisma.$transaction([
+    prisma.post.updateMany({ where: { authorId: from }, data: { authorId: to } }),
+    prisma.user.delete({ where: { id: from } }),
+  ])
+
+export const topAuthors = () =&gt;
+  prisma.$queryRaw&lt;{ authorId: number; n: bigint }[]&gt;`
+    select "authorId", count(*) as n from "Post" group by 1 order by 2 desc limit ${5}`
+
+export async function register(email: string) {
+  try {
+    return await prisma.user.create({ data: { email } })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError &amp;&amp; e.code === 'P2002') return null
+    throw e
+  }
+}
+</pre>
+<pre data-kind="editor" data-lang="ts" data-title="src/posts/service.ts">
+import { isKastorError } from 'kastor'
+import { db } from '../db'
+
+export const feed = (tag: string, after?: string) =&gt;
+  db.post.findPage({
+    where: { published: true, tags: { some: { name: tag } }, author: { role: 'ADMIN' } },
+    include: { author: { select: { name: true } }, tags: true },
+    orderBy: { createdAt: 'desc' },
+    first: 20,
+    after,
+  })
+
+export const signUp = (email: string, bio: string) =&gt;
+  db.user.create({
+    data: { email, profile: { create: { bio } }, posts: { create: [{ title: 'Hello' }] } },
+    include: { profile: true, posts: true },
+  })
+
+export const publish = (id: string, tags: string[]) =&gt;
+  db.post.update({
+    where: { id },
+    data: {
+      published: true,
+      views: { increment: 1 },
+      tags: { connectOrCreate: tags.map((name) =&gt; ({ where: { name }, create: { name } })) },
+    },
+  })
+
+export const moveAll = (from: number, to: number) =&gt;
+  db.$transaction([
+    db.post.updateMany({ where: { authorId: from }, data: { authorId: to } }),
+    db.user.delete({ where: { id: from } }),
+  ])
+
+export const topAuthors = () =&gt;
+  db.$sql&lt;{ authorId: number; n: number }&gt;`
+    select "authorId", count(*)::int as n from "Post" group by 1 order by 2 desc limit ${5}`
+
+export async function register(email: string) {
+  try {
+    return await db.user.create({ data: { email } })
+  } catch (e) {
+    if (isKastorError(e) &amp;&amp; e.code === 'UNIQUE_VIOLATION') return null
+    throw e
+  }
+}
+</pre>
+<p>The feed also shows an upgrade you can take or leave: Prisma style <code>cursor</code> plus <code>skip: 1</code> still works in <code>findMany</code>, and <code>findPage</code> returns <code>&#123; items, pageInfo &#125;</code> with opaque cursors when you want pagination done for you. The full mapping:</p>
+<table class="spec">
+<thead><tr><th>Prisma Client</th><th>kastor</th></tr></thead>
+<tbody>
+<tr><td><code>prisma.user.findMany</code>, <code>findFirst</code>, <code>findUnique</code>, <code>...OrThrow</code></td><td><code>db.user.findMany</code>, <code>findFirst</code>, <code>findUnique</code>, <code>...OrThrow</code></td></tr>
+<tr><td><code>where</code> with <code>equals</code>, <code>in</code>, <code>lt</code>, <code>contains</code>, <code>mode: &#39;insensitive&#39;</code></td><td>the same keys</td></tr>
+<tr><td><code>AND</code>, <code>OR</code>, <code>NOT</code>, <code>some</code>, <code>every</code>, <code>none</code>, <code>is</code>, <code>isNot</code></td><td>the same keys</td></tr>
+<tr><td><code>include</code>, <code>select</code>, <code>_count</code></td><td>the same, loaded in one statement per call</td></tr>
+<tr><td><code>orderBy</code>, <code>take</code>, <code>skip</code>, <code>cursor</code>, <code>distinct</code></td><td>the same, plus <code>findPage</code></td></tr>
+<tr><td><code>create</code> with nested <code>create</code>, <code>connect</code>, <code>connectOrCreate</code></td><td>the same</td></tr>
+<tr><td><code>update</code> with <code>increment</code>, <code>set</code>, nested <code>disconnect</code>, <code>delete</code></td><td>the same</td></tr>
+<tr><td><code>upsert</code>, <code>createMany</code> with <code>skipDuplicates</code>, <code>createManyAndReturn</code></td><td>the same</td></tr>
+<tr><td><code>updateMany</code>, <code>delete</code>, <code>deleteMany</code>, <code>count</code>, <code>aggregate</code>, <code>groupBy</code> with <code>having</code></td><td>the same</td></tr>
+<tr><td><code>$transaction([...])</code>, <code>$transaction(async (tx) =&gt; ...)</code></td><td>the same, with <code>isolationLevel</code></td></tr>
+<tr><td><code>$queryRaw`...`</code>, <code>$executeRaw`...`</code></td><td><code>$sql`...`</code>, <code>$execute`...`</code></td></tr>
+<tr><td><code>Prisma.sql</code>, <code>Prisma.join</code>, <code>Prisma.raw</code></td><td><code>sql`...`</code>, <code>sql.join</code>, <code>sql.raw</code></td></tr>
+<tr><td><code>$queryRawUnsafe(text, ...values)</code></td><td><code>$sql</code> with <code>sql.raw</code> for trusted identifiers only</td></tr>
+<tr><td>error <code>P2002</code>, <code>P2003</code>, <code>P2025</code></td><td><code>UNIQUE_VIOLATION</code>, <code>FOREIGN_KEY_VIOLATION</code>, <code>NOT_FOUND</code></td></tr>
+<tr><td><code>Prisma.UserGetPayload&lt;...&gt;</code>, generated <code>User</code></td><td><code>InferSelect&lt;typeof user&gt;</code>, or the return type of your query</td></tr>
+<tr><td><code>$connect</code>, <code>$disconnect</code></td><td>not needed, <code>$disconnect()</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="extensions"><h2>Middleware and client extensions</h2>
+<p>Prisma's <code>$use</code> middleware and <code>$extends</code> extensions let you intercept queries and add fields or methods. kastor has no interception API on purpose: every query you read in the code is the query that runs. Here is where the common uses go:</p>
+<table class="spec">
+<thead><tr><th>What the middleware or extension did</th><th>The closest kastor feature</th></tr></thead>
+<tbody>
+<tr><td>Log queries and time them</td><td>the <code>log</code> option: <code>true</code>, or a function receiving <code>sql</code>, <code>params</code>, <code>durationMs</code> and <code>error</code></td></tr>
+<tr><td>Soft delete (rewrite delete to update, filter reads)</td><td><code>softDelete: &#39;deletedAt&#39;</code> on the table, with <code>restore</code> and <code>hardDelete</code></td></tr>
+<tr><td>Computed fields (<code>result</code> extension)</td><td>a function over <code>InferSelect&lt;typeof user&gt;</code></td></tr>
+<tr><td>Custom model methods (<code>model</code> extension)</td><td>functions in a module that call <code>db</code></td></tr>
+<tr><td>Set <code>updatedAt</code> on every write</td><td><code>.updatedAt()</code> on the column</td></tr>
+<tr><td>Normalize input before writes</td><td>the function that writes, or a JS default on the column</td></tr>
+<tr><td>Multi tenant filters, row level security</td><td>a typed where object you spread, or Postgres RLS set inside <code>$transaction</code></td></tr>
+<tr><td>Retry on serialization failures</td><td>catch <code>SERIALIZATION_FAILURE</code> and run the transaction again</td></tr>
+</tbody>
+</table>
+<pre data-kind="editor" data-lang="ts" data-title="src/db/logged.ts">
+import pg from 'pg'
+import { kastor, type InferSelect } from 'kastor'
+import { postgres } from 'kastor/postgres'
+import { schema, relations, user } from './schema'
+
+// Was: prisma.$extends({ query: { $allOperations } }) timing every query
+export const db = kastor({
+  adapter: postgres(new pg.Pool({ connectionString: process.env.DATABASE_URL })),
+  schema,
+  relations,
+  log: (e) =&gt; {
+    if (e.durationMs &gt; 200) console.warn(`slow query (${e.durationMs} ms): ${e.sql}`)
+  },
+})
+
+// Was: a result extension adding user.displayName
+export const displayName = (u: InferSelect&lt;typeof user&gt;) =&gt; u.name ?? u.email.split('@')[0]
+
+// Was: a model extension adding prisma.user.findByEmail
+export const findByEmail = (email: string) =&gt; db.user.findUnique({ where: { email } })
+</pre>
+</section>
+<section id="ci"><h2>Step 6: switch CI and remove Prisma</h2>
+<p>When a module no longer imports <code>@prisma/client</code>, delete the old code. When the last import goes, uninstall <code>prisma</code> and <code>@prisma/client</code>, remove <code>prisma generate</code> from <code>postinstall</code> and the build, and replace <code>prisma migrate deploy</code> in the pipeline:</p>
+<pre data-kind="editor" data-lang="yaml" data-title=".github/workflows/deploy.yml">
+- run: npm ci
+- run: npx tsc --noEmit
+- run: npx kastor migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+</pre>
+<p>Keep the <code>prisma/migrations</code> folder in git as a record if you like. kastor already holds the history it needs.</p>
+</section>
+<section id="pitfalls"><h2>Pitfalls to check</h2>
+<ul>
+<li><strong>updatedAt outside kastor.</strong> The import turns <code>@updatedAt</code> into <code>.updatedAt()</code>, which kastor fills on every create and update, just like Prisma Client did. Neither tool sets it for writes made with raw SQL or by other programs; use a database trigger if those matter.</li>
+<li><strong>Client side ids.</strong> <code>cuid()</code>, <code>uuid()</code>, <code>nanoid()</code> and <code>ulid()</code> defaults are made in JavaScript by Prisma Client, not by the database. The import writes small helpers at the top of the schema file; rows written by other tools still need ids.</li>
+<li><strong>Old join tables.</strong> Prisma 5 and older created implicit many to many tables with a unique index instead of a primary key. If <code>migrate dev</code> proposes a change on <code>_AToB</code> tables, follow the hint in the report.</li>
+<li><strong>SQLite dates.</strong> On SQLite, Prisma Client stores <code>DateTime</code> as Unix milliseconds while kastor writes ISO text. Both read back as <code>Date</code>, but comparisons mix badly; the report prints the one time <code>UPDATE</code> that converts old rows.</li>
+<li><strong>Decimal and BigInt.</strong> Prisma returns <code>Decimal</code> objects; kastor returns exact strings for <code>t.decimal()</code>. BigInt stays <code>bigint</code>.</li>
+<li><strong>Raw query results.</strong> <code>$queryRaw</code> counts come back as <code>bigint</code> on Postgres; with <code>$sql</code>, cast in SQL (<code>count(*)::int</code>) or convert in code.</li>
+<li><strong>relationMode = "prisma".</strong> Without foreign keys in the database, relations come from the Prisma schema, and kastor does not emulate referential actions on SQL databases. Add real foreign keys in a kastor migration when you can.</li>
+</ul>
+<p>Next, wire the client into your framework: the <a href="nextjs-app-router-orm.html">Next.js App Router guide</a> covers server components, server actions and edge runtimes, and the <a href="frameworks.html">frameworks page</a> lists the rest.</p>
+</section>
