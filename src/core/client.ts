@@ -1062,6 +1062,19 @@ function delegate(session: SessionImpl, m: ModelMeta): ModelClient<any, any, any
       ) as never;
     },
   };
+  // Argument errors surface as rejections of the returned query, never as synchronous throws.
+  for (const [name, method] of Object.entries(api) as [keyof typeof api, (...args: unknown[]) => KastorQuery<unknown>][]) {
+    (api as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      try {
+        return method(...args);
+      } catch (error) {
+        const fail = (): never => {
+          throw error;
+        };
+        return new KastorQuery(session, async () => fail(), fail);
+      }
+    };
+  }
   return api;
 }
 
@@ -1097,7 +1110,7 @@ function buildClient(session: SessionImpl): any {
   };
 
   const methods = {
-    $transaction(arg: unknown, options?: TransactionOptions): Promise<unknown> {
+    async $transaction(arg: unknown, options?: TransactionOptions): Promise<unknown> {
       if (Array.isArray(arg)) {
         for (const item of arg) {
           if (!(item instanceof KastorQuery)) {

@@ -133,14 +133,14 @@ export class SqlCompiler {
   cond(w: WhereIR, scope: Scope): Sql {
     switch (w.kind) {
       case 'and': {
-        const items = w.items.filter((i) => !(i.kind === 'const' && i.value));
+        const items = w.items.flatMap((i) => (i.kind === 'and' ? i.items : [i])).filter((i) => !(i.kind === 'const' && i.value));
         if (items.some((i) => i.kind === 'const' && !i.value)) return text('1=0');
         if (items.length === 0) return text('1=1');
         if (items.length === 1) return this.cond(items[0]!, scope);
         return join(items.map((i) => q`(${this.cond(i, scope)})`), ' AND ');
       }
       case 'or': {
-        const items = w.items.filter((i) => !(i.kind === 'const' && !i.value));
+        const items = w.items.flatMap((i) => (i.kind === 'or' ? i.items : [i])).filter((i) => !(i.kind === 'const' && !i.value));
         if (items.some((i) => i.kind === 'const' && i.value)) return text('1=1');
         if (items.length === 0) return text('1=0');
         if (items.length === 1) return this.cond(items[0]!, scope);
