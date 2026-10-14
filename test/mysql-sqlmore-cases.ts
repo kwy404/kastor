@@ -41,6 +41,9 @@ export const items = table('sm_items', {
   rank: t.int(),
 });
 
+/** Accented, CJK and astral characters, written as code points to keep the source ASCII. */
+const UNICODE = String.fromCodePoint(0xe9, 0x4e2d, 0x1f600);
+
 const schema = { kinds, owners, items };
 const relations = ({ owners, items }: typeof schema) => ({
   owners: { items: many(items) },
@@ -75,7 +78,7 @@ export function sqlmoreCases(target: CasesTarget): void {
       const bytes = new Uint8Array([0, 1, 2, 254, 255]);
       const created = await db.kinds.create({
         data: {
-          label: 'edges é中😀',
+          label: `edges ${UNICODE}`,
           note: 'x'.repeat(5000),
           count: -2147483648,
           big: 9223372036854775807n,
@@ -92,7 +95,7 @@ export function sqlmoreCases(target: CasesTarget): void {
         },
       });
       const row = await db.kinds.findUniqueOrThrow({ where: { id: created.id } });
-      expect(row.label).toBe('edges é中😀');
+      expect(row.label).toBe(`edges ${UNICODE}`);
       expect(row.note).toBe('x'.repeat(5000));
       expect(row.count).toBe(-2147483648);
       expect(row.big).toBe(9223372036854775807n);
