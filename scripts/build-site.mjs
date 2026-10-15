@@ -97,7 +97,7 @@ for (const p of guidesPt) {
   en.meta.alt = p.meta.slug;
 }
 const ORDER = [
-  'typescript-orm', 'prisma-alternative-without-codegen', 'drizzle-alternative', 'type-safe-sql-typescript', 'avoid-n-plus-1-queries', 'database-migrations-explained', 'nextjs-postgres-orm', 'database-seeding-typescript', 'multi-database-apps', 'sql-server-orm-nodejs', 'oracle-orm-nodejs', 'mongodb-orm-typescript', 'cloudflare-d1-orm', 'turso-libsql-orm',
+  'typescript-orm', 'type-safe-sql-typescript', 'avoid-n-plus-1-queries', 'database-migrations-explained', 'nextjs-postgres-orm', 'database-seeding-typescript', 'multi-database-apps', 'sql-server-orm-nodejs', 'oracle-orm-nodejs', 'mongodb-orm-typescript', 'cloudflare-d1-orm', 'turso-libsql-orm',
   'migrate-from-prisma', 'migrate-from-drizzle', 'migrate-from-typeorm', 'migrate-from-sequelize', 'migrate-from-knex', 'migrate-from-mongoose', 'migrate-from-laravel-eloquent', 'migrate-from-django-orm', 'migrate-from-rails-active-record',
   'nextjs-app-router-orm', 'nuxt-orm', 'sveltekit-orm', 'remix-react-router-orm', 'astro-orm', 'nestjs-orm', 'express-orm', 'fastify-orm', 'hono-orm', 'adonisjs-orm', 'bun-orm', 'deno-orm', 'cloudflare-workers-orm', 'electron-sqlite-orm', 'aws-lambda-orm',
 ];

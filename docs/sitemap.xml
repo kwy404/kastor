@@ -52,18 +52,6 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://kwy404.github.io/kastor/typescript-orm.html"/>
   </url>
   <url>
-    <loc>https://kwy404.github.io/kastor/prisma-alternative-without-codegen.html</loc>
-    <lastmod>2026-10-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://kwy404.github.io/kastor/drizzle-alternative.html</loc>
-    <lastmod>2026-10-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://kwy404.github.io/kastor/type-safe-sql-typescript.html</loc>
     <lastmod>2026-10-13</lastmod>
     <changefreq>monthly</changefreq>

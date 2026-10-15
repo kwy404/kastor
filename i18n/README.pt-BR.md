@@ -437,7 +437,7 @@ Client: `db.<model>.<method>(...)`, `db.$transaction`, `db.$sql`, `db.$execute`,
 Um que infira os tipos a partir de um schema em TypeScript e mantenha a mesma API em todos os bancos de dados. O kastor compila as mesmas consultas para cada dialeto, então sair do SQLite nos testes para o PostgreSQL em produção é uma troca de adaptador, não de código. Saiba mais no guia [ORM para TypeScript](https://kwy404.github.io/kastor/pt-br/orm-typescript.html).
 
 ### Existe ORM para TypeScript sem geração de código?
-Sim. O kastor infere todos os tipos a partir do schema com o compilador do TypeScript, então não existe comando `generate` nem client gerado para manter sincronizado. Veja [o guia sobre como sair de um client gerado](https://kwy404.github.io/kastor/prisma-alternative-without-codegen.html).
+Sim. O kastor infere todos os tipos a partir do schema com o compilador do TypeScript, então não existe comando `generate` nem client gerado para manter sincronizado. Veja [o guia de ORM para TypeScript](https://kwy404.github.io/kastor/pt-br/orm-typescript.html).
 
 ### Como evitar consultas N+1 no Node.js?
 Use `include`. O kastor carrega relações aninhadas em um único comando por chamada: agregação JSON em todos os bancos SQL e estágios `$lookup` em um único pipeline no MongoDB. Leia [como evitar consultas N+1](https://kwy404.github.io/kastor/pt-br/evitar-consultas-n-mais-1.html).

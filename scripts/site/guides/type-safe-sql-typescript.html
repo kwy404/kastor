@@ -16,7 +16,7 @@
     { "q": "What is the difference between InferSelect and InferInsert?", "a": "<code>InferSelect</code> is the type of a row you read, with every column present. <code>InferInsert</code> is the type you pass to <code>create</code>, where columns with defaults or nullable columns are optional." },
     { "q": "Can I use dynamic column names in raw SQL safely?", "a": "Use <code>sql.ident</code>, which quotes the name as an identifier, and only pass names from an allowlist you control. Values always go through normal interpolation so they become parameters." }
   ],
-  "related": ["typescript-orm", "drizzle-alternative", "avoid-n-plus-1-queries"]
+  "related": ["typescript-orm", "avoid-n-plus-1-queries", "database-migrations-explained"]
 }
 -->
 <section id="what-it-means"><h2>What type safe SQL in TypeScript actually means</h2>

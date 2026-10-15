@@ -37,8 +37,7 @@
     "neon",
     "supabase",
     "planetscale",
-    "data mapper",
-    "active record alternative"
+    "data mapper"
   ],
   "homepage": "https://kwy404.github.io/kastor/",
   "bugs": {

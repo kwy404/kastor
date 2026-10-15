@@ -448,7 +448,7 @@ Client: `db.<model>.<method>(...)`, `db.$transaction`, `db.$sql`, `db.$execute`,
 One that infers types from a TypeScript schema and keeps the same API on every database. kastor compiles the same queries to each dialect, so moving from SQLite in tests to PostgreSQL in production is a change of adapter, not of code.
 
 ### Is there a TypeScript ORM without codegen?
-Yes. kastor infers every type from the schema with the TypeScript compiler, so there is no `generate` command and no generated client to keep in sync. See [the guide on moving from a generated client](https://kwy404.github.io/kastor/prisma-alternative-without-codegen.html).
+Yes. kastor infers every type from the schema with the TypeScript compiler, so there is no `generate` command and no generated client to keep in sync. See [the TypeScript ORM guide](https://kwy404.github.io/kastor/typescript-orm.html).
 
 ### How do I avoid N+1 queries in Node.js?
 Use `include`. kastor loads nested relations in one statement per call: JSON aggregation on every SQL database, `$lookup` stages in one pipeline on MongoDB. Read [avoid N+1 queries](https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html).

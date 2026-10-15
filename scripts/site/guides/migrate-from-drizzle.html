@@ -10,7 +10,7 @@
   "crumb": "From Drizzle",
   "lead": "Drizzle and kastor both keep the schema in TypeScript and infer types from it, so the move is mostly vocabulary: <code>pgTable</code> becomes <code>table()</code>, operator functions become <code>where</code> objects, and <code>drizzle-kit</code> hands migrations to <code>kastor migrate</code>.",
   "readTime": "12 min read",
-  "keywords": ["migrate from Drizzle", "Drizzle to kastor", "drizzle orm alternative", "drizzle-kit migrate", "drizzle relational queries", "replace drizzle orm"],
+  "keywords": ["migrate from Drizzle", "Drizzle to kastor", "drizzle-kit migrate", "drizzle relational queries"],
   "howto": {
     "name": "Migrate a project from Drizzle ORM to kastor",
     "totalTime": "PT2H",
@@ -30,7 +30,7 @@
     { "q": "Is there a replacement for the eq, and, or helpers?", "a": "kastor uses plain objects: <code>eq(users.email, x)</code> is <code>{ email: x }</code>, <code>and(a, b)</code> is two keys in one object or <code>AND: [a, b]</code>, <code>or()</code> is <code>OR</code> and <code>inArray</code> is <code>{ in: [...] }</code>. For anything else, the <code>sql</code> tag works inside <code>where</code>." },
     { "q": "Do I lose the SQL like builder?", "a": "kastor has no chained select builder. Its object API covers filters, relations, aggregates and grouping, and <code>db.$sql</code> runs any SQL with bound parameters and a typed row. If a module is a large reporting query, it is fine to leave it on Drizzle or move it to <code>$sql</code>." }
   ],
-  "related": ["drizzle-alternative", "migrate-from-prisma", "database-migrations-explained"]
+  "related": ["migrate-from-prisma", "database-migrations-explained", "type-safe-sql-typescript"]
 }
 -->
 <section id="overview"><h2>What changes and what stays</h2>
@@ -241,5 +241,5 @@ export const register = (email: string) =&gt;
 <li><strong>Prepared statements.</strong> Drizzle's <code>.prepare()</code> has no direct counterpart; the driver still caches statements where it supports that.</li>
 <li><strong>Two migration owners.</strong> Never run <code>drizzle-kit push</code> after the baseline. It would change the database behind kastor's history and the next <code>migrate dev</code> would try to undo it.</li>
 </ul>
-<p>The <a href="drizzle-alternative.html">Drizzle alternative guide</a> compares the two designs in more depth, and the <a href="./#playground">playground</a> shows the SQL each kastor query compiles to on your database.</p>
+<p>The <a href="./#playground">playground</a> shows the SQL each kastor query compiles to on your database.</p>
 </section>

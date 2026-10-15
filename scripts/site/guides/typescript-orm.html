@@ -16,7 +16,7 @@
     { "q": "Is an ORM slower than writing SQL by hand?", "a": "The overhead of building a query is small compared to a network round trip. What makes an app slow is the number and shape of queries, which is why relation loading matters more than the ORM itself. kastor loads nested includes in one query on databases with JSON aggregation." },
     { "q": "Which databases does kastor support?", "a": "PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB. You install the driver yourself and pass it to the adapter." }
   ],
-  "related": ["prisma-alternative-without-codegen", "drizzle-alternative", "avoid-n-plus-1-queries"]
+  "related": ["type-safe-sql-typescript", "avoid-n-plus-1-queries", "database-migrations-explained"]
 }
 -->
 <section id="what-is-a-typescript-orm"><h2>What a TypeScript ORM actually does</h2>

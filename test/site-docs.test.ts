@@ -51,7 +51,7 @@ describe('docs site', () => {
   });
 
   it('has 38 English guides and 6 Portuguese guides', () => {
-    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(38);
+    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(36);
     expect(guidePages.filter((p) => p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(6);
   });
 

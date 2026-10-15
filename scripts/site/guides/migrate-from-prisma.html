@@ -10,7 +10,7 @@
   "crumb": "From Prisma",
   "lead": "kastor keeps the query API Prisma made popular and drops the generate step. <code>npx kastor import prisma</code> turns schema.prisma into a TypeScript schema for the same database, <code>npx kastor migrate baseline --from-prisma</code> keeps your migration history, and most client calls only change their first word.",
   "readTime": "16 min read",
-  "keywords": ["migrate from Prisma", "Prisma to kastor", "Prisma alternative", "schema.prisma to TypeScript", "prisma migrate baseline", "replace Prisma Client", "prisma $queryRaw alternative"],
+  "keywords": ["migrate from Prisma", "Prisma to kastor", "schema.prisma to TypeScript", "prisma migrate baseline"],
   "howto": {
     "name": "Migrate a project from Prisma to kastor",
     "totalTime": "PT2H",
@@ -32,12 +32,12 @@
     { "q": "Can Prisma and kastor run at the same time?", "a": "Yes, on the same database, while you move modules. Each has its own connection pool, so lower both pool sizes, and keep only one tool creating migrations: after the baseline, that is kastor." },
     { "q": "Do I still need prisma generate?", "a": "No. kastor infers every type from the schema file with the TypeScript compiler, so CI runs the type check and <code>npx kastor migrate deploy</code> with no generate or postinstall step." }
   ],
-  "related": ["prisma-alternative-without-codegen", "database-migrations-explained", "nextjs-app-router-orm"]
+  "related": ["database-migrations-explained", "nextjs-app-router-orm", "migrate-from-drizzle"]
 }
 -->
 <section id="overview"><h2>What moves, and what stays put</h2>
 <p>Most of a Prisma project survives the move unchanged. The database stays, every row stays, the migration history stays, and the query style stays: kastor uses <code>findMany</code>, <code>where</code>, <code>include</code>, <code>select</code>, nested writes and <code>$transaction</code> with the same shapes. What changes is everything around them. The schema becomes a TypeScript module instead of a <code>.prisma</code> file, types are inferred by the compiler instead of generated, and queries run through the driver you install instead of Prisma's engine.</p>
-<p>This guide follows the order that keeps production safe: convert the schema, adopt the database without changing it, create the client, then move calls one module at a time while Prisma keeps serving the rest. If you are still deciding, the <a href="prisma-alternative-without-codegen.html">Prisma alternative guide</a> compares the two designs.</p>
+<p>This guide follows the order that keeps production safe: convert the schema, adopt the database without changing it, create the client, then move calls one module at a time while Prisma keeps serving the rest.</p>
 </section>
 <section id="install"><h2>Step 1: install kastor and the driver</h2>
 <p>kastor ships no driver. Install the one that matches the <code>provider</code> in your datasource block: <code>pg</code> for <code>postgresql</code> (also Neon, Supabase and Vercel Postgres) and <code>cockroachdb</code>, <code>mysql2</code> for <code>mysql</code> (also PlanetScale), <code>better-sqlite3</code> for <code>sqlite</code>, <code>mssql</code> for <code>sqlserver</code> and <code>mongodb</code> for <code>mongodb</code>.</p>
