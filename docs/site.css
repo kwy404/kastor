@@ -224,7 +224,7 @@ p code, li code, td code, dd code, .lead code, summary code, h3 code, figcaption
 @media (min-width: 1080px) { .hero-in { grid-template-columns: minmax(0, 1fr) 21rem; align-items: end; gap: 4rem; } }
 .hero-pill { display: inline-flex; align-items: center; gap: .55rem; margin-bottom: 1.6rem; padding: .3rem .7rem .3rem .3rem; border: 1px solid var(--line-2); border-radius: 999px; background: color-mix(in oklab, var(--card) 70%, transparent); font-size: .82rem; color: var(--fg-2); text-decoration: none; transition: border-color .15s, color .15s; }
 .hero-pill:hover { border-color: var(--line-3); color: var(--fg); }
-.hp-new { padding: .18rem .55rem; border-radius: 999px; background: var(--grad); color: #1a0d05; font-weight: 600; font-size: .72rem; }
+.hp-new { padding: .18rem .55rem; border-radius: 999px; background: linear-gradient(92deg, #ffc067, #f39243); color: #1a0d05; font-weight: 600; font-size: .72rem; }
 .k-hero h1 { font-size: clamp(2.6rem, 6.2vw, 5.4rem); line-height: .98; letter-spacing: -.055em; margin: 0 0 1.4rem; max-width: 11.5em; font-weight: 650; text-wrap: balance; }
 .k-hero .lead { margin: 0 0 2rem; max-width: 40rem; }
 .hero-cta { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
@@ -521,7 +521,9 @@ p code, li code, td code, dd code, .lead code, summary code, h3 code, figcaption
 .lc-card:hover .lc-glow { opacity: 1; transform: translate(6%, 6%); }
 .lc-ic { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-bottom: 1.6rem; border: 1px solid var(--line-2); border-radius: 12px; background: color-mix(in oklab, var(--card) 70%, transparent); backdrop-filter: blur(6px); }
 .lc-ic .bic { --ic-accent: var(--tone); }
-.lc-kicker { font: 500 .78rem/1 var(--font-mono); color: color-mix(in oklab, var(--tone) 70%, var(--fg)); letter-spacing: .02em; }
+.lc-kicker { font: 500 .78rem/1 var(--font-mono); color: color-mix(in oklab, var(--tone) 42%, var(--fg)); letter-spacing: .02em; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lc-kicker { color: color-mix(in oklab, var(--tone) 75%, var(--fg)); } }
+:root[data-theme="dark"] .lc-kicker { color: color-mix(in oklab, var(--tone) 75%, var(--fg)); }
 .lc-title { font-size: 1.25rem; font-weight: 600; letter-spacing: -.03em; color: var(--fg); }
 .lc-text { font-size: .9rem; color: var(--fg-2); line-height: 1.55; }
 .lc-cmd { align-self: end; margin-top: auto; padding: .55rem .75rem; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-2); font-size: .78rem; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -695,8 +697,10 @@ p code, li code, td code, dd code, .lead code, summary code, h3 code, figcaption
 .k-prose li { margin: .35rem 0; }
 .k-prose li::marker { color: var(--fg-3); }
 .k-prose strong { color: var(--fg); font-weight: 600; }
-.k-prose a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: .22em; transition: text-decoration-color .15s; }
-.k-prose a:hover { text-decoration-color: var(--acc-2); }
+.k-prose a:not(.btn):not(.g-card):not(.anchor):not(.more-link):not(.lang-switch) { color: var(--fg); text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: .22em; transition: text-decoration-color .15s; }
+.k-prose a:not(.btn):not(.g-card):not(.anchor):not(.more-link):not(.lang-switch):hover { text-decoration-color: var(--acc-2); }
+/* Buttons inside prose, callouts and cards keep their own colors. */
+:is(.k-prose, .lead, .note-box, .collapse.q, .guide-cta, .hub, .nf) a.btn { color: var(--btn-fg); text-decoration: none; }
 .k-prose a.anchor, .k-prose a.btn, .k-prose a.g-card, .k-prose a.more-link { text-decoration: none; }
 .k-prose h2 { position: relative; font-size: 1.6rem; line-height: 1.2; letter-spacing: -.035em; margin: 3.25rem 0 1rem; scroll-margin-top: calc(var(--top) + 1.5rem); }
 .k-prose h3 { position: relative; font-size: 1.2rem; letter-spacing: -.025em; margin: 2.25rem 0 .75rem; }
