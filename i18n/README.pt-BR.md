@@ -63,9 +63,10 @@ O nome vem de *castor*, palavra latina para o animal de mesmo nome. Castores con
 ## Início rápido
 
 ```bash
-npm i kastor-orm pg          # or mysql2, mariadb, better-sqlite3, @libsql/client, mssql, oracledb, mongodb
-npx kastor-orm init --db postgres   # writes kastor.config.ts, a starter schema, a seed and .env
+npx kastor-orm init
 ```
+
+O assistente pergunta qual é o seu banco, cria o `kastor.config.ts`, um schema de exemplo, um seed e o `.env`, instala os pacotes e então cria as tabelas e roda uma primeira consulta. Escolha SQLite para não precisar de servidor nenhum. Sem um terminal interativo, passe as respostas como opções: `npx kastor-orm init --db postgres --yes`.
 
 O pacote no npm é `kastor-orm`; o projeto e a CLI se chamam kastor. Rode `npx kastor-orm init` antes de instalar o pacote; depois de instalado, a mesma CLI também responde pelo nome curto, como em `npx kastor migrate dev`.
 
@@ -300,7 +301,7 @@ export default defineConfig({
 
 | Comando | O que faz |
 | --- | --- |
-| `npx kastor-orm init --db postgres` | Cria o `kastor.config.ts`, um schema inicial e um arquivo de seed para o seu banco |
+| `npx kastor-orm init` | Pergunta qual é o seu banco, cria o `kastor.config.ts`, um schema de exemplo e um seed, instala os pacotes e roda uma primeira consulta (`--db`, `--yes`, `--no-install`, `--no-run`) |
 | `npx kastor migrate dev --name <name>` | Compara o schema com o banco de dados, grava `kastor/migrations/<timestamp>_<name>/migration.sql` e aplica a migração. Uma possível renomeação vira uma pergunta, nunca um drop silencioso. `--create-only`, `--rename users.name:fullName`, `--accept-data-loss` |
 | `npx kastor migrate baseline` | Adota um banco existente: registra o schema atual como a primeira migração sem executá-la (`--name init`, `--from-prisma prisma/migrations`) |
 | `npx kastor migrate deploy` | Aplica as migrações pendentes (CI e produção) |
@@ -322,7 +323,7 @@ Leia [migrações de banco de dados explicadas](https://kwy404.github.io/kastor/
   <img src="https://raw.githubusercontent.com/kwy404/kastor/1da873e30e031ca462b1f5cb2a41334aa8eceb9e/docs/assets/studio-data-light.png" alt="O studio do kastor navegando pela tabela posts: filtros, linhas, chaves estrangeiras e ações" width="100%">
 </picture>
 
-`npx kastor studio` abre uma interface web local: navegue por todas as tabelas, filtre e busque, crie, edite e apague linhas, siga as chaves estrangeiras e veja o diagrama do banco de dados inteiro. Ele roda em 127.0.0.1 protegido por um token de sessão privado, e `--read-only` protege dados que não podem ser alterados.
+`npx kastor studio` abre uma interface web local: navegue por todas as tabelas, filtre e busque, crie, edite e apague linhas, siga as chaves estrangeiras e veja o diagrama do banco de dados inteiro. A página Queries lista o SQL das consultas recentes, com os parâmetros e o tempo de cada uma. Ele roda em 127.0.0.1 protegido por um token de sessão privado, e `--read-only` protege dados que não podem ser alterados.
 
 ## Migre do Prisma e de outros ORMs
 
@@ -362,7 +363,7 @@ Todos os caminhos e comandos em um só lugar: [Migrate to kastor](https://kwy404
 
 O kastor roda no servidor. Crie um client por processo (ou por requisição no Workers), importe ele apenas em código de servidor e reaproveite entre os hot reloads.
 
-**Next.js (App Router)**: reaproveite o client entre os hot reloads e faça consultas em server components e server actions. Veja também o guia [Next.js com PostgreSQL e ORM](https://kwy404.github.io/kastor/pt-br/nextjs-postgres-orm.html).
+**Next.js (App Router)**: reaproveite o client entre os hot reloads e faça consultas em server components e server actions. Um projeto inicial completo com SQLite está em [examples/nextjs](https://github.com/kwy404/kastor/tree/main/examples/nextjs).
 
 ```ts
 // src/db/index.ts
@@ -433,23 +434,23 @@ Client: `db.<model>.<method>(...)`, `db.$transaction`, `db.$sql`, `db.$execute`,
 
 ## Perguntas frequentes
 
-### Qual o melhor ORM para TypeScript com PostgreSQL, MySQL e SQLite ao mesmo tempo?
-Um que infira os tipos a partir de um schema em TypeScript e mantenha a mesma API em todos os bancos de dados. O kastor compila as mesmas consultas para cada dialeto, então sair do SQLite nos testes para o PostgreSQL em produção é uma troca de adaptador, não de código. Saiba mais no guia [ORM para TypeScript](https://kwy404.github.io/kastor/pt-br/orm-typescript.html).
+### Um projeto pode usar PostgreSQL, MySQL e SQLite?
+Sim. O schema e a API de consultas são os mesmos em todos os bancos de dados. O kastor compila as mesmas consultas para cada dialeto, então sair do SQLite nos testes para o PostgreSQL em produção é uma troca de adaptador, não de código. Experimente no [playground](https://kwy404.github.io/kastor/#playground).
 
-### Existe ORM para TypeScript sem geração de código?
-Sim. O kastor infere todos os tipos a partir do schema com o compilador do TypeScript, então não existe comando `generate` nem client gerado para manter sincronizado. Veja [o guia de ORM para TypeScript](https://kwy404.github.io/kastor/pt-br/orm-typescript.html).
+### Existe uma etapa de geração de código?
+Não. O kastor infere todos os tipos a partir do schema com o compilador do TypeScript, então não existe comando `generate` nem client gerado para manter sincronizado. Experimente no [playground](https://kwy404.github.io/kastor/#playground).
 
-### Como evitar consultas N+1 no Node.js?
+### Como as relações são carregadas?
 Use `include`. O kastor carrega relações aninhadas em um único comando por chamada: agregação JSON em todos os bancos SQL e estágios `$lookup` em um único pipeline no MongoDB. Leia [como evitar consultas N+1](https://kwy404.github.io/kastor/pt-br/evitar-consultas-n-mais-1.html).
 
-### Qual ORM funciona com SQL Server e Oracle no Node.js?
-O kastor suporta os dois com os drivers `mssql` e `oracledb`: OUTPUT e MERGE no SQL Server, FETCH FIRST e MERGE no Oracle. Veja os guias de [SQL Server](https://kwy404.github.io/kastor/sql-server-orm-nodejs.html) e [Oracle](https://kwy404.github.io/kastor/oracle-orm-nodejs.html).
+### Funciona com SQL Server e Oracle?
+O kastor suporta os dois com os drivers `mssql` e `oracledb`: OUTPUT e MERGE no SQL Server, FETCH FIRST e MERGE no Oracle. Veja a [tabela de suporte por banco](https://kwy404.github.io/kastor/#databases).
 
-### Dá para usar ORM com Cloudflare D1 e Turso?
-Sim: `d1(env.DB)` dentro de um Worker e `libsql(createClient(...))` para o Turso. Veja os guias de [D1](https://kwy404.github.io/kastor/cloudflare-d1-orm.html) e [Turso](https://kwy404.github.io/kastor/turso-libsql-orm.html).
+### Funciona no Cloudflare D1 e no Turso?
+Sim: `d1(env.DB)` dentro de um Worker e `libsql(createClient(...))` para o Turso. Veja [kastor com Cloudflare Workers](https://kwy404.github.io/kastor/cloudflare-workers-orm.html).
 
-### Existe ORM para MongoDB em TypeScript com a mesma API do SQL?
-O adaptador de MongoDB do kastor usa o mesmo schema e a mesma API de consultas, e compila os includes para pipelines com `$lookup`. Veja [ORM para MongoDB em TypeScript](https://kwy404.github.io/kastor/mongodb-orm-typescript.html).
+### O MongoDB usa a mesma API?
+Sim. O adaptador de MongoDB do kastor usa o mesmo schema e a mesma API de consultas, e compila os includes para pipelines com `$lookup`. Veja a [tabela de suporte por banco](https://kwy404.github.io/kastor/#databases).
 
 ### Funciona com um banco de dados que já existe?
 Sim. `npx kastor db pull` gera o schema TypeScript a partir do banco de dados em uso, com as relações incluídas. O `npx kastor migrate baseline` registra o banco como a primeira migração sem alterá-lo, e quem vem do Prisma pode converter o schema.prisma direto com `npx kastor import prisma`. Veja o [guia de migração do Prisma](https://kwy404.github.io/kastor/pt-br/migrar-do-prisma.html).

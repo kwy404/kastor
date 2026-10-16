@@ -6,6 +6,14 @@ All notable changes to kastor are documented in this file. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `npx kastor-orm init` is now a short wizard: it asks for the database, writes the config, a sample schema, a seed and `.env`, installs the packages with the package manager in use, then creates the tables and runs a first query. `--db`, `--yes`, `--no-install` and `--no-run` answer the questions without a terminal.
+- The studio has a Queries page that lists the SQL it ran, with parameters, timing and the action that caused each statement.
+- The studio follows special dates (New Year, Carnival, Easter, Valentine's, Festa Junina, Halloween and Christmas) with a seasonal accent and Kas in costume, behind a switch that remembers the choice.
+- A Next.js App Router starter on SQLite in `examples/nextjs`.
+- Docs site: a five step tutorial in the playground, a database picker that every example on the page follows, and the same special date themes.
+
 ## [0.1.1] - 2026-10-14
 
 ### Fixed

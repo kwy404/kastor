@@ -79,12 +79,14 @@ describe('README', () => {
         expect(existsSync(join(root, pinned![1] as string)), url).toBe(true);
       }
     });
-    it(`${file}: uses absolute links, and repo links point at files that exist`, () => {
+    it(`${file}: uses absolute links, and repo and site links point at files that exist`, () => {
       const links = [...md.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1] as string).filter((l) => !l.startsWith('#'));
       for (const link of links) {
         expect(/^https:\/\//.test(link), link).toBe(true);
         const blob = /^https:\/\/github\.com\/kwy404\/kastor\/blob\/main\/(.+)$/.exec(link);
         if (blob) expect(existsSync(join(root, blob[1] as string)), link).toBe(true);
+        const site = /^https:\/\/kwy404\.github\.io\/kastor\/([^#]*)/.exec(link);
+        if (site) expect(existsSync(join(root, 'docs', (site[1] as string).replace(/(^|\/)$/, '$1index.html'))), link).toBe(true);
       }
     });
     it(`${file}: links the other language and lists the projects from kwy404`, () => {
