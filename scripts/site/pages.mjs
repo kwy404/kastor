@@ -1,8 +1,9 @@
 // Guide pages, the guide hubs (English and Portuguese), the framework guides,
 // the API reference and the 404 page.
 import { DATABASES } from './art/icons.mjs';
+import { DB_INFO } from './content/databases.mjs';
 import { FRAMEWORKS } from './content/frameworks.mjs';
-import { AUTHOR_GH, AUTHOR_IN, SITE, UPDATED, esc, icon, ui } from './layout.mjs';
+import { AUTHOR_GH, AUTHOR_IN, SITE, UPDATED, dbSwitch, esc, icon, ui } from './layout.mjs';
 
 const UPDATED_LABEL = { en: 'October 13, 2026', 'pt-BR': '13 de outubro de 2026' };
 const T = {
@@ -76,7 +77,7 @@ export function guideBody(guide, all, index) {
 ${body}
       <section id="faq" class="chapter"><h2><a href="#faq" class="anchor" aria-hidden="true" tabindex="-1">#</a>${t.faq}</h2><div class="accordion collapse-plus">${faq}</div></section>
       <aside class="guide-cta drawing" aria-label="${t.cta}">
-        <img src="${up}assets/mascot.svg" class="brand-light" width="110" height="110" alt="" loading="lazy"><img src="${up}assets/mascot-dark.svg" class="brand-dark" width="110" height="110" alt="" loading="lazy">
+        <img src="${up}assets/mascot.svg" class="brand-light" width="110" height="110" alt="" loading="lazy" data-season-art="mascot"><img src="${up}assets/mascot-dark.svg" class="brand-dark" width="110" height="110" alt="" loading="lazy" data-season-art="mascot-dark">
         <div><h2>${t.cta}</h2><p>${t.ctaText}</p><a href="${up || './'}#playground" class="btn btn-primary">${ui('play')}${t.open}</a></div>
       </aside>
       <section id="related" class="chapter"><h2><a href="#related" class="anchor" aria-hidden="true" tabindex="-1">#</a>${t.related}</h2><div class="g-grid g-grid-3">${related}</div></section>
@@ -290,6 +291,15 @@ export function migrateHubJsonLd(guides) {
   };
 }
 
+/** The client module for the database picked in the switcher; the setups below import it. */
+function clientCard(frame) {
+  const panels = DATABASES.map((d, i) => `<div v-show="S.db === '${d.id}'"${i ? ' style="display:none"' : ''}>${frame(DB_INFO[d.id].install, { kind: 'terminal', lang: 'bash', title: 'Terminal', compact: true })}${frame(DB_INFO[d.id].setup, { lang: 'ts', title: d.id === 'd1' ? 'src/worker.ts' : 'src/db/index.ts', compact: true })}</div>`).join('');
+  return `<section class="client-card" aria-labelledby="client-title" v-data="{}">
+    <div class="client-head"><div><h2 id="client-title">Your client module</h2><p>Most setups below use Postgres. For another database, use this client module instead.</p></div>${dbSwitch('db-switch db-switch-inline')}</div>
+    ${panels}
+  </section>`;
+}
+
 /** The framework guides page. */
 export function frameworksBody(frame) {
   const nav = FRAMEWORKS.map((f) => `<li><a href="#${f.id}">${esc(f.name)}</a></li>`).join('');
@@ -307,6 +317,7 @@ export function frameworksBody(frame) {
     <h1>kastor in your framework</h1>
     <p class="lead">${FRAMEWORKS.length} short, complete setups. Each one creates a single client and shows one read and one write the way that framework likes them. The schema is the one from the playground in <code>src/db/schema.ts</code>.</p>
   </header>
+  ${clientCard(frame)}
   <div class="read">
     <aside class="read-toc" aria-label="Frameworks"><div class="toc-box"><p class="k-toc-title">Frameworks</p><ol>${nav}</ol></div></aside>
     <article class="read-main k-prose">${secs}</article>
@@ -353,7 +364,7 @@ export function notFoundBody() {
       <p class="nf-code"><code>KastorError: NOT_FOUND</code><br><span>hint: start from the home page or search the site</span></p>
       <p class="hero-cta"><a href="/kastor/" class="btn btn-primary">Back to the home page</a><a href="/kastor/guides.html" class="btn btn-outline">Browse the guides</a><button type="button" class="btn btn-ghost" data-search-open>${ui('search')}Search</button></p>
     </div>
-    <div class="nf-art"><img src="/kastor/assets/mascot.svg" class="brand-light" width="300" height="300" alt="Kas the beaver holding a blueprint"><img src="/kastor/assets/mascot-dark.svg" class="brand-dark" width="300" height="300" alt="Kas the beaver holding a blueprint"><span class="stamp stamp-a">Not found</span></div>
+    <div class="nf-art"><img src="/kastor/assets/mascot.svg" class="brand-light" width="300" height="300" alt="Kas the beaver" data-season-art="mascot"><img src="/kastor/assets/mascot-dark.svg" class="brand-dark" width="300" height="300" alt="Kas the beaver" data-season-art="mascot-dark"><span class="stamp stamp-a">Not found</span></div>
   </div>
 </section>`;
 }

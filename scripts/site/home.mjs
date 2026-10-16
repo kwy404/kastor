@@ -1,7 +1,7 @@
-// The home page: the lit K hero, the database strip, the product story
-// (types, includes, migrations, the Prisma import, studio, runtimes), the
-// live playground, the support matrix, the feature tour, 60 second starts,
-// the build and deploy cards, a neutral comparison, guides and the FAQ.
+// The home page: the lit K hero, the database switcher, the playground with
+// its five step tutorial, the product story (types, includes, migrations,
+// studio), 60 second starts, the support matrix, the feature tour, runtimes
+// and the FAQ.
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { litMark } from './art/brand.mjs';
@@ -9,7 +9,7 @@ import { DATABASES, RUNTIMES } from './art/icons.mjs';
 import { DB_INFO } from './content/databases.mjs';
 import { FEATURES } from './content/features.mjs';
 import { FRAMEWORKS } from './content/frameworks.mjs';
-import { PRESETS } from './playground/presets.mjs';
+import { PRESETS, TUTORIAL } from './playground/presets.mjs';
 import { AUTHOR_GH, AUTHOR_IN, GITHUB, NPM, SITE, UPDATED, VERSION, dbIcon, esc, icon, rtIcon, ui } from './layout.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -122,8 +122,8 @@ export function homeJsonLd(guides) {
 
 function hero() {
   const entries = [
-    ['#start', 'Start a project', 'Install, create the client and run a first query on any of ten databases.'],
-    ['migrate-from-prisma.html', 'Move from Prisma', 'One command converts schema.prisma. Your data and migration history stay put.'],
+    ['#playground', 'Try it in five steps', 'A table, a relation, an include and a migration, right here in the browser.'],
+    ['#start', 'Start a project', 'Install, create the client and run a first query on your database.'],
     ['api.html', 'Read the reference', 'Every method, filter, error code and CLI command, with examples.'],
   ]
     .map(([href, t, d]) => `<li><a href="${href}" class="entry"><span class="entry-t">${t}${ui('arrow', 'ic entry-go')}</span><span class="entry-d">${d}</span></a></li>`)
@@ -134,10 +134,10 @@ function hero() {
     <div class="hero-text">
       <a href="${GITHUB}/blob/main/CHANGELOG.md" class="hero-pill"><span class="hp-new">New</span><span>kastor ${VERSION}: ten databases, one schema</span>${ui('chevron')}</a>
       <h1 id="hero-title">The TypeScript ORM for <span class="hl">every database</span>.</h1>
-      <p class="lead">Write your schema in plain TypeScript and the types are there as you type. No generate step, no binary engine. Nested includes in one query, readable migrations and a local studio on PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB and four more.</p>
+      <p class="lead">Write your schema in plain TypeScript and the types are there as you type. No generate step. One query API on SQL databases and MongoDB.</p>
       <div class="hero-cta">
-        <a href="#start" class="btn btn-lg btn-solid">Get started${ui('arrow')}</a>
-        <a href="#playground" class="btn btn-lg btn-line">${ui('play')}Open the playground</a>
+        <a href="#playground" class="btn btn-lg btn-solid">${ui('play')}Try the tutorial</a>
+        <a href="#start" class="btn btn-lg btn-line">Get started${ui('arrow')}</a>
         ${copyBox('install-cmd', 'npm i kastor-orm', 'Install', ' install-pill')}
       </div>
     </div>
@@ -147,16 +147,17 @@ function hero() {
     <div class="stage-rays"></div>
     <div class="stage-floor"></div>
     <div class="stage-mark">${litMark({ vars: true, id: 'hero-k' })}</div>
+    <div class="season-stage" data-season-stage><img class="ss-accent brand-light" data-season-art="accent" width="600" height="480" alt="" hidden><img class="ss-accent brand-dark" data-season-art="accent-dark" width="600" height="480" alt="" hidden><img class="ss-kas brand-light" data-season-art="mascot" width="512" height="512" alt="" hidden><img class="ss-kas brand-dark" data-season-art="mascot-dark" width="512" height="512" alt="" hidden></div>
     <div class="stage-line"></div>
   </div>
 </section>`;
 }
 
 function logoStrip() {
-  const items = DATABASES.map((d) => `<li>${dbIcon(d.id, 'dbic strip-ic')}<span>${esc(d.name)}</span></li>`).join('');
-  return `<section class="strip" aria-labelledby="strip-title">
+  const items = DATABASES.map((d) => `<li><button type="button" class="strip-db" data-db="${d.id}" :aria-pressed="S.db === '${d.id}' ? 'true' : 'false'" aria-pressed="${d.id === 'postgres'}" @click="setDb('${d.id}')">${dbIcon(d.id, 'dbic strip-ic')}<span>${esc(d.name)}</span></button></li>`).join('');
+  return `<section class="strip" aria-labelledby="strip-title" v-data="{}">
   <div class="wrap">
-    <h2 id="strip-title" class="strip-title">One schema and one API on the databases you already run</h2>
+    <h2 id="strip-title" class="strip-title">Pick your database. Every example on this page follows.</h2>
     <ul class="strip-list">${items}</ul>
   </div>
 </section>`;
@@ -266,10 +267,10 @@ const INCLUDE_SQL = await compileIncludes();
 function storyIncludes(frame) {
   const ids = INCLUDE_SQL ? Object.keys(INCLUDE_SQL) : [];
   const name = (id) => DATABASES.find((d) => d.id === id).name;
-  const tabs = ids.map((id, i) => `<button type="button" role="tab" class="seg-tab" id="inc-t-${id}" aria-controls="inc-p-${id}" :aria-selected="db === '${id}' ? 'true' : 'false'" aria-selected="${i === 0}" @click="db = '${id}'">${dbIcon(id)}<span>${esc(name(id))}</span></button>`).join('');
-  const panels = ids.map((id, i) => `<div role="tabpanel" class="inc-panel" id="inc-p-${id}" aria-labelledby="inc-t-${id}" v-show="db === '${id}'"${i ? ' style="display:none"' : ''}>${hl(frame, INCLUDE_SQL[id], id === 'mongodb' ? 'json' : 'sql')}</div>`).join('');
+  const tabs = ids.map((id, i) => `<button type="button" role="tab" class="seg-tab" id="inc-t-${id}" aria-controls="inc-p-${id}" :aria-selected="incDb(S.db) === '${id}' ? 'true' : 'false'" aria-selected="${i === 0}" @click="setDb('${id}')">${dbIcon(id)}<span>${esc(name(id))}</span></button>`).join('');
+  const panels = ids.map((id, i) => `<div role="tabpanel" class="inc-panel" id="inc-p-${id}" aria-labelledby="inc-t-${id}" v-show="incDb(S.db) === '${id}'"${i ? ' style="display:none"' : ''}>${hl(frame, INCLUDE_SQL[id], id === 'mongodb' ? 'json' : 'sql')}</div>`).join('');
   const out = INCLUDE_SQL
-    ? `<div class="win win-sql" v-data="{ db: 'postgres' }"><div class="win-bar win-bar-tabs" role="tablist" aria-label="Database">${tabs}</div><div class="win-body">${panels}</div><p class="win-foot">${ui('check')}One statement per call. Compiled at build time by the same code that ships on npm.</p></div>`
+    ? `<div class="win win-sql" v-data="{}"><div class="win-bar win-bar-tabs" role="tablist" aria-label="Database">${tabs}</div><div class="win-body">${panels}</div><p class="win-foot">${ui('check')}One statement per call. Compiled at build time by the same code that ships on npm.</p></div>`
     : '';
   return `<section class="story story-rev" id="includes" aria-labelledby="includes-title">
   <div class="wrap">
@@ -348,53 +349,13 @@ function storyMigrations(frame) {
         ['raw-sql', 'Plain SQL files.', 'One folder per migration, a header that says what changed, nothing hidden.'],
         ['branch', 'Built for CI.', '<code>migrate deploy</code> applies pending files, <code>migrate status</code> catches drift.'],
         ['logs', 'Existing database?', '<code>db pull</code> writes the schema from it, <code>migrate baseline</code> adopts it.'],
+        ['deploy', 'Coming from Prisma?', '<code>kastor import prisma</code> converts schema.prisma and keeps the history. See the <a href="migrate-to-kastor.html">migration guides</a>.'],
       ])}
     </div>
     <div class="story-vis vis-mig">
       ${win('src/db/schema.ts', diff, { cls: 'win-diff' })}
       <div class="win win-term"><div class="win-bar"><span class="win-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="win-title">${fileBadge('bash')}<span>Terminal</span></span></div><div class="win-body"><pre class="term" tabindex="0"><code>${MIGRATE_OUT}</code></pre></div></div>
       ${win('migration.sql', hl(frame, MIGRATE_SQL, 'sql'), { lang: 'sql', cls: 'win-file' })}
-    </div>
-  </div>
-</section>`;
-}
-
-/** Terminal output of kastor import prisma, recorded from a real run. */
-const IMPORT_OUT = `<span class="t-p">$</span> npx kastor import prisma
-
-<span class="t-b t-c">kastor</span> <span class="t-d">/</span> <span class="t-b">import prisma</span>
-
-  <span class="t-d">Prisma schema</span>  prisma/schema.prisma
-  <span class="t-d">Provider     </span>  postgresql (kastor-orm/postgres)
-
-<span class="t-ok">ok</span>    Wrote <span class="t-b">src/db/schema.ts</span>: 3 models, 1 join table, 1 enum, 4 relation fields.
-<span class="t-ok">ok</span>    Every model, field and relation mapped exactly.
-
-  <span class="t-c">+------------------------------------------------------------+</span>
-  <span class="t-c">|</span> <span class="t-b">Next steps</span>                                                 <span class="t-c">|</span>
-  <span class="t-c">|</span> 1. Read src/db/schema.ts and point kastor.config.ts at it. <span class="t-c">|</span>
-  <span class="t-c">|</span> 2. kastor migrate baseline --from-prisma prisma/migrations <span class="t-c">|</span>
-  <span class="t-c">|</span>    records the database as it is now, without changing it. <span class="t-c">|</span>
-  <span class="t-c">|</span> 3. kastor migrate dev should then say: Already in sync.    <span class="t-c">|</span>
-  <span class="t-c">+------------------------------------------------------------+</span>`;
-
-function storyImport(guides) {
-  const list = guides.filter((g) => g.meta.lang === 'en' && g.meta.section === 'migrate');
-  const chips = list.map((g) => `<a href="${g.meta.slug}.html" class="chip-link"><span>${esc(g.meta.crumb.replace(/^From /, ''))}</span>${ui('arrow', 'ic')}</a>`).join('');
-  return `<section class="story story-rev" id="migrate" aria-labelledby="migrate-title">
-  <div class="wrap story-in story-in-rev">
-    <div class="story-copy">
-      ${secHead('deploy', 'Migrate', 'Move from Prisma in one command', 'Point kastor at schema.prisma and get a TypeScript schema with the same table, column and constraint names. A baseline keeps the history Prisma already applied, so nothing in the database moves.', 'migrate')}
-      ${checks([
-        ['schema', 'Same names, same tables.', 'Models, enums, implicit join tables and relation fields carry over.'],
-        ['shield', 'History kept.', '<code>migrate baseline --from-prisma</code> records every applied migration.'],
-        ['database', 'Any other ORM.', '<code>db pull</code> reads the live database into a schema file.'],
-      ])}
-      <div class="chips" aria-label="Migration guides">${chips}</div>
-      <p class="story-more"><a href="migrate-to-kastor.html" class="link-arrow">All migration guides${ui('arrow')}</a></p>
-    </div>
-    <div class="story-vis vis-import">
-      <div class="win win-term win-wide"><div class="win-bar"><span class="win-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="win-title">${fileBadge('bash')}<span>Terminal</span></span></div><div class="win-body"><pre class="term" tabindex="0"><code>${IMPORT_OUT}</code></pre></div></div>
     </div>
   </div>
 </section>`;
@@ -456,12 +417,32 @@ function playground() {
   const dbTabs = DATABASES.map(
     (d, i) => `<button type="button" role="tab" class="db-tab" data-dialect="${d.id}" aria-selected="${i === 0}" id="pg-db-${d.id}">${dbIcon(d.id)}<span>${esc(d.name.replace(' / Turso', ''))}</span></button>`,
   ).join('');
+  const steps = TUTORIAL.map((st, i) => `<li><button type="button" class="tut-pill" data-step="${i}"${i === 0 ? ' aria-current="step"' : ''}><span class="tut-no" aria-hidden="true"><span>${i + 1}</span>${ui('check', 'ic tut-ok')}</span><span class="tut-name">${esc(st.title)}</span></button></li>`).join('');
   return `<section id="playground" class="sec sec-playground" aria-labelledby="playground-title">
   <div class="pg-glow" aria-hidden="true"></div>
   <div class="wrap">
-    ${secHead('cli', 'Live playground', 'Type a schema. Watch the types and the SQL appear.', 'This is the real kastor compiler running in your browser. Edit the schema or the query: the result type is checked by the TypeScript compiler, and the SQL is compiled for every database side by side. Open Rows to run it on SQLite in this page.', 'playground', true)}
+    ${secHead('cli', 'Live playground', 'Learn kastor in five small steps', 'The real kastor compiler runs in your browser. Each step asks for one small edit and checks it as you type: the result type comes from the TypeScript compiler, and the SQL follows the database you pick.', 'playground', true)}
     <div class="pg" data-playground>
-      <div class="pg-presets" role="group" aria-label="Examples">${presets}</div>
+      <div class="pg-modes" role="tablist" aria-label="Playground mode"><button type="button" role="tab" class="pg-mode" data-mode="tutorial" aria-selected="true">${ui('book')}Tutorial</button><button type="button" role="tab" class="pg-mode" data-mode="examples" aria-selected="false">${ui('spark')}Examples</button></div>
+      <div class="tut" data-tutorial>
+        <div class="tut-track" aria-hidden="true"><span class="tut-fill" data-progress></span></div>
+        <ol class="tut-steps" aria-label="Tutorial steps">${steps}</ol>
+        <div class="tut-card">
+          <div class="tut-copy">
+            <p class="tut-count" data-step-count>Step 1 of ${TUTORIAL.length}</p>
+            <h3 class="tut-title" data-step-title>${esc(TUTORIAL[0].title)}</h3>
+            <p class="tut-text" data-step-text>${TUTORIAL[0].text}</p>
+            <p class="tut-state" data-step-state role="status">Your turn: make the edit, or press Show me.</p>
+          </div>
+          <div class="tut-actions">
+            <button type="button" class="btn btn-sm btn-ghost-k" data-prev disabled>Back</button>
+            <button type="button" class="btn btn-sm btn-line" data-show>${ui('spark')}Show me</button>
+            <button type="button" class="btn btn-sm btn-line" data-next>Next${ui('arrow')}</button>
+          </div>
+          <div class="tut-finish" data-finish hidden><p><strong>All five steps done.</strong> Install kastor and keep the schema you just wrote.</p><a href="#start" class="btn btn-sm btn-solid">Start a project${ui('arrow')}</a></div>
+        </div>
+      </div>
+      <div class="pg-presets" role="group" aria-label="Examples" hidden>${presets}</div>
       <div class="pg-grid">
         <div class="pg-pane pg-edit">
           <div class="pg-bar" role="tablist" aria-label="Files">
@@ -506,7 +487,7 @@ function matrix(features) {
   const rows = DATABASES.map((d) => {
     const info = DB_INFO[d.id];
     const f = features[d.id] || {};
-    return `<tr>
+    return `<tr :class="{ 'is-on': S.db === '${d.id}' }">
   <th scope="row"><span class="db-name">${dbIcon(d.id)}<span>${esc(d.name)}</span></span></th>
   <td><code>${esc(d.entry)}</code></td>
   <td><code>${esc(info.driver)}</code></td>
@@ -518,7 +499,7 @@ function matrix(features) {
   <td>${yes('Migrations')}</td>
 </tr>`;
   }).join('\n');
-  return `<section id="databases" class="sec" aria-labelledby="databases-title">
+  return `<section id="databases" class="sec" aria-labelledby="databases-title" v-data="{}">
   <div class="wrap">
     ${secHead('database', 'Database support', 'One schema, ten databases', 'Every adapter takes the driver you already use. The same queries compile to each dialect: JSON aggregation for includes, the native way to return written rows, the native upsert.', 'databases')}
     <div class="matrix-wrap" tabindex="0" role="region" aria-label="Database support matrix">
@@ -558,12 +539,12 @@ function tour(frame) {
 
 function starts(frame) {
   const tabs = DATABASES.map(
-    (d, i) => `<button type="button" role="tab" class="start-tab" id="st-t-${d.id}" aria-controls="st-p-${d.id}" :aria-selected="db === '${d.id}' ? 'true' : 'false'" aria-selected="${i === 0}" @click="db = '${d.id}'">${dbIcon(d.id)}<span>${esc(d.name)}</span></button>`,
+    (d, i) => `<button type="button" role="tab" class="start-tab" id="st-t-${d.id}" aria-controls="st-p-${d.id}" :aria-selected="S.db === '${d.id}' ? 'true' : 'false'" aria-selected="${i === 0}" @click="setDb('${d.id}')">${dbIcon(d.id)}<span>${esc(d.name)}</span></button>`,
   ).join('');
   const panels = DATABASES.map((d, i) => {
     const info = DB_INFO[d.id];
     const migrate = d.id === 'mongodb' ? 'npx kastor db push' : 'npx kastor migrate dev --name init';
-    return `<div role="tabpanel" class="start-panel" id="st-p-${d.id}" aria-labelledby="st-t-${d.id}" v-show="db === '${d.id}'"${i ? ' style="display:none"' : ''}>
+    return `<div role="tabpanel" class="start-panel" id="st-p-${d.id}" aria-labelledby="st-t-${d.id}" v-show="S.db === '${d.id}'"${i ? ' style="display:none"' : ''}>
   <ol class="k-steps">
     <li><span class="step-no">1</span><div><h3>Install kastor and the driver</h3>${frame(info.install, { kind: 'terminal', lang: 'bash', title: 'Terminal', compact: true })}</div></li>
     <li><span class="step-no">2</span><div><h3>Create the client</h3><p>${esc(info.note).replace(/`([^`]+)`/g, '<code>$1</code>')}</p>${frame(info.setup, { lang: 'ts', title: d.id === 'd1' ? 'src/worker.ts' : 'src/db/index.ts', compact: true })}</div></li>
@@ -573,71 +554,11 @@ function starts(frame) {
   }).join('\n');
   return `<section id="start" class="sec" aria-labelledby="start-title">
   <div class="wrap">
-    ${secHead('cli', 'Get started', 'Get started in 60 seconds', 'Pick your database. Three steps, and the schema from the playground is all you need: put it in <code>src/db/schema.ts</code>.', 'start')}
-    <div class="start" v-data="{ db: 'postgres' }">
+    ${secHead('cli', 'Get started', 'Get started in 60 seconds', 'Three steps for the database you picked. The schema from the tutorial is all you need: put it in <code>src/db/schema.ts</code>.', 'start')}
+    <div class="start" v-data="{}">
       <div class="start-tabs" role="tablist" aria-label="Database">${tabs}</div>
       <div class="start-panels">${panels}</div>
     </div>
-  </div>
-</section>`;
-}
-
-/** Build, migrate, deploy and inspect: the path to production. */
-function lifecycle() {
-  const cards = [
-    ['amber', 'schema', 'Build', 'Schema, types and queries', 'Write tables in TypeScript and query them with inferred results. The playground above is the real thing.', 'db.users.findMany()', '#playground'],
-    ['copper', 'migrations', 'Migrate', 'Reviewed SQL, every time', 'migrate dev writes the file, you commit it, migrate deploy applies it in CI before the new code ships.', 'npx kastor migrate deploy', 'database-migrations-explained.html'],
-    ['rose', 'deploy', 'Deploy', 'Servers, functions, edge', 'One client per process, reused across hot reloads and invocations, with the pool or HTTP driver your host wants.', 'export const db = kastor(...)', 'frameworks.html'],
-    ['teal', 'studio', 'Inspect', 'Studio and doctor', 'Browse and edit rows locally, read the diagram, and let kastor doctor check config, driver and connection.', 'npx kastor doctor', '#studio'],
-  ]
-    .map(([tone, ic, kicker, title, text, cmd, href]) => `<a href="${href}" class="lc-card lc-${tone}"><span class="lc-glow" aria-hidden="true"></span><span class="lc-ic">${icon(ic, 'bic')}</span><span class="lc-kicker">${kicker}</span><span class="lc-title">${title}</span><span class="lc-text">${text}</span><code class="lc-cmd">${esc(cmd)}</code></a>`)
-    .join('');
-  return `<section id="ship" class="sec sec-lc" aria-labelledby="ship-title">
-  <div class="wrap">
-    ${secHead('deploy', 'From laptop to production', 'Build it, ship it, keep it healthy', 'The same schema file drives the client, the migrations and the studio, from the first table to the hundredth deploy.', 'ship', true)}
-    <div class="lc-grid">${cards}</div>
-  </div>
-</section>`;
-}
-
-const COMPARE = [
-  ['Where the schema lives', 'TypeScript', 'A schema file in its own language', 'TypeScript', 'Classes with decorators'],
-  ['Types after a schema change', 'Inferred on the next keystroke', 'After running a generate command', 'Inferred', 'Declared by hand on classes'],
-  ['Query style', 'Objects: where, include, select', 'Objects: where, include, select', 'SQL shaped builder, plus a relational API in some tools', 'Repositories and a builder'],
-  ['Nested relations', 'One query per root call (JSON aggregation)', 'Varies by tool and version', 'Varies by API', 'Joins or extra queries'],
-  ['Migrations from the schema', 'Built in, rename detection asks first', 'Usually built in', 'Usually a separate kit', 'Usually built in'],
-  ['Same API on SQL and MongoDB', 'Yes', 'Varies by tool', 'Usually SQL only', 'Varies by tool'],
-  ['Runtime dependencies', 'Zero (bring your driver)', 'Varies', 'Small', 'Several'],
-];
-
-function compare() {
-  const rows = COMPARE.map(([k, a, b, c, d]) => `<tr><th scope="row">${k}</th><td class="us">${a}</td><td>${b}</td><td>${c}</td><td>${d}</td></tr>`).join('');
-  return `<section id="compare" class="sec" aria-labelledby="compare-title">
-  <div class="wrap">
-    ${secHead('relations', 'Comparison', 'How kastor compares, by approach', 'There are many good ORMs. They make different trade-offs, so this table compares approaches rather than products. Check each tool\'s docs for its current details.', 'compare')}
-    <div class="matrix-wrap" tabindex="0" role="region" aria-label="Comparison by approach">
-      <table class="matrix k-compare">
-        <thead><tr><th scope="col"><span class="sr-only">Aspect</span></th><th scope="col" class="us">kastor</th><th scope="col">Generated client ORMs</th><th scope="col">SQL first query builders</th><th scope="col">Decorator ORMs</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <p class="matrix-note">${ui('info')}<span>Coming from a specific tool? The <a href="migrate-to-kastor.html">migration guides</a> map every concept and command, from Prisma and Drizzle to Laravel and Rails.</span></p>
-  </div>
-</section>`;
-}
-
-function guidesTeaser(guides) {
-  const en = guides.filter((g) => g.meta.lang === 'en');
-  const cards = en
-    .filter((g) => !g.meta.section)
-    .slice(0, 6)
-    .map((g) => `<a href="${g.meta.slug}.html" class="g-card"><span class="g-no">${esc(g.meta.crumb)}</span><strong>${esc(g.meta.h1)}</strong><span>${esc(g.meta.description)}</span><span class="g-meta">${esc(g.meta.readTime)}${ui('arrow')}</span></a>`)
-    .join('');
-  return `<section id="guides" class="sec" aria-labelledby="guides-title">
-  <div class="wrap">
-    ${secHead('blueprint', 'Guides', 'Long reads on the problems an ORM should solve', `${en.length} guides in English and more in Portuguese, from N+1 queries to running one data layer on every database.`, 'guides')}
-    <div class="g-grid">${cards}</div>
-    <p class="g-all"><a href="guides.html" class="btn btn-line">All ${en.length} guides${ui('arrow')}</a><a href="pt-br/" class="btn btn-ghost-k" hreflang="pt-BR">${ui('globe')}Guias em portugu&ecirc;s</a></p>
   </div>
 </section>`;
 }
@@ -670,25 +591,21 @@ function closing() {
 }
 
 export function homeBody(ctx) {
-  const { frame, guides, features = {} } = ctx;
+  const { frame, features = {} } = ctx;
   return [
     hero(),
     logoStrip(),
+    playground(),
     `<div id="features" class="stories">`,
     storyTypes(frame),
     storyIncludes(frame),
     storyMigrations(frame),
-    storyImport(guides),
     studio(),
-    runtimes(),
     `</div>`,
-    playground(),
+    starts(frame),
     matrix(features),
     tour(frame),
-    starts(frame),
-    lifecycle(),
-    compare(),
-    guidesTeaser(guides),
+    runtimes(),
     faq(),
     closing(),
   ].join('\n');

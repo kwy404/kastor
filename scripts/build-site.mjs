@@ -115,6 +115,18 @@ const written = writeAssets(root);
 mkdirSync(join(docs, 'assets'), { recursive: true });
 for (const f of readdirSync(join(siteDir, 'static'))) cpSync(join(siteDir, 'static', f), join(docs, f.startsWith('pg-') ? `assets/${f}` : f));
 cpSync(join(siteDir, 'playground', 'presets.mjs'), join(docs, 'assets', 'pg-presets.js'));
+// The seasons script is shared with the studio; the site serves a minified copy.
+{
+  const src = readFileSync(join(root, 'assets', 'seasons', 'seasons.js'), 'utf8');
+  let min = src;
+  try {
+    const esbuild = await import(pathToFileURL(createRequire(join(root, 'package.json')).resolve('esbuild')).href);
+    min = (await esbuild.transform(src, { minify: true, target: 'es2019' })).code;
+  } catch {
+    // esbuild is optional here: serve the readable file
+  }
+  writeFileSync(join(docs, 'seasons.js'), min);
+}
 
 // Dialect features for the matrix come from the real dialects when the bundle step can load them.
 let features = {};
@@ -140,6 +152,7 @@ out['index.html'] = page(
   {
     kind: 'home',
     path: '',
+    dbSwitch: true,
     title: 'kastor: the TypeScript ORM for almost every database',
     description: 'A TypeScript ORM with types inferred from a plain TypeScript schema. One API on SQL databases and MongoDB.',
     jsonld: homeJsonLd(guides),
@@ -153,6 +166,7 @@ out['frameworks.html'] = page(
   {
     kind: 'doc',
     path: 'frameworks.html',
+    dbSwitch: true,
     nav: 'frameworks',
     title: 'kastor in your framework | kastor',
     description: 'Short, complete setups that create one kastor client and run a first read and write in each framework.',
@@ -240,6 +254,7 @@ out['404.html'] = page({ kind: 'nf', path: '404.html', root: '/kastor/', noindex
 // ---------- Search index, sitemap, robots ----------
 
 const search = [
+  { kind: 'Page', title: 'Tutorial', sub: 'Five steps in the playground: a table, a relation, an include, a migration, a run', url: '#playground', home: true },
   { kind: 'Page', title: 'Live playground', sub: 'Schema, query, inferred type and SQL for every database', url: '#playground', home: true },
   { kind: 'Page', title: 'Database support matrix', sub: 'Adapters, drivers, includes, upsert and paging per database', url: '#databases', home: true },
   { kind: 'Page', title: 'Feature tour', sub: 'Schema, types, queries, includes, migrations, errors', url: '#features', home: true },

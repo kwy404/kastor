@@ -60,6 +60,16 @@ describe('docs site', () => {
     expect(guidePages.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('puts the five step tutorial and the database switcher on the home page, and loads the seasons script everywhere', () => {
+    const home = byRel.get('index.html')!.html;
+    expect(home.match(/class="tut-pill"/g)?.length).toBe(5);
+    expect(home).toContain('data-db-switch');
+    expect(home.match(/class="strip-db"/g)?.length).toBe(10);
+    expect(byRel.get('frameworks.html')!.html).toContain('data-db-switch');
+    for (const p of pages) expect(p.html, p.rel).toMatch(/<script src="(\.\.\/|\/kastor\/)?seasons\.js"><\/script>/);
+    expect(existsSync(join(docs, 'seasons.js'))).toBe(true);
+  });
+
   it('carries no keyword lists: no meta keywords and no keywords in JSON-LD', () => {
     for (const p of pages) {
       expect(p.html, p.rel).not.toMatch(/<meta name="keywords"/);

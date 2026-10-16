@@ -1,7 +1,7 @@
 // Shared page chrome for the kastor site: head, top bar, docs sidebar,
 // search dialog and footer. Used by scripts/build-site.mjs.
 import { logo } from './art/brand.mjs';
-import { sprite as brandSprite } from './art/icons.mjs';
+import { DATABASES, sprite as brandSprite } from './art/icons.mjs';
 import { illustration } from './art/illustrations.mjs';
 
 export const SITE = 'https://kwy404.github.io/kastor/';
@@ -97,6 +97,7 @@ export function head(p) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 ${THEME_SNIPPET}
+<script src="${prefix}seasons.js"></script>
 <title>${esc(p.title)}</title>
 <meta name="description" content="${esc(p.description)}">
 ${p.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${url}">`}
@@ -145,8 +146,14 @@ function brand(home, ver = true) {
   return `<a href="${home}" class="brand" aria-label="kastor home">${logo({ size: 26, id: `kl-${ver ? 'top' : 'foot'}` })}<span class="brand-name">kastor</span>${ver ? `<span class="brand-ver">${VERSION}</span>` : ''}</a>`;
 }
 
+/** The database picker in the top bar, on pages whose examples follow it. */
+export function dbSwitch(cls = 'db-switch') {
+  const options = DATABASES.map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  return `<label class="${cls}"><svg class="dbic" aria-hidden="true"><use data-db-icon href="#db-postgres"/></svg><span class="sr-only">Database for the examples</span><select data-db-switch aria-label="Database for the examples">${options}</select>${ui('chevron', 'ic db-chev')}</label>`;
+}
+
 /** The sticky top bar. */
-export function topbar(current = '', depth = 0, lang = 'en', root = null) {
+export function topbar(current = '', depth = 0, lang = 'en', root = null, withDb = false) {
   const prefix = root ?? (depth ? '../'.repeat(depth) : '');
   const home = root ?? (depth ? `${prefix}` : './');
   const links = NAV.map(([key, label, href]) => {
@@ -160,6 +167,7 @@ export function topbar(current = '', depth = 0, lang = 'en', root = null) {
     ${brand(home)}
     <nav id="topnav" class="topnav" :class="{ 'is-open': open }" aria-label="Main" @click="open = false">${links}${langLink}</nav>
     <div class="top-right">
+      ${withDb ? dbSwitch() : ''}
       <button type="button" class="search-btn" data-search-open v-hotkey="mod+k" aria-haspopup="dialog" aria-label="Search the site">${ui('search')}<span class="search-label">Search docs</span><kbd class="kbd kbd-sm">Ctrl K</kbd></button>
       <a href="${GITHUB}" class="icon-btn" aria-label="kastor on GitHub">${ui('github')}</a>
       <button type="button" class="icon-btn theme-btn" v-theme-toggle.cycle aria-label="Switch theme" title="Theme: system, light or dark">${ui('system', 'ic ti-system')}${ui('sun', 'ic ti-light')}${ui('moon', 'ic ti-dark')}</button>
@@ -179,7 +187,7 @@ export function searchDialog(depth = 0, root = null) {
     <div id="search-results" class="command-palette-list" role="listbox" aria-label="Results">
       <p class="command-palette-heading" v-if="!q">Suggestions</p>
       <a v-for="(r, i) in hits(q, S.ready)" :key="r.url" :href="r.href" class="command-palette-item" role="option" :aria-selected="i === sel ? 'true' : 'false'" @mouseenter="sel = i"><span class="hit-kind" v-text="r.kind"></span><span class="hit-text"><span class="hit-title" v-text="r.title"></span><span class="hit-sub" v-text="r.sub"></span></span>${ui('chevron', 'ic hit-go')}</a>
-      <div class="command-palette-empty search-empty" v-if="q && !hits(q, S.ready).length"><img src="${prefix}assets/mascot-head.svg" class="brand-light" width="64" height="64" alt="" loading="lazy"><img src="${prefix}assets/mascot-head-dark.svg" class="brand-dark" width="64" height="64" alt="" loading="lazy"><p>Kas looked under every log. Nothing matches that yet.</p><p class="search-empty-sub">Try a method name, a database or a framework.</p></div>
+      <div class="command-palette-empty search-empty" v-if="q && !hits(q, S.ready).length"><img src="${prefix}assets/mascot-head.svg" class="brand-light" width="64" height="64" alt="" loading="lazy" data-season-art="mascot-head"><img src="${prefix}assets/mascot-head-dark.svg" class="brand-dark" width="64" height="64" alt="" loading="lazy" data-season-art="mascot-head-dark"><p>Kas looked under every log. Nothing matches that yet.</p><p class="search-empty-sub">Try a method name, a database or a framework.</p></div>
     </div>
     <div class="command-palette-footer"><span><kbd class="kbd kbd-xs">Enter</kbd> open</span><span><kbd class="kbd kbd-xs">Up</kbd> <kbd class="kbd kbd-xs">Down</kbd> move</span><span><kbd class="kbd kbd-xs">Esc</kbd> close</span></div>
   </div>
@@ -225,7 +233,7 @@ export function footer(guides, depth = 0, root = null) {
   </div>
   <div class="kas-peek" v-data="{ up: false }" :class="{ 'is-up': up }">
     <p class="kas-say" role="status" v-show="up" style="display:none">Kas here. One query per include tree, every time. Now back to the dam.</p>
-    <button type="button" class="kas-btn" @click="up = !up" :aria-expanded="up ? 'true' : 'false'" aria-expanded="false" aria-label="Say hi to Kas, the kastor beaver"><img src="${prefix}assets/mascot-head.svg" class="brand-light" width="64" height="64" alt="" loading="lazy"><img src="${prefix}assets/mascot-head-dark.svg" class="brand-dark" width="64" height="64" alt="" loading="lazy"></button>
+    <button type="button" class="kas-btn" @click="up = !up" :aria-expanded="up ? 'true' : 'false'" aria-expanded="false" aria-label="Say hi to Kas, the kastor beaver"><img src="${prefix}assets/mascot-head.svg" class="brand-light" width="64" height="64" alt="" loading="lazy" data-season-art="mascot-head"><img src="${prefix}assets/mascot-head-dark.svg" class="brand-dark" width="64" height="64" alt="" loading="lazy" data-season-art="mascot-head-dark"></button>
   </div>
 </footer>`;
 }
@@ -305,7 +313,7 @@ export function page(p, body, guides) {
   return `${head(p)}
 <body class="antialiased page-${p.kind}${docs ? ' has-docs' : ''}">
 ${sprite()}
-${topbar(p.nav, depth, p.lang, p.root)}
+${topbar(p.nav, depth, p.lang, p.root, p.dbSwitch)}
 <main id="main">
 ${main}
 </main>

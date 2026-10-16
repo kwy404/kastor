@@ -9,7 +9,7 @@
 //   sql.js        SQLite compiled to WebAssembly, loaded on demand, to run the
 //                 query against seeded sample rows
 import * as K from './pg-kastor.js';
-import { PRESETS, SCHEMA } from './pg-presets.js';
+import { PRESETS, SCHEMA, TUTORIAL } from './pg-presets.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -398,6 +398,66 @@ export function rowsHtml(result) {
   return `<table class="rows-table"><thead><tr>${keys.map((k) => `<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${list.map((r) => `<tr>${keys.map((k) => `<td>${renderValue(r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
+// ---------- Tutorial ----------
+
+/** The five step tutorial above the editors: step pills, the task, Show me and Next. */
+function makeTutorial(root, hooks) {
+  const box = $('[data-tutorial]', root);
+  const t = { index: 0, done: new Set(), check() {}, go() {} };
+  if (!box) return t;
+  const pills = $$('[data-step]', box);
+  const title = $('[data-step-title]', box);
+  const text = $('[data-step-text]', box);
+  const count = $('[data-step-count]', box);
+  const status = $('[data-step-state]', box);
+  const next = $('[data-next]', box);
+  const prev = $('[data-prev]', box);
+  const show = $('[data-show]', box);
+  const finish = $('[data-finish]', box);
+  const bar = $('[data-progress]', box);
+  const paint = () => {
+    const step = TUTORIAL[t.index];
+    const ok = t.done.has(t.index);
+    pills.forEach((p, i) => {
+      if (i === t.index) p.setAttribute('aria-current', 'step');
+      else p.removeAttribute('aria-current');
+      p.classList.toggle('is-done', t.done.has(i));
+    });
+    title.textContent = step.title;
+    text.innerHTML = step.text;
+    count.textContent = `Step ${t.index + 1} of ${TUTORIAL.length}`;
+    status.textContent = ok ? (t.index === TUTORIAL.length - 1 ? 'Done. That is the whole loop.' : 'Done. On to the next step.') : 'Your turn: make the edit, or press Show me.';
+    box.classList.toggle('is-ok', ok);
+    prev.disabled = t.index === 0;
+    next.hidden = t.index === TUTORIAL.length - 1;
+    next.classList.toggle('btn-solid', ok);
+    next.classList.toggle('btn-line', !ok);
+    show.hidden = ok;
+    finish.hidden = t.done.size !== TUTORIAL.length;
+    bar.style.transform = `scaleX(${t.done.size / TUTORIAL.length})`;
+  };
+  t.go = (i) => {
+    t.index = Math.max(0, Math.min(TUTORIAL.length - 1, i));
+    paint();
+    hooks.load(TUTORIAL[t.index]);
+  };
+  t.check = () => {
+    if (!t.done.has(t.index) && hooks.passed(TUTORIAL[t.index].check)) {
+      t.done.add(t.index);
+      box.classList.remove('just-done');
+      void box.offsetWidth;
+      box.classList.add('just-done');
+      paint();
+    }
+  };
+  pills.forEach((p) => p.addEventListener('click', () => t.go(Number(p.dataset.step))));
+  next.addEventListener('click', () => t.go(t.index + 1));
+  prev.addEventListener('click', () => t.go(t.index - 1));
+  show.addEventListener('click', () => hooks.apply(TUTORIAL[t.index].solution));
+  paint();
+  return t;
+}
+
 // ---------- Mount ----------
 
 export function mount(root) {
@@ -410,7 +470,8 @@ export function mount(root) {
   const dbBar = $('[data-dbs]', root);
   const allBox = $('[data-all]', root);
   const foot = $('[data-foot]', root);
-  const state = { out: 'type', db: 'postgres', all: false, parsed: null, queryFn: null, seq: 0, typeSeq: 0, rowsFor: '' };
+  const shared = window.kastorDb;
+  const state = { out: 'type', db: shared?.get() || 'postgres', all: false, parsed: null, queryFn: null, seq: 0, typeSeq: 0, rowsFor: '', rowsOk: '' };
   let timer = null;
   const schedule = () => {
     clearTimeout(timer);
@@ -443,17 +504,25 @@ export function mount(root) {
       if (state.out === 'rows' && state.queryFn && state.rowsFor !== key()) runRows();
     }),
   );
+  // The database follows the switcher shared by every example on the page.
+  const selectDb = (id) => {
+    if (!K.DIALECTS[id]) return;
+    state.db = id;
+    $$('.db-tab', root).forEach((x) => x.setAttribute('aria-selected', String(x.dataset.dialect === id)));
+    if (state.all) {
+      state.all = false;
+      allBox.checked = false;
+    }
+    renderSql();
+  };
   $$('.db-tab', root).forEach((b) =>
     b.addEventListener('click', () => {
-      state.db = b.dataset.dialect;
-      $$('.db-tab', root).forEach((x) => x.setAttribute('aria-selected', String(x === b)));
-      if (state.all) {
-        state.all = false;
-        allBox.checked = false;
-      }
-      renderSql();
+      if (shared) shared.set(b.dataset.dialect);
+      else selectDb(b.dataset.dialect);
     }),
   );
+  window.addEventListener('kastor:db', (e) => selectDb(e.detail));
+  $$('.db-tab', root).forEach((x) => x.setAttribute('aria-selected', String(x.dataset.dialect === state.db)));
   allBox.addEventListener('change', () => {
     state.all = allBox.checked;
     renderSql();
@@ -556,7 +625,9 @@ export function mount(root) {
       const result = await state.queryFn(db, K.sql);
       const ms = (performance.now() - started).toFixed(1);
       if (key() !== myKey) return;
-      rowsOut.innerHTML = `<p class="pg-note">Ran on SQLite ${esc(SQL.Database ? '' : '')}in ${ms} ms against freshly seeded sample rows.</p>${rowsHtml(result)}`;
+      rowsOut.innerHTML = `<p class="pg-note">Ran on SQLite in ${ms} ms against freshly seeded sample rows.</p>${rowsHtml(result)}`;
+      state.rowsOk = myKey;
+      tutorial.check();
       sdb.close();
     } catch (e) {
       rowsOut.innerHTML = errorBlock('SQLite', e) + '<button type="button" class="btn btn-primary btn-sm" data-run>Try again</button>';
@@ -566,6 +637,7 @@ export function mount(root) {
 
   function run() {
     state.seq++;
+    state.rowsOk = '';
     try {
       state.parsed = evalSchema(edSchema.value);
     } catch (e) {
@@ -587,14 +659,57 @@ export function mount(root) {
     if (!workerReady) setStatus('compiled, loading TypeScript');
     renderSql();
     sendTypes();
+    tutorial.check();
     if (state.out === 'rows' && state.queryFn) runRows();
     else rowsOut.innerHTML = '<p class="pg-note">Runs your query against an in-memory SQLite database (sql.js) seeded with sample rows. Loads about 1 MB the first time.</p><button type="button" class="btn btn-primary btn-sm" data-run>Run on SQLite</button>';
     $('[data-run]', rowsOut)?.addEventListener('click', runRows);
   }
 
-  edSchema.value = SCHEMA;
-  edQuery.value = PRESETS[0].query;
-  run();
+  // ---------- Tutorial ----------
+
+  const tutorial = makeTutorial(root, {
+    load(step) {
+      edSchema.value = step.schema;
+      edQuery.value = step.query;
+      run();
+      $(`.pg-file[data-file="${step.file}"]`, root).click();
+      $(`.pg-otab[data-out="${step.out}"]`, root).click();
+    },
+    apply(solution) {
+      if (solution.schema) edSchema.value = solution.schema;
+      if (solution.query) edQuery.value = solution.query;
+      if (solution.schema || solution.query) run();
+      else if (state.out !== 'rows') $('.pg-otab[data-out="rows"]', root).click();
+      else runRows();
+    },
+    passed(check) {
+      const cols = (name) => state.parsed?.tables[name]?.$table?.columns || {};
+      if (check === 'users.name') return Boolean(cols('users').name);
+      if (check === 'posts.authorId.references') return Boolean(cols('posts').authorId?.config.references);
+      if (check === 'query.include.posts') return Boolean(state.queryFn) && /include\s*:\s*\{[^}]*\bposts\s*:/.test(edQuery.value);
+      if (check === 'posts.views') return Boolean(cols('posts').views);
+      if (check === 'rows') return state.rowsOk !== '' && state.rowsOk === key();
+      return false;
+    },
+  });
+
+  // Examples and the tutorial share the editors.
+  const modes = $$('[data-mode]', root);
+  const setMode = (mode) => {
+    modes.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+    $('[data-tutorial]', root).hidden = mode !== 'tutorial';
+    $('.pg-presets', root).hidden = mode !== 'examples';
+    if (mode === 'examples') $('[data-preset="0"]', root).click();
+    else tutorial.go(tutorial.index);
+  };
+  modes.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  if ($('[data-tutorial]', root)) setMode('tutorial');
+  else {
+    edSchema.value = SCHEMA;
+    edQuery.value = PRESETS[0].query;
+    run();
+  }
   new ResizeObserver(() => {
     edSchema.fit();
     edQuery.fit();
