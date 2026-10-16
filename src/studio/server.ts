@@ -9,6 +9,7 @@ import type { Adapter, SchemaIR } from '../core/ir';
 import { introspect } from '../migrate/engine';
 import { handleApi, toJson, type StudioState } from './api';
 import { clientScript } from './client';
+import { QueryLog } from './queries';
 import { FAVICON, renderPage, THEME_SCRIPT } from './page';
 
 export interface StudioOptions {
@@ -21,6 +22,8 @@ export interface StudioOptions {
   schema?: SchemaIR;
   version?: string;
   readOnly?: boolean;
+  /** Statements kept in the query log. Default 200; 0 turns the log off. */
+  queryLog?: number;
 }
 
 export interface StudioServer {
@@ -104,6 +107,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioServer>
     schema: options.schema ?? (await introspect(options.adapter)),
     version: options.version ?? '0.0.0',
     readOnly: options.readOnly,
+    queries: options.queryLog === 0 ? undefined : new QueryLog(options.queryLog ?? 200),
   };
   let port = 0;
   const allowedHosts = (): Set<string> => new Set([`${HOST}:${port}`, `localhost:${port}`]);

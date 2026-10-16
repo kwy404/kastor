@@ -12,7 +12,8 @@ export function clientMain(): void {
   type Rel = { from: string; columns: string[]; to: string; refColumns: string[]; name: string };
   type Schema = { dialect: string; version: string; readOnly: boolean; tables: Table[]; relations: Rel[] };
   type Filter = { column: string; op: string; value?: unknown };
-  type Route = { view: 'home' } | { view: 'diagram' } | { view: 'table'; table: string; tab: 'data' | 'structure'; filters: Filter[]; page: number; sort?: string; dir: 'asc' | 'desc'; q: string };
+  type Query = { id: number; at: string; action: string; sql: string; params: unknown[]; durationMs: number; error?: string };
+  type Route = { view: 'home' } | { view: 'diagram' } | { view: 'queries' } | { view: 'table'; table: string; tab: 'data' | 'structure'; filters: Filter[]; page: number; sort?: string; dir: 'asc' | 'desc'; q: string };
 
   const TOKEN_KEY = 'kastor-studio:token';
   const THEME_KEY = 'kastor-studio:theme';
@@ -107,6 +108,7 @@ export function clientMain(): void {
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
     const q = new URLSearchParams(query);
     if (parts[0] === 'diagram') return { view: 'diagram' };
+    if (parts[0] === 'queries') return { view: 'queries' };
     if (parts[0] === 'table' && parts[1]) {
       let filters: Filter[] = [];
       try {
@@ -200,7 +202,10 @@ export function clientMain(): void {
     renderTableList();
     $('#side').classList.remove('open');
     const route = parseRoute();
+    stopQueryPolling();
+    markNav(route);
     if (route.view === 'diagram') return renderDiagram();
+    if (route.view === 'queries') return renderQueries();
     if (route.view === 'table') return renderTable(route);
     renderHome();
   }
@@ -215,7 +220,7 @@ export function clientMain(): void {
       })
       .join('');
     $('#view').innerHTML = `<div class="space-y-6 max-w-6xl">
-      <div><h1 class="text-2xl font-bold">Your ${esc(s.dialect)} database</h1><p class="text-muted-foreground">${s.tables.length} table${s.tables.length === 1 ? '' : 's'}. Pick one to browse and edit its rows, or open the <a class="link link-primary" href="#/diagram">diagram</a>.</p></div>
+      <div><h1 class="text-2xl font-bold">Your ${esc(s.dialect)} database</h1><p class="text-muted-foreground">${s.tables.length} table${s.tables.length === 1 ? '' : 's'}. Pick one to browse and edit its rows, open the <a class="link link-primary" href="#/diagram">diagram</a>, or see the SQL the studio ran in the <a class="link link-primary" href="#/queries">query log</a>.</p></div>
       ${s.tables.length ? `<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards}</div>` : '<div class="empty-state empty-state-bordered"><h3 class="empty-state-title">No tables yet</h3><p class="empty-state-description">Run <code>kastor migrate dev</code> to create them from your schema.</p></div>'}
     </div>`;
   }
@@ -259,7 +264,7 @@ export function clientMain(): void {
     if (route.sort) qs.set('sort', route.sort);
     if (route.filters.length) qs.set('filters', JSON.stringify(route.filters));
     if (route.q) qs.set('q', route.q);
-    let data: { rows: Record<string, unknown>[]; total: number };
+    let data: { rows: Record<string, unknown>[]; total: number; queries?: Query[] };
     try {
       data = await api('GET', `/api/tables/${encodeURIComponent(table.name)}/rows?${qs}`);
     } catch (error) {
@@ -270,7 +275,8 @@ export function clientMain(): void {
     if (parseRoute().view !== 'table') return;
     current = { table, rows: data.rows, total: data.total, route };
     selected.clear();
-    view.innerHTML = head + toolbarHtml(table, route, readOnly) + gridHtml(table, data.rows, route, readOnly) + pagerHtml(data.total, route);
+    view.innerHTML = head + toolbarHtml(table, route, readOnly) + gridHtml(table, data.rows, route, readOnly) + pagerHtml(data.total, route) + pageSqlHtml(data.queries ?? []);
+    bindCopy(view, data.queries ?? []);
     bindTable(table, route, readOnly);
   }
 
@@ -590,6 +596,147 @@ export function clientMain(): void {
     form.querySelector<HTMLElement>('[data-close]')!.onclick = () => dlg.close();
     dlg.showModal();
     (form.querySelector('input, select, textarea') as HTMLElement | null)?.focus();
+  }
+
+  /* ----------------------------------------------------------- query log */
+  const SQL_WORDS =
+    /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|LATERAL|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|FETCH|NEXT|ROWS|ONLY|TOP|INSERT|INTO|VALUES|UPDATE|SET|DELETE|RETURNING|OUTPUT|WITH|UNION|ALL|DISTINCT|CASE|WHEN|THEN|ELSE|END|EXISTS|LIKE|ESCAPE|ASC|DESC|COUNT|COALESCE|CAST|BEGIN|COMMIT|ROLLBACK|PRAGMA|CREATE|ALTER|DROP|TABLE|INDEX)\b/g;
+
+  /** Escaped SQL with keywords, string literals and placeholders marked for color. */
+  function highlightSql(sql: string): string {
+    return sql
+      .split(/('(?:[^']|'')*')/)
+      .map((part, i) =>
+        i % 2
+          ? `<span class="sql-str">${esc(part)}</span>`
+          : esc(part)
+              .replace(SQL_WORDS, '<span class="sql-kw">$1</span>')
+              .replace(/(\$\d+|\?|:\d+|@p\d+)/g, '<span class="sql-param">$1</span>'),
+      )
+      .join('');
+  }
+
+  function timeLabel(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function queryHtml(q: Query, fresh = false): string {
+    const params = q.params.length ? `<p class="query-params"><span class="text-muted-foreground">Parameters</span> <code>${esc(JSON.stringify(q.params))}</code></p>` : '';
+    const error = q.error ? `<p class="text-sm text-danger">${esc(q.error)}</p>` : '';
+    return `<article class="query${fresh ? ' query-new' : ''}${q.error ? ' query-failed' : ''}" data-query="${q.id}">
+      <header class="query-head"><span class="font-medium">${esc(q.action)}</span><span class="text-xs text-muted-foreground">${esc(timeLabel(q.at))}</span><span class="badge badge-sm${q.durationMs >= 100 ? ' badge-warning' : ''}" title="Time spent in the database">${q.durationMs} ms</span>${q.error ? '<span class="badge badge-sm badge-danger">failed</span>' : ''}<span class="flex-1"></span><button type="button" class="btn btn-ghost btn-xs" data-copy-query="${q.id}">Copy SQL</button></header>
+      <pre class="query-sql"><code>${highlightSql(q.sql)}</code></pre>${params}${error}
+    </article>`;
+  }
+
+  function pageSqlHtml(queries: Query[]): string {
+    if (!queries.length) return '';
+    return `<details class="sql-peek mt-4"><summary class="text-sm">SQL for this page (${queries.length} statement${queries.length === 1 ? '' : 's'})</summary><div class="space-y-3 mt-3">${queries.map((q) => queryHtml(q)).join('')}</div><p class="text-sm mt-2"><a class="link link-primary" href="#/queries">Open the query log</a></p></details>`;
+  }
+
+  async function copyText(text: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      return ok;
+    }
+  }
+
+  function bindCopy(root: HTMLElement, queries: Query[]): void {
+    root.querySelectorAll<HTMLButtonElement>('[data-copy-query]').forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', async () => {
+        const q = queries.find((x) => String(x.id) === btn.dataset.copyQuery);
+        if (!q) return;
+        if (await copyText(q.sql)) {
+          btn.textContent = 'Copied';
+          setTimeout(() => (btn.textContent = 'Copy SQL'), 1500);
+        } else toast('Could not copy', 'warning', 'Select the SQL and copy it by hand.');
+      });
+    });
+  }
+
+  let queryTimer: ReturnType<typeof setInterval> | null = null;
+
+  function stopQueryPolling(): void {
+    if (queryTimer) clearInterval(queryTimer);
+    queryTimer = null;
+  }
+
+  function markNav(route: Route): void {
+    const link = document.getElementById('queries-link');
+    if (!link) return;
+    if (route.view === 'queries') link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+
+  async function renderQueries(): Promise<void> {
+    const view = $('#view');
+    let info: { sql: boolean; enabled: boolean; limit: number; queries: Query[] };
+    try {
+      info = await api('GET', '/api/queries');
+    } catch (error) {
+      fail(error);
+      return;
+    }
+    if (parseRoute().view !== 'queries') return;
+    let shown: Query[] = info.queries;
+    const empty = (title: string, text: string): string => `<div class="empty-state empty-state-bordered"><h3 class="empty-state-title">${title}</h3><p class="empty-state-description">${text}</p></div>`;
+    const draw = (): void => {
+      const head = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div><h1 class="text-2xl font-bold">Query log</h1><p class="text-muted-foreground">The statements this studio sent to the database, newest first. It keeps the last ${info.limit}.</p></div>
+        <div class="flex gap-2"><button type="button" class="btn btn-sm btn-ghost" id="queries-refresh">Refresh</button><button type="button" class="btn btn-sm btn-outline" id="queries-clear"${shown.length ? '' : ' disabled'}>Clear</button></div>
+      </div>`;
+      const first = schema?.tables[0];
+      let body: string;
+      if (!info.sql) body = empty('No SQL to show', 'MongoDB reads and writes go through driver commands, not SQL, so this log stays empty.');
+      else if (!info.enabled) body = empty('The query log is off', 'Start the studio again without turning the log off.');
+      else if (!shown.length) body = empty('No queries yet', `Open a table and the SQL it runs shows up here.${first ? ` <a class="link link-primary" href="${tableHref(first.name)}">Browse ${esc(first.name)}</a>` : ''}`);
+      else body = `<div class="space-y-3" id="query-list">${shown.map((q) => queryHtml(q)).join('')}</div>`;
+      view.innerHTML = head + body;
+      bindCopy(view, shown);
+      $('#queries-refresh').addEventListener('click', () => void renderQueries());
+      $('#queries-clear').addEventListener('click', async () => {
+        try {
+          await api('DELETE', '/api/queries');
+          shown = [];
+          draw();
+        } catch (error) {
+          fail(error);
+        }
+      });
+    };
+    draw();
+    if (!info.sql || !info.enabled) return;
+    stopQueryPolling();
+    queryTimer = setInterval(async () => {
+      if (document.hidden || parseRoute().view !== 'queries') return;
+      try {
+        const next = await api<{ queries: Query[] }>('GET', `/api/queries?after=${shown[0]?.id ?? 0}`);
+        if (!next.queries.length || parseRoute().view !== 'queries') return;
+        shown = [...next.queries, ...shown].slice(0, info.limit);
+        const list = document.getElementById('query-list');
+        if (!list) return draw();
+        list.insertAdjacentHTML('afterbegin', next.queries.map((q) => queryHtml(q, true)).join(''));
+        while (list.children.length > shown.length) list.lastElementChild?.remove();
+        bindCopy(list, shown);
+        ($('#queries-clear') as HTMLButtonElement).disabled = false;
+      } catch {
+        /* the next tick tries again */
+      }
+    }, 2000);
   }
 
   /* ------------------------------------------------------------- diagram */

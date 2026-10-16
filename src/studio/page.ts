@@ -41,6 +41,19 @@ body { margin: 0; }
 .er-edge-end { fill: var(--muted-foreground); }
 .er-tools { position: absolute; top: .75rem; right: .75rem; display: flex; gap: .5rem; }
 .filter-chip { display: inline-flex; align-items: center; gap: .35rem; }
+.query { border: 1px solid var(--border); border-radius: .75rem; padding: .75rem 1rem; background: var(--surface); }
+.query-failed { border-color: var(--danger); }
+.query-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.query-sql { margin: 0; padding: .75rem; border-radius: .5rem; background: var(--muted); color: var(--foreground); font: 12.5px/1.6 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
+.query-params { margin: .5rem 0 0; font-size: .8rem; overflow-wrap: anywhere; }
+.sql-kw { color: var(--primary); font-weight: 600; }
+.sql-str { color: var(--success); }
+.sql-param { color: var(--warning); font-weight: 600; }
+.sql-peek > summary { cursor: pointer; color: var(--muted-foreground); width: fit-content; }
+.sql-peek > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+@keyframes query-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.query-new { animation: query-in .24s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .query-new { animation: none; } }
 @media (max-width: 760px) { .studio-body { grid-template-columns: minmax(0, 1fr); } .studio-side { display: none; } .studio-side.open { display: block; position: fixed; inset: 3.5rem 0 0 0; z-index: 30; background: var(--background); } }
 `;
 
@@ -70,6 +83,7 @@ export function renderPage(options: { version: string }): string {
     </div>
     <nav class="navbar-end gap-2" aria-label="Studio">
       <a href="#/diagram" class="btn btn-ghost btn-sm hidden sm:inline-flex" id="diagram-link">Diagram</a>
+      <a href="#/queries" class="btn btn-ghost btn-sm hidden sm:inline-flex" id="queries-link" title="The SQL this studio ran">Queries</a>
       <button type="button" class="btn btn-ghost btn-sm hidden sm:inline-flex" id="refresh-schema" title="Read the schema again">Reload schema</button>
       <button type="button" class="btn btn-outline btn-sm" id="theme-toggle" aria-label="Switch theme">Theme: system</button>
     </nav>
@@ -81,7 +95,7 @@ export function renderPage(options: { version: string }): string {
       </div>
       <nav class="sidebar" aria-label="Tables">
         <div class="sidebar-section" id="table-list"><p class="sidebar-title">Tables</p></div>
-        <div class="sidebar-section"><p class="sidebar-title">Schema</p><a href="#/diagram" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4a2 2 0 0 1 2 2V14"/></svg><span class="sidebar-label">Diagram</span></a></div>
+        <div class="sidebar-section"><p class="sidebar-title">Schema</p><a href="#/diagram" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4a2 2 0 0 1 2 2V14"/></svg><span class="sidebar-label">Diagram</span></a><a href="#/queries" class="sidebar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m16 15 3 3-3 3"/></svg><span class="sidebar-label">Query log</span></a></div>
       </nav>
     </aside>
     <main class="studio-main p-4 md:p-6" id="view" tabindex="-1">

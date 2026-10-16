@@ -5,6 +5,7 @@
 import { KastorError, isKastorError } from '../core/errors';
 import type { Adapter, ColumnIR, OrderByIR, QueryIR, ReadIR, SchemaIR, SelectColumnIR, TableIR, WhereIR } from '../core/ir';
 import { introspect } from '../migrate/engine';
+import type { QueryEntry, QueryLog } from './queries';
 
 export interface StudioState {
   adapter: Adapter;
@@ -12,6 +13,8 @@ export interface StudioState {
   version: string;
   /** Refuse writes (create, update, delete). */
   readOnly?: boolean;
+  /** Records the statements the studio sends, for the query log view. */
+  queries?: QueryLog;
 }
 
 export interface ApiResponse {
@@ -179,7 +182,19 @@ function rowData(table: TableIR, data: unknown, forCreate: boolean): Record<stri
 }
 
 async function exec(state: StudioState, query: QueryIR): Promise<unknown> {
-  return state.adapter.dialect.execute(query, state.schema, state.adapter.executor);
+  const executor = state.queries ? state.queries.executor(state.adapter.executor) : state.adapter.executor;
+  return state.adapter.dialect.execute(query, state.schema, executor);
+}
+
+/** True when the database speaks SQL, so the query log has statements to show. */
+export function logsSql(state: StudioState): boolean {
+  return state.adapter.dialect.name !== 'mongodb';
+}
+
+/** Runs one API action, labelled in the query log when there is one. */
+async function logged<T>(state: StudioState, action: string, fn: () => Promise<T>): Promise<{ result: T; queries: QueryEntry[] }> {
+  if (!state.queries) return { result: await fn(), queries: [] };
+  return state.queries.run(action, fn);
 }
 
 export interface RowsQuery {
@@ -275,22 +290,37 @@ export async function handleApi(state: StudioState, method: string, path: string
       return { status: 200, body: { dialect: state.adapter.dialect.name, version: state.version, readOnly: Boolean(state.readOnly), tables: state.schema.tables, enums: state.schema.enums ?? [], relations: relationsOf(state.schema) } };
     }
     if (path === '/api/refresh' && method === 'POST') {
-      state.schema = await introspect(state.adapter);
+      const adapter = state.queries ? state.queries.adapter(state.adapter) : state.adapter;
+      const { result } = await logged(state, 'Reload schema', () => introspect(adapter));
+      state.schema = result;
       return { status: 200, body: { tables: state.schema.tables.length } };
+    }
+    if (path === '/api/queries') {
+      if (method === 'GET') {
+        const after = Math.max(0, Math.floor(Number(params.get('after') ?? 0)) || 0);
+        return { status: 200, body: { sql: logsSql(state), enabled: Boolean(state.queries), limit: state.queries?.limit ?? 0, queries: state.queries?.list(after) ?? [] } };
+      }
+      if (method === 'DELETE') {
+        state.queries?.clear();
+        return { status: 200, body: { cleared: true } };
+      }
+      return { status: 405, body: { error: { code: 'METHOD', message: `${method} is not allowed here.` } } };
     }
     const m = /^\/api\/tables\/([^/]+)\/rows$/.exec(path);
     if (m) {
       const table = decodeURIComponent(m[1]!);
       const b = (body ?? {}) as { data?: unknown; key?: unknown; keys?: unknown };
       switch (method) {
-        case 'GET':
-          return { status: 200, body: await listRows(state, table, parseRowsQuery(params)) };
+        case 'GET': {
+          const { result, queries } = await logged(state, `Browse ${table}`, () => listRows(state, table, parseRowsQuery(params)));
+          return { status: 200, body: { ...result, queries } };
+        }
         case 'POST':
-          return { status: 201, body: { row: await createRow(state, table, b.data) } };
+          return { status: 201, body: { row: (await logged(state, `Add a row to ${table}`, () => createRow(state, table, b.data))).result } };
         case 'PATCH':
-          return { status: 200, body: { row: await updateRow(state, table, b.key, b.data) } };
+          return { status: 200, body: { row: (await logged(state, `Edit a row in ${table}`, () => updateRow(state, table, b.key, b.data))).result } };
         case 'DELETE':
-          return { status: 200, body: await deleteRows(state, table, b.keys) };
+          return { status: 200, body: (await logged(state, `Delete rows from ${table}`, () => deleteRows(state, table, b.keys))).result };
         default:
           return { status: 405, body: { error: { code: 'METHOD', message: `${method} is not allowed here.` } } };
       }
