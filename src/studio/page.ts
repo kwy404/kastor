@@ -84,7 +84,7 @@ body { margin: 0; }
 .empty-art { display: block; width: 4.5rem; height: 4.5rem; margin: 0 auto .5rem; }
 @keyframes season-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .season-mascot { animation: none; } .season-chip { transition: none; } }
-@media (max-width: 640px) { .season-chip-label { display: none; } .season-mascot { width: 5rem; height: 5rem; } }
+@media (max-width: 640px) { .season-chip { padding: 0 .15rem; gap: 0; } .season-chip-label, .season-chip-state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .season-mascot { width: 5rem; height: 5rem; } .studio > header .navbar-start { min-width: 0; } }
 @media (max-width: 760px) { .studio-body { grid-template-columns: minmax(0, 1fr); } .studio-side { display: none; } .studio-side.open { display: block; position: fixed; inset: 3.5rem 0 0 0; z-index: 30; background: var(--background); } }
 `;
 
