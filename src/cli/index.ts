@@ -44,6 +44,7 @@ export interface MainOptions {
   color?: boolean;
   openUrl?: (url: string) => void;
   onStudio?: CliContext['onStudio'];
+  exec?: CliContext['exec'];
 }
 
 export async function main(argv: string[], options: MainOptions = {}): Promise<number> {
@@ -83,6 +84,7 @@ export async function main(argv: string[], options: MainOptions = {}): Promise<n
       options: parsed.options,
       openUrl: options.openUrl ?? openBrowser,
       onStudio: options.onStudio,
+      exec: options.exec,
     };
     return await HANDLERS[command.name]!(ctx);
   } catch (error) {

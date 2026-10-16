@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import type { QueryEvent } from '../../core/client';
 import { KastorError } from '../../core/errors';
 import { generateSchema } from '../../migrate/codegen';
 import { tablesOf } from '../../core/schema-ir';
@@ -99,8 +100,8 @@ export async function runSeed(ctx: CliContext, project: Project): Promise<void> 
   }
 }
 
-/** A kastor client over the project's adapter and schema. */
-export async function makeClient(project: Project): Promise<unknown> {
+/** A kastor client over the project's adapter and schema; `log` sees every statement it runs. */
+export async function makeClient(project: Project, options: { log?: (event: QueryEvent) => void } = {}): Promise<unknown> {
   const core = (await import('../../index')) as Record<string, unknown>;
   const create = core.kastor as ((config: Record<string, unknown>) => unknown) | undefined;
   if (typeof create !== 'function') throw new KastorError('UNSUPPORTED', 'This build of kastor has no client.', { hint: 'Reinstall kastor-orm.' });
@@ -109,7 +110,7 @@ export async function makeClient(project: Project): Promise<unknown> {
   const relations = typeof raw.relations === 'function' ? raw.relations : undefined;
   const nested = raw.schema as Record<string, unknown> | undefined;
   const tables = Object.fromEntries(tablesOf(nested && tablesOf(nested).length ? nested : raw));
-  return create({ adapter: project.adapter, schema: tables, ...(relations ? { relations } : {}) });
+  return create({ adapter: project.adapter, schema: tables, ...(relations ? { relations } : {}), ...(options.log ? { log: options.log } : {}) });
 }
 
 export async function dbSeed(ctx: CliContext): Promise<number> {

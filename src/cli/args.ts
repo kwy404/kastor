@@ -39,6 +39,8 @@ export const OPTIONS: Record<string, OptionSpec> = {
   out: { type: 'string', alias: 'o', value: 'path', description: 'Output file for db pull (default: the schema path from the config)' },
   print: { type: 'boolean', description: 'Print to stdout instead of writing a file' },
   db: { type: 'string', value: 'database', description: 'Database for init: postgres, cockroach, mysql, mariadb, sqlite, libsql, d1, mssql, oracle, mongodb' },
+  install: { type: 'boolean', description: 'Install kastor-orm and the database driver (use --no-install to skip)' },
+  run: { type: 'boolean', description: 'Create the tables, seed them and run a first query (use --no-run to skip)' },
   json: { type: 'boolean', description: 'Machine readable output' },
   schema: { type: 'string', alias: 's', value: 'path', description: 'Prisma schema file or folder (default: prisma/schema.prisma)' },
   'from-prisma': { type: 'string', value: 'folder', description: 'Also record the Prisma migrations in this folder as applied history' },
@@ -52,10 +54,14 @@ const COMMON = ['config', 'color', 'help'];
 export const COMMANDS: CommandSpec[] = [
   {
     name: 'init',
-    summary: 'Scaffold kastor.config.ts and a starter schema',
-    usage: 'kastor init [--db postgres]',
-    options: ['db', 'force', 'yes', 'color', 'help'],
-    examples: ['kastor init --db postgres', 'kastor init --db sqlite'],
+    summary: 'Set up kastor step by step: pick a database, write a sample schema and run a first query',
+    usage: 'kastor init [--db sqlite] [--install] [--run] [--yes]',
+    options: ['db', 'install', 'run', 'force', 'yes', 'color', 'help'],
+    optionOverrides: {
+      force: { type: 'boolean', alias: 'f', description: 'Overwrite an existing kastor.config.ts' },
+      yes: { type: 'boolean', alias: 'y', description: 'Say yes to every step: install the packages and run the first query' },
+    },
+    examples: ['kastor init', 'kastor init --db sqlite --yes', 'kastor init --db postgres --no-install --no-run'],
   },
   {
     name: 'migrate dev',

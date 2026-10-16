@@ -233,7 +233,8 @@ describe('kastor init', () => {
       expect(readFileSync(join(dir, 'src/db/schema.ts'), 'utf8')).toContain("export const users = table('users'");
       expect(readFileSync(join(dir, '.env'), 'utf8')).toContain('DATABASE_URL=postgres://');
       expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('node_modules\n.env\n');
-      expect(r.out).toContain('npm install kastor-orm pg');
+      expect(r.out).toContain('npm install kastor-orm');
+      expect(r.out).toContain('Set the connection in .env');
       const again = await run(dir, ['init', '--db', 'sqlite']);
       expect(again.code).toBe(1);
       expect(again.err).toContain('already exists');
@@ -243,7 +244,7 @@ describe('kastor init', () => {
       expect(forced.out).toContain('skip   src/db/schema.ts');
       const unknown = await run(dir, ['init', '--db', 'nope']);
       expect(unknown.code).toBe(2);
-      const ask = await run(dir, ['init', '--force'], { prompt: new ScriptedPrompter(['sqlite']) });
+      const ask = await run(dir, ['init', '--force'], { prompt: new ScriptedPrompter(['sqlite', false]) });
       expect(ask.code).toBe(0);
       expect(readFileSync(join(dir, 'kastor.config.ts'), 'utf8')).toContain('better-sqlite3');
       expect((await run(dir, ['init', '--force'])).err).toContain('Pass --db');

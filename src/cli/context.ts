@@ -21,6 +21,8 @@ export interface CliContext {
   openUrl?: (url: string) => void;
   /** Called with the running studio, so tests can stop it. */
   onStudio?: (studio: { url: string; close(): Promise<void> }) => void;
+  /** Runs a program such as the package manager and resolves with its exit code (init). */
+  exec?: (command: string, args: string[], cwd: string) => Promise<number>;
 }
 
 export interface Project {
