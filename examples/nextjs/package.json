@@ -1,0 +1,31 @@
+{
+  "name": "kastor-nextjs-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Next.js App Router starter with kastor and SQLite.",
+  "scripts": {
+    "predev": "kastor migrate deploy && kastor db seed",
+    "dev": "next dev",
+    "prebuild": "kastor migrate deploy",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "kastor migrate dev",
+    "db:seed": "kastor db seed",
+    "studio": "kastor studio"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "kastor-orm": "^0.1.1",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.3"
+  }
+}
