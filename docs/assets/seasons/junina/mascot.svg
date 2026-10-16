@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="t"><title id="t">Kas, the kastor beaver, dressed for Festa Junina</title><defs></defs><ellipse cx="262" cy="482" rx="170" ry="14" fill="#3a2416" opacity=".12"/><g id="kas-bonfire">
+  <path d="M44 486 L 134 452 M44 452 L 134 486" stroke="#3a2416" stroke-width="22" stroke-linecap="round"/>
+  <path d="M44 486 L 134 452 M44 452 L 134 486" stroke="#8b5a35" stroke-width="12" stroke-linecap="round"/>
+  <path d="M89 466 C 56 446 62 412 80 392 C 80 410 88 414 94 408 C 88 386 100 366 118 356 C 112 380 128 392 126 418 C 124 444 108 462 89 466 Z" fill="#f08a3c" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M90 460 C 76 448 78 430 88 418 C 90 432 98 432 102 426 C 108 440 106 454 90 460 Z" fill="#ffd27a"/>
+</g><g><g id="kas-tail">
+    <clipPath id="kas-tail-clip"><ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)"/></clipPath>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="#5a3a24"/>
+    <g clip-path="url(#kas-tail-clip)" stroke="#7a5236" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M320 380 L470 500 M340 352 L490 472 M360 324 L510 444 M300 408 L450 528"/>
+      <path d="M470 330 L330 470 M495 352 L355 492 M445 308 L305 448 M520 375 L380 515"/>
+    </g>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="none" stroke="#3a2416" stroke-width="7"/>
+  </g>
+<g id="kas-pencil" transform="rotate(-38 352 132)">
+    <rect x="300" y="120" width="104" height="22" rx="4" fill="#e2553b" stroke="#3a2416" stroke-width="6"/>
+    <rect x="300" y="131" width="104" height="5" fill="#b83f29" opacity=".55"/>
+    <path d="M404 120 L434 131 L404 142 Z" fill="#f4d4a2" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M424 127.4 L434 131 L424 134.6 Z" fill="#3a2416"/>
+  </g>
+<g id="kas-body">
+    <ellipse cx="208" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <ellipse cx="306" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 250 C 340 250 362 330 360 386 C 358 440 316 468 256 468 C 196 468 154 440 152 386 C 150 330 172 250 256 250 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 300 C 304 300 318 350 316 392 C 314 430 292 452 256 452 C 220 452 198 430 196 392 C 194 350 208 300 256 300 Z" fill="#f0cf9f"/>
+    <path d="M214 420 C 226 440 244 448 256 448 C 268 448 286 440 298 420" fill="none" stroke="#e2b77f" stroke-width="5" stroke-linecap="round"/>
+  </g>
+<g id="kas-corn" transform="rotate(-14 196 352)">
+  <path d="M110 352 C 110 326 150 318 240 326 C 270 330 290 342 292 352 C 290 362 270 374 240 378 C 150 386 110 378 110 352 Z" fill="#f2c94c" stroke="#3a2416" stroke-width="7"/>
+  <path d="M140 338 V 368 M166 334 V 372 M192 333 V 374 M218 333 V 374 M244 336 V 370 M128 352 H 286" stroke="#d9a21e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M110 352 C 92 330 76 326 60 334 C 74 344 84 352 110 352 Z M110 352 C 90 372 72 380 58 372 C 74 362 88 354 110 352 Z" fill="#7aa35a" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+</g>
+<g id="kas-arms">
+    <path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="216" cy="368" rx="22" ry="18" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M206 360 v 14 M216 358 v 16 M226 360 v 14" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="368" cy="246" rx="11" ry="9" transform="rotate(-30 368 246)" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M366 236 C 364 214 374 204 390 204 C 406 204 414 216 412 236 C 410 254 400 260 388 260 C 374 260 368 252 366 236 Z" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M381 208 v 14 M392 206 v 15 M403 209 v 13" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+<g id="kas-bandana">
+  <path d="M188 288 C 228 304 284 304 324 288 L 256 352 Z" fill="#c4473d" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="232" cy="306" r="4" fill="#f6efe2"/><circle cx="280" cy="306" r="4" fill="#f6efe2"/><circle cx="256" cy="326" r="4" fill="#f6efe2"/>
+</g>
+<g id="kas-head">
+    <circle cx="164" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="164" cy="168" r="11" fill="#8b532c"/>
+    <circle cx="348" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="348" cy="168" r="11" fill="#8b532c"/>
+    <path d="M256 104 C 330 104 360 150 360 204 C 360 262 316 300 256 300 C 196 300 152 262 152 204 C 152 150 182 104 256 104 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M168 232 C 176 270 210 292 256 292 C 302 292 336 270 344 232" fill="none" stroke="#c4834f" stroke-width="6" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="190" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="322" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="256" cy="244" rx="56" ry="40" fill="#f0cf9f" stroke="#3a2416" stroke-width="5"/>
+    <path d="M243 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M257 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M228 262 C 238 272 250 270 256 262 C 262 270 274 272 284 262" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 240 V 262" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M236 228 C 236 216 276 216 276 228 C 276 240 262 244 256 244 C 250 244 236 240 236 228 Z" fill="#3a2416"/>
+    <ellipse cx="248" cy="225" rx="7" ry="4" fill="#ffffff" opacity=".55"/>
+    <ellipse cx="216" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <ellipse cx="296" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <circle cx="221" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="301" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="212" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <circle cx="292" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <path d="M198 170 C 206 164 222 163 230 168" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M282 168 C 290 163 306 164 314 170" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+<g id="kas-straw">
+  <ellipse cx="256" cy="146" rx="150" ry="28" fill="#e2b85c" stroke="#3a2416" stroke-width="7"/>
+  <path d="M120 152 l-8 8 M150 166 l-4 10 M190 172 l-2 10 M232 175 v10 M280 175 v10 M322 172 l2 10 M362 166 l4 10 M392 152 l8 8" stroke="#3a2416" stroke-width="4" stroke-linecap="round"/>
+  <path d="M186 146 C 186 94 218 70 256 70 C 294 70 326 94 326 146 Z" fill="#ecc66e" stroke="#3a2416" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M200 102 C 236 94 276 94 312 102 M194 120 C 236 112 276 112 318 120" fill="none" stroke="#c99a3d" stroke-width="4" stroke-linecap="round"/>
+  <path d="M188 128 C 230 138 282 138 324 128 L 326 146 C 280 154 232 154 186 146 Z" fill="#c4473d" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+  <rect x="284" y="84" width="24" height="22" rx="2" fill="#5f8fc0" stroke="#3a2416" stroke-width="4" transform="rotate(8 296 95)"/>
+  <path d="M288 88 l16 14 M304 88 l-16 14" stroke="#e7eef8" stroke-width="2.5" stroke-dasharray="3 3" transform="rotate(8 296 95)"/>
+</g></g></svg>

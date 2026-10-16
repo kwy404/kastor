@@ -26,7 +26,7 @@ export const C = {
 
 const sw = 7;
 
-function tail() {
+export function tail() {
   return `<g id="kas-tail">
     <clipPath id="kas-tail-clip"><ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)"/></clipPath>
     <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="${C.tail}"/>
@@ -38,7 +38,7 @@ function tail() {
   </g>`;
 }
 
-function pencil() {
+export function pencil() {
   // Carpenter pencil tucked behind the right ear, drawn before the head.
   return `<g id="kas-pencil" transform="rotate(-38 352 132)">
     <rect x="300" y="120" width="104" height="22" rx="4" fill="${C.pencil}" stroke="${C.ink}" stroke-width="6"/>
@@ -48,7 +48,7 @@ function pencil() {
   </g>`;
 }
 
-function body() {
+export function body() {
   return `<g id="kas-body">
     <ellipse cx="208" cy="466" rx="40" ry="17" fill="${C.foot}" stroke="${C.ink}" stroke-width="${sw}"/>
     <ellipse cx="306" cy="466" rx="40" ry="17" fill="${C.foot}" stroke="${C.ink}" stroke-width="${sw}"/>
@@ -58,7 +58,7 @@ function body() {
   </g>`;
 }
 
-function roll() {
+export function roll() {
   // Blueprint roll tucked under the left arm (viewer's left), in front of the body.
   return `<g id="kas-roll" transform="rotate(-12 200 352)">
     <rect x="86" y="326" width="214" height="52" rx="10" fill="${C.bp}" stroke="${C.ink}" stroke-width="${sw}"/>
@@ -70,7 +70,7 @@ function roll() {
   </g>`;
 }
 
-function arms() {
+export function arms() {
   // Left arm wraps over the roll; right arm waves.
   const limb = (d, w = 40) => `<path d="${d}" fill="none" stroke="${C.ink}" stroke-width="${w + sw * 2 - 2}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${C.fur}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
   return `<g id="kas-arms">
@@ -84,7 +84,7 @@ function arms() {
   </g>`;
 }
 
-function head() {
+export function head() {
   return `<g id="kas-head">
     <circle cx="164" cy="166" r="24" fill="${C.fur}" stroke="${C.ink}" stroke-width="${sw}"/>
     <circle cx="164" cy="168" r="11" fill="${C.furShade}"/>
@@ -112,7 +112,7 @@ function head() {
   </g>`;
 }
 
-function hat() {
+export function hat() {
   return `<g id="kas-hat">
     <path d="M168 150 C 168 92 206 58 256 58 C 306 58 344 92 344 150 Z" fill="${C.hat}" stroke="${C.ink}" stroke-width="${sw}" stroke-linejoin="round"/>
     <path d="M300 74 C 326 90 338 116 340 146 L 318 146 C 316 116 310 92 300 74 Z" fill="${C.hatShade}" opacity=".7"/>

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="t"><title id="t">Kas, the kastor beaver, dressed for New Year</title><defs><filter id="kas-rim" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="9" result="d"/><feFlood flood-color="#fff4df"/><feComposite in2="d" operator="in" result="o"/><feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g transform="translate(70 90)" stroke="#e9c46a" stroke-width="3.5" stroke-linecap="round"><path d="M19.8 0.0 L 44.0 0.0"/><path d="M17.1 9.9 L 38.1 22.0"/><path d="M9.9 17.1 L 22.0 38.1"/><path d="M0.0 19.8 L 0.0 44.0"/><path d="M-9.9 17.1 L -22.0 38.1"/><path d="M-17.1 9.9 L -38.1 22.0"/><path d="M-19.8 0.0 L -44.0 0.0"/><path d="M-17.1 -9.9 L -38.1 -22.0"/><path d="M-9.9 -17.1 L -22.0 -38.1"/><path d="M-0.0 -19.8 L -0.0 -44.0"/><path d="M9.9 -17.1 L 22.0 -38.1"/><path d="M17.1 -9.9 L 38.1 -22.0"/></g><g transform="translate(120 34)" stroke="#f08a3c" stroke-width="3.5" stroke-linecap="round"><path d="M10.8 0.0 L 24.0 0.0"/><path d="M8.7 6.3 L 19.4 14.1"/><path d="M3.3 10.3 L 7.4 22.8"/><path d="M-3.3 10.3 L -7.4 22.8"/><path d="M-8.7 6.3 L -19.4 14.1"/><path d="M-10.8 0.0 L -24.0 0.0"/><path d="M-8.7 -6.3 L -19.4 -14.1"/><path d="M-3.3 -10.3 L -7.4 -22.8"/><path d="M3.3 -10.3 L 7.4 -22.8"/><path d="M8.7 -6.3 L 19.4 -14.1"/></g><g filter="url(#kas-rim)"><g id="kas-tail">
+    <clipPath id="kas-tail-clip"><ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)"/></clipPath>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="#5a3a24"/>
+    <g clip-path="url(#kas-tail-clip)" stroke="#7a5236" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M320 380 L470 500 M340 352 L490 472 M360 324 L510 444 M300 408 L450 528"/>
+      <path d="M470 330 L330 470 M495 352 L355 492 M445 308 L305 448 M520 375 L380 515"/>
+    </g>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="none" stroke="#3a2416" stroke-width="7"/>
+  </g>
+<g id="kas-pencil" transform="rotate(-38 352 132)">
+    <rect x="300" y="120" width="104" height="22" rx="4" fill="#e2553b" stroke="#3a2416" stroke-width="6"/>
+    <rect x="300" y="131" width="104" height="5" fill="#b83f29" opacity=".55"/>
+    <path d="M404 120 L434 131 L404 142 Z" fill="#f4d4a2" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M424 127.4 L434 131 L424 134.6 Z" fill="#3a2416"/>
+  </g>
+<g id="kas-body">
+    <ellipse cx="208" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <ellipse cx="306" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 250 C 340 250 362 330 360 386 C 358 440 316 468 256 468 C 196 468 154 440 152 386 C 150 330 172 250 256 250 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 300 C 304 300 318 350 316 392 C 314 430 292 452 256 452 C 220 452 198 430 196 392 C 194 350 208 300 256 300 Z" fill="#f0cf9f"/>
+    <path d="M214 420 C 226 440 244 448 256 448 C 268 448 286 440 298 420" fill="none" stroke="#e2b77f" stroke-width="5" stroke-linecap="round"/>
+  </g>
+<g id="kas-roll" transform="rotate(-12 200 352)">
+    <rect x="86" y="326" width="214" height="52" rx="10" fill="#2a63e6" stroke="#3a2416" stroke-width="7"/>
+    <path d="M110 340 H 270 M110 352 H 240 M110 364 H 260" stroke="#c9dafd" stroke-width="3.5" stroke-linecap="round" opacity=".9"/>
+    <path d="M150 334 V 370 M206 334 V 370" stroke="#c9dafd" stroke-width="2.5" stroke-dasharray="3 5" opacity=".7"/>
+    <ellipse cx="300" cy="352" rx="15" ry="26" fill="#e6eeff" stroke="#3a2416" stroke-width="7"/>
+    <path d="M300 352 m -6 0 a 6 9 0 1 0 12 0 a 9 13 0 1 0 -16 0" fill="none" stroke="#2a63e6" stroke-width="3"/>
+    <ellipse cx="86" cy="352" rx="15" ry="26" fill="#1b45b0" stroke="#3a2416" stroke-width="7"/>
+  </g>
+<g id="kas-arms">
+    <path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="216" cy="368" rx="22" ry="18" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M206 360 v 14 M216 358 v 16 M226 360 v 14" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="368" cy="246" rx="11" ry="9" transform="rotate(-30 368 246)" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M366 236 C 364 214 374 204 390 204 C 406 204 414 216 412 236 C 410 254 400 260 388 260 C 374 260 368 252 366 236 Z" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M381 208 v 14 M392 206 v 15 M403 209 v 13" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+
+<g id="kas-head">
+    <circle cx="164" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="164" cy="168" r="11" fill="#8b532c"/>
+    <circle cx="348" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="348" cy="168" r="11" fill="#8b532c"/>
+    <path d="M256 104 C 330 104 360 150 360 204 C 360 262 316 300 256 300 C 196 300 152 262 152 204 C 152 150 182 104 256 104 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M168 232 C 176 270 210 292 256 292 C 302 292 336 270 344 232" fill="none" stroke="#c4834f" stroke-width="6" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="190" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="322" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="256" cy="244" rx="56" ry="40" fill="#f0cf9f" stroke="#3a2416" stroke-width="5"/>
+    <path d="M243 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M257 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M228 262 C 238 272 250 270 256 262 C 262 270 274 272 284 262" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 240 V 262" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M236 228 C 236 216 276 216 276 228 C 276 240 262 244 256 244 C 250 244 236 240 236 228 Z" fill="#3a2416"/>
+    <ellipse cx="248" cy="225" rx="7" ry="4" fill="#ffffff" opacity=".55"/>
+    <ellipse cx="216" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <ellipse cx="296" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <circle cx="221" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="301" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="212" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <circle cx="292" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <path d="M198 170 C 206 164 222 163 230 168" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M282 168 C 290 163 306 164 314 170" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+<g id="kas-party" transform="rotate(10 258 120)">
+  <path d="M206 140 L 258 14 L 310 140 Z" fill="#2b2f45" stroke="#3a2416" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M232 76 L 284 76 M220 106 L 296 106 M245 46 L 271 46" stroke="#e9c46a" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="258" cy="14" r="15" fill="#e9c46a" stroke="#3a2416" stroke-width="5"/>
+  <path d="M206 140 C 236 150 280 150 310 140" fill="none" stroke="#e9c46a" stroke-width="6" stroke-linecap="round"/>
+</g></g><g id="kas-sparkler">
+  <path d="M394 212 L 436 132" stroke="#3a2416" stroke-width="7" stroke-linecap="round"/>
+  <path d="M394 212 L 436 132" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round"/>
+  <g transform="translate(440 124)" stroke="#f2b84b" stroke-width="4" stroke-linecap="round">
+    <path d="M0 -30 V -14 M0 14 V 30 M-30 0 H -14 M14 0 H 30 M-21 -21 L -11 -11 M11 11 L 21 21 M-21 21 L -11 11 M11 -11 L 21 -21"/>
+  </g>
+  <circle cx="440" cy="124" r="8" fill="#fff1c7" stroke="#f2b84b" stroke-width="3"/>
+</g></svg>

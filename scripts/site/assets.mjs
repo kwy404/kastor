@@ -7,6 +7,7 @@ import { favicon, logoFile } from './art/brand.mjs';
 import { banner } from './art/banner.mjs';
 import { DATABASES, FEATURE_ICONS, RUNTIMES, dbIconSvg, featureIconSvg, runtimeSymbol } from './art/icons.mjs';
 import { illustrationFile } from './art/illustrations.mjs';
+import { SEASONS, SEASON_ICONS, seasonAccent, seasonHead, seasonIconSvg, seasonMascot } from './art/seasons.mjs';
 
 export const ICON_THEMES = {
   light: { ink: '#171717', accent: '#d4622b', text: '#171717' },
@@ -40,6 +41,24 @@ export function writeAssets(root) {
   // The site serves its own copies so it works without the repo around it.
   for (const f of ['mascot.svg', 'mascot-dark.svg', 'mascot-head.svg', 'mascot-head-dark.svg', 'banner.svg', 'banner-dark.svg']) {
     put(`docs/assets/${f}`, f.startsWith('banner') ? banner(f.includes('dark') ? 'dark' : 'light') : f.startsWith('mascot-head') ? mascotHead({ dark: f.includes('dark') }) : mascot({ dark: f.includes('dark') }));
+  }
+  // Seasonal art: Kas in costume, icons and the stage accent, in the repo and on the site.
+  for (const { id } of SEASONS) {
+    const files = {
+      'mascot.svg': seasonMascot(id),
+      'mascot-dark.svg': seasonMascot(id, { dark: true }),
+      'head.svg': seasonHead(id),
+      'head-dark.svg': seasonHead(id, { dark: true }),
+      'accent.svg': seasonAccent(id, 'light'),
+      'accent-dark.svg': seasonAccent(id, 'dark'),
+    };
+    for (const [mode, theme] of Object.entries(ICON_THEMES)) {
+      for (const name of Object.keys(SEASON_ICONS[id])) files[`icons/${mode}/${name}.svg`] = seasonIconSvg(id, name, theme);
+    }
+    for (const [f, text] of Object.entries(files)) {
+      put(`assets/seasons/${id}/${f}`, text);
+      put(`docs/assets/seasons/${id}/${f}`, text);
+    }
   }
   put('docs/favicon.svg', favicon());
   return written;

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 -16 340 340" width="320" height="320" role="img" aria-labelledby="t"><title id="t">Kas, dressed for Carnival</title><defs><filter id="kas-head-rim" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="8" result="d"/><feFlood flood-color="#fff4df"/><feComposite in2="d" operator="in" result="o"/><feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#kas-head-rim)"><g id="kas-pencil" transform="rotate(-38 352 132)">
+    <rect x="300" y="120" width="104" height="22" rx="4" fill="#e2553b" stroke="#3a2416" stroke-width="6"/>
+    <rect x="300" y="131" width="104" height="5" fill="#b83f29" opacity=".55"/>
+    <path d="M404 120 L434 131 L404 142 Z" fill="#f4d4a2" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M424 127.4 L434 131 L424 134.6 Z" fill="#3a2416"/>
+  </g>
+<g id="kas-head">
+    <circle cx="164" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="164" cy="168" r="11" fill="#8b532c"/>
+    <circle cx="348" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="348" cy="168" r="11" fill="#8b532c"/>
+    <path d="M256 104 C 330 104 360 150 360 204 C 360 262 316 300 256 300 C 196 300 152 262 152 204 C 152 150 182 104 256 104 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M168 232 C 176 270 210 292 256 292 C 302 292 336 270 344 232" fill="none" stroke="#c4834f" stroke-width="6" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="190" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="322" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="256" cy="244" rx="56" ry="40" fill="#f0cf9f" stroke="#3a2416" stroke-width="5"/>
+    <path d="M243 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M257 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M228 262 C 238 272 250 270 256 262 C 262 270 274 272 284 262" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 240 V 262" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M236 228 C 236 216 276 216 276 228 C 276 240 262 244 256 244 C 250 244 236 240 236 228 Z" fill="#3a2416"/>
+    <ellipse cx="248" cy="225" rx="7" ry="4" fill="#ffffff" opacity=".55"/>
+    <ellipse cx="216" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <ellipse cx="296" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <circle cx="221" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="301" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="212" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <circle cx="292" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <path d="M198 170 C 206 164 222 163 230 168" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M282 168 C 290 163 306 164 314 170" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+  </g>
+<g id="kas-mask">
+  <path d="M182 194 C 184 170 226 164 256 182 C 286 164 328 170 330 194 C 334 220 298 228 278 218 C 266 212 262 204 256 204 C 250 204 246 212 234 218 C 214 228 178 220 182 194 Z" fill="#2a9d8f" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M196 182 C 214 174 236 176 252 186 M260 186 C 276 176 298 174 316 182" fill="none" stroke="#e9c46a" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="216" cy="198" rx="17" ry="14" fill="#f6efe2" stroke="#3a2416" stroke-width="4"/>
+  <ellipse cx="296" cy="198" rx="17" ry="14" fill="#f6efe2" stroke="#3a2416" stroke-width="4"/>
+  <ellipse cx="216" cy="198" rx="10" ry="11" fill="#3a2416"/>
+  <ellipse cx="296" cy="198" rx="10" ry="11" fill="#3a2416"/>
+  <circle cx="220" cy="194" r="3.5" fill="#ffffff"/>
+  <circle cx="300" cy="194" r="3.5" fill="#ffffff"/>
+  <circle cx="186" cy="208" r="4" fill="#e76f51"/><circle cx="326" cy="208" r="4" fill="#e76f51"/>
+</g>
+<g id="kas-feathers">
+  <path d="M232 70 C 212 40 222 8 244 0 C 252 26 250 52 240 76 Z" fill="#e76f51" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M256 66 C 246 30 258 4 276 -2 C 282 26 276 50 264 72 Z" fill="#e9c46a" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M276 74 C 280 42 300 24 322 24 C 318 50 304 70 284 82 Z" fill="#2a9d8f" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M164 140 C 176 100 214 80 256 80 C 298 80 336 100 348 140" fill="none" stroke="#3a2416" stroke-width="22" stroke-linecap="round"/>
+  <path d="M164 140 C 176 100 214 80 256 80 C 298 80 336 100 348 140" fill="none" stroke="#7b5ab8" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="256" cy="80" r="13" fill="#e9c46a" stroke="#3a2416" stroke-width="4.5"/>
+  <path d="M190 112 l4 4 M214 96 l4 4 M300 96 l4 4 M324 112 l4 4" stroke="#e9c46a" stroke-width="5" stroke-linecap="round"/>
+</g></g></svg>

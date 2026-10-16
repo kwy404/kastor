@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="t"><title id="t">Kas, the kastor beaver, dressed for Halloween</title><defs><filter id="kas-rim" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="9" result="d"/><feFlood flood-color="#fff4df"/><feComposite in2="d" operator="in" result="o"/><feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#kas-rim)"><g id="kas-tail">
+    <clipPath id="kas-tail-clip"><ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)"/></clipPath>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="#5a3a24"/>
+    <g clip-path="url(#kas-tail-clip)" stroke="#7a5236" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M320 380 L470 500 M340 352 L490 472 M360 324 L510 444 M300 408 L450 528"/>
+      <path d="M470 330 L330 470 M495 352 L355 492 M445 308 L305 448 M520 375 L380 515"/>
+    </g>
+    <ellipse cx="402" cy="414" rx="84" ry="44" transform="rotate(-24 402 414)" fill="none" stroke="#3a2416" stroke-width="7"/>
+  </g>
+<g id="kas-pencil" transform="rotate(-38 352 132)">
+    <rect x="300" y="120" width="104" height="22" rx="4" fill="#e2553b" stroke="#3a2416" stroke-width="6"/>
+    <rect x="300" y="131" width="104" height="5" fill="#b83f29" opacity=".55"/>
+    <path d="M404 120 L434 131 L404 142 Z" fill="#f4d4a2" stroke="#3a2416" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M424 127.4 L434 131 L424 134.6 Z" fill="#3a2416"/>
+  </g>
+<g id="kas-body">
+    <ellipse cx="208" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <ellipse cx="306" cy="466" rx="40" ry="17" fill="#5a3a24" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 250 C 340 250 362 330 360 386 C 358 440 316 468 256 468 C 196 468 154 440 152 386 C 150 330 172 250 256 250 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M256 300 C 304 300 318 350 316 392 C 314 430 292 452 256 452 C 220 452 198 430 196 392 C 194 350 208 300 256 300 Z" fill="#f0cf9f"/>
+    <path d="M214 420 C 226 440 244 448 256 448 C 268 448 286 440 298 420" fill="none" stroke="#e2b77f" stroke-width="5" stroke-linecap="round"/>
+  </g>
+<g id="kas-pumpkin">
+  <path d="M196 312 C 196 300 202 292 212 288" fill="none" stroke="#3a2416" stroke-width="12" stroke-linecap="round"/>
+  <path d="M196 312 C 196 300 202 292 212 288" fill="none" stroke="#5f7a3a" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="196" cy="368" rx="78" ry="58" fill="#e07b2a" stroke="#3a2416" stroke-width="7"/>
+  <path d="M196 312 C 168 330 164 404 196 424 M196 312 C 224 330 228 404 196 424 M150 324 C 132 346 134 396 154 414 M242 324 C 260 346 258 396 238 414" fill="none" stroke="#b85d1c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M160 352 L 178 336 L 186 358 Z M206 358 L 214 336 L 232 352 Z" fill="#ffd27a" stroke="#3a2416" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M158 384 L 172 394 L 182 384 L 196 396 L 210 384 L 220 394 L 234 384 C 226 404 166 404 158 384 Z" fill="#ffd27a" stroke="#3a2416" stroke-width="4" stroke-linejoin="round"/>
+</g>
+<g id="kas-arms">
+    <path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M196 296 C 176 318 178 350 206 366" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="216" cy="368" rx="22" ry="18" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M206 360 v 14 M216 358 v 16 M226 360 v 14" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#3a2416" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><path d="M322 300 C 350 300 372 280 384 246" fill="none" stroke="#a86a3c" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="368" cy="246" rx="11" ry="9" transform="rotate(-30 368 246)" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M366 236 C 364 214 374 204 390 204 C 406 204 414 216 412 236 C 410 254 400 260 388 260 C 374 260 368 252 366 236 Z" fill="#8b532c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M381 208 v 14 M392 206 v 15 M403 209 v 13" stroke="#3a2416" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+
+<g id="kas-head">
+    <circle cx="164" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="164" cy="168" r="11" fill="#8b532c"/>
+    <circle cx="348" cy="166" r="24" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <circle cx="348" cy="168" r="11" fill="#8b532c"/>
+    <path d="M256 104 C 330 104 360 150 360 204 C 360 262 316 300 256 300 C 196 300 152 262 152 204 C 152 150 182 104 256 104 Z" fill="#a86a3c" stroke="#3a2416" stroke-width="7"/>
+    <path d="M168 232 C 176 270 210 292 256 292 C 302 292 336 270 344 232" fill="none" stroke="#c4834f" stroke-width="6" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="190" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="322" cy="236" rx="17" ry="11" fill="#f29a86" opacity=".55"/>
+    <ellipse cx="256" cy="244" rx="56" ry="40" fill="#f0cf9f" stroke="#3a2416" stroke-width="5"/>
+    <path d="M243 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M257 268 h 12 v 22 a 4 4 0 0 1 -4 4 h -4 a 4 4 0 0 1 -4 -4 Z" fill="#fffaf0" stroke="#3a2416" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M228 262 C 238 272 250 270 256 262 C 262 270 274 272 284 262" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 240 V 262" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M236 228 C 236 216 276 216 276 228 C 276 240 262 244 256 244 C 250 244 236 240 236 228 Z" fill="#3a2416"/>
+    <ellipse cx="248" cy="225" rx="7" ry="4" fill="#ffffff" opacity=".55"/>
+    <ellipse cx="216" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <ellipse cx="296" cy="196" rx="13" ry="16" fill="#3a2416"/>
+    <circle cx="221" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="301" cy="190" r="5" fill="#ffffff"/>
+    <circle cx="212" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <circle cx="292" cy="203" r="2.2" fill="#ffffff" opacity=".8"/>
+    <path d="M198 170 C 206 164 222 163 230 168" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+    <path d="M282 168 C 290 163 306 164 314 170" fill="none" stroke="#3a2416" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+<g id="kas-witch">
+  <ellipse cx="256" cy="150" rx="132" ry="22" fill="#3d2d55" stroke="#3a2416" stroke-width="7"/>
+  <path d="M182 148 L 232 46 C 240 28 258 14 290 12 C 274 24 270 36 276 52 L 330 148 Z" fill="#4b3768" stroke="#3a2416" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M292 72 C 304 98 316 124 324 146 L 308 146 C 300 122 294 98 292 72 Z" fill="#3d2d55" opacity=".8"/>
+  <path d="M190 126 C 232 138 282 138 322 126 L 330 146 C 284 158 228 158 182 146 Z" fill="#e0823a" stroke="#3a2416" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="242" y="124" width="28" height="24" rx="4" fill="#f6d27a" stroke="#3a2416" stroke-width="4.5"/>
+  <rect x="251" y="132" width="10" height="8" rx="2" fill="#4b3768"/>
+  <path d="M214 92 C 220 78 228 66 236 58" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity=".35" fill="none"/>
+</g></g></svg>
