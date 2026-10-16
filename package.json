@@ -158,6 +158,9 @@
   "files": [
     "dist",
     "bin",
+    "assets/seasons/seasons.js",
+    "assets/seasons/*/mascot*.svg",
+    "assets/seasons/*/head*.svg",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

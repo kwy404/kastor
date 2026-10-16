@@ -54,6 +54,37 @@ body { margin: 0; }
 @keyframes query-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .query-new { animation: query-in .24s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .query-new { animation: none; } }
+/* Seasonal themes: seasons.js sets data-season on <html>. */
+[data-season="newyear"] { --season-accent: #c9a227; }
+[data-season="carnival"] { --season-accent: #d9468f; }
+[data-season="easter"] { --season-accent: #9b7fd1; }
+[data-season="valentine"] { --season-accent: #d64d6f; }
+[data-season="junina"] { --season-accent: #d9822b; }
+[data-season="halloween"] { --season-accent: #e0702a; }
+[data-season="christmas"] { --season-accent: #2f8f5b; }
+[data-season] .studio > header { box-shadow: inset 0 -2px 0 var(--season-accent); }
+.season-art img { display: block; width: 100%; height: 100%; }
+.season-art-dark { display: none !important; }
+:root[data-theme="dark"] .season-art-light { display: none !important; }
+:root[data-theme="dark"] .season-art-dark { display: block !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .season-art-light { display: none !important; }
+  :root:not([data-theme="light"]) .season-art-dark { display: block !important; }
+}
+.season-chip { display: inline-flex; align-items: center; gap: .4rem; height: 1.85rem; padding: 0 .6rem 0 .2rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--foreground); font-size: .75rem; cursor: pointer; transition: border-color .2s ease, opacity .2s ease; }
+.season-chip:hover { border-color: var(--season-accent, var(--ring)); }
+.season-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.season-chip[aria-pressed="false"] { opacity: .7; }
+.season-chip[aria-pressed="false"] .season-chip-head { filter: grayscale(1); }
+.season-chip-head { width: 1.5rem; height: 1.5rem; flex: none; }
+.season-chip-head img { width: 100%; height: 100%; }
+.season-chip-state { color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .04em; font-size: .65rem; }
+.season-hero { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.season-mascot { width: 7.5rem; height: 7.5rem; flex: none; animation: season-bob 4s ease-in-out infinite; }
+.empty-art { display: block; width: 4.5rem; height: 4.5rem; margin: 0 auto .5rem; }
+@keyframes season-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .season-mascot { animation: none; } .season-chip { transition: none; } }
+@media (max-width: 640px) { .season-chip-label { display: none; } .season-mascot { width: 5rem; height: 5rem; } }
 @media (max-width: 760px) { .studio-body { grid-template-columns: minmax(0, 1fr); } .studio-side { display: none; } .studio-side.open { display: block; position: fixed; inset: 3.5rem 0 0 0; z-index: 30; background: var(--background); } }
 `;
 
@@ -68,6 +99,7 @@ export function renderPage(options: { version: string }): string {
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="${MONSOON_CSS}">
 <script src="/theme.js"></script>
+<script src="/seasons.js"></script>
 <style>${STYLES}</style>
 <script src="${MONSOON_JS}" defer></script>
 <script src="/app.js" defer></script>
@@ -79,6 +111,7 @@ export function renderPage(options: { version: string }): string {
       <button type="button" class="btn btn-ghost btn-sm md:hidden" id="menu-toggle" aria-label="Tables">Tables</button>
       <a href="#/" class="navbar-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>kastor studio</a>
       <span class="badge badge-primary hidden sm:inline-flex" id="dialect-badge">connecting</span>
+      <span id="season-slot"></span>
       <span class="text-xs text-muted-foreground hidden sm:inline">v${options.version}</span>
     </div>
     <nav class="navbar-end gap-2" aria-label="Studio">

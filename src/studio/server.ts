@@ -10,6 +10,7 @@ import { introspect } from '../migrate/engine';
 import { handleApi, toJson, type StudioState } from './api';
 import { clientScript } from './client';
 import { QueryLog } from './queries';
+import { findSeasonsDir, seasonFiles } from './seasons';
 import { FAVICON, renderPage, THEME_SCRIPT } from './page';
 
 export interface StudioOptions {
@@ -24,6 +25,8 @@ export interface StudioOptions {
   readOnly?: boolean;
   /** Statements kept in the query log. Default 200; 0 turns the log off. */
   queryLog?: number;
+  /** Folder with seasons.js and the seasonal art; false turns seasonal themes off. Default: the one shipped with kastor. */
+  seasons?: string | false;
 }
 
 export interface StudioServer {
@@ -112,6 +115,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioServer>
   let port = 0;
   const allowedHosts = (): Set<string> => new Set([`${HOST}:${port}`, `localhost:${port}`]);
   const script = clientScript();
+  const seasons = seasonFiles(options.seasons === false ? null : (options.seasons ?? findSeasonsDir()));
 
   const server = createServer(async (req, res) => {
     try {
@@ -127,6 +131,9 @@ export async function startStudio(options: StudioOptions): Promise<StudioServer>
         if (url.pathname === '/app.js') return send(res, 200, 'text/javascript; charset=utf-8', script);
         if (url.pathname === '/theme.js') return send(res, 200, 'text/javascript; charset=utf-8', THEME_SCRIPT);
         if (url.pathname === '/favicon.svg') return send(res, 200, 'image/svg+xml', FAVICON);
+        if (url.pathname === '/seasons.js') return send(res, 200, 'text/javascript; charset=utf-8', seasons.script);
+        const art = url.pathname.startsWith('/seasons/') ? seasons.art(url.pathname) : null;
+        if (art !== null) return send(res, 200, 'image/svg+xml', art);
         return send(res, 404, 'text/plain; charset=utf-8', 'Not found.');
       }
       if (!sameToken(req.headers['x-kastor-token'] as string | undefined, token)) {

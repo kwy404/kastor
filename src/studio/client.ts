@@ -220,8 +220,8 @@ export function clientMain(): void {
       })
       .join('');
     $('#view').innerHTML = `<div class="space-y-6 max-w-6xl">
-      <div><h1 class="text-2xl font-bold">Your ${esc(s.dialect)} database</h1><p class="text-muted-foreground">${s.tables.length} table${s.tables.length === 1 ? '' : 's'}. Pick one to browse and edit its rows, open the <a class="link link-primary" href="#/diagram">diagram</a>, or see the SQL the studio ran in the <a class="link link-primary" href="#/queries">query log</a>.</p></div>
-      ${s.tables.length ? `<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards}</div>` : '<div class="empty-state empty-state-bordered"><h3 class="empty-state-title">No tables yet</h3><p class="empty-state-description">Run <code>kastor migrate dev</code> to create them from your schema.</p></div>'}
+      <div class="season-hero"><div><h1 class="text-2xl font-bold">Your ${esc(s.dialect)} database</h1><p class="text-muted-foreground">${s.tables.length} table${s.tables.length === 1 ? '' : 's'}. Pick one to browse and edit its rows, open the <a class="link link-primary" href="#/diagram">diagram</a>, or see the SQL the studio ran in the <a class="link link-primary" href="#/queries">query log</a>.</p></div>${seasonArt('mascot', 'season-mascot')}</div>
+      ${s.tables.length ? `<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards}</div>` : `<div class="empty-state empty-state-bordered">${seasonArt('head', 'empty-art')}<h3 class="empty-state-title">No tables yet</h3><p class="empty-state-description">Run <code>kastor migrate dev</code> to create them from your schema.</p></div>`}
     </div>`;
   }
 
@@ -316,7 +316,7 @@ export function clientMain(): void {
       })
       .join('');
     if (!rows.length) {
-      return `<div class="empty-state empty-state-bordered"><h3 class="empty-state-title">${route.filters.length || route.q ? 'No rows match' : 'This table is empty'}</h3><p class="empty-state-description">${route.filters.length || route.q ? 'Change or clear the filters.' : readOnly ? 'Nothing to show yet.' : 'Add the first row with the button above.'}</p></div>`;
+      return `<div class="empty-state empty-state-bordered">${seasonArt('head', 'empty-art')}<h3 class="empty-state-title">${route.filters.length || route.q ? 'No rows match' : 'This table is empty'}</h3><p class="empty-state-description">${route.filters.length || route.q ? 'Change or clear the filters.' : readOnly ? 'Nothing to show yet.' : 'Add the first row with the button above.'}</p></div>`;
     }
     const body = rows
       .map((row, i) => {
@@ -598,6 +598,42 @@ export function clientMain(): void {
     (form.querySelector('input, select, textarea') as HTMLElement | null)?.focus();
   }
 
+  /* ------------------------------------------------------------- seasons */
+  // seasons.js (loaded before this script) sets data-season on <html> and exposes KastorSeasons.
+  type Seasons = { season: string | null; active: string | null; lang: string; label(id: string, lang?: string): string; off(id: string): void; on(id: string): void };
+  const seasons = (window as unknown as { KastorSeasons?: Seasons }).KastorSeasons;
+
+  /** Kas in costume for the active season, light and dark versions; empty out of season. Decorative only. */
+  function seasonArt(kind: 'mascot' | 'head', cls: string): string {
+    const id = seasons?.active;
+    if (!id) return '';
+    return `<span class="season-art ${cls}" aria-hidden="true"><img class="season-art-light" src="/seasons/${esc(id)}/${kind}.svg" alt=""><img class="season-art-dark" src="/seasons/${esc(id)}/${kind}-dark.svg" alt=""></span>`;
+  }
+
+  /** The switch in the header: shown during a season, on or off as the visitor chose. */
+  function renderSeasonChip(): void {
+    const slot = document.getElementById('season-slot');
+    const id = seasons?.season;
+    if (!slot) return;
+    if (!seasons || !id) {
+      slot.innerHTML = '';
+      return;
+    }
+    const on = seasons.active === id;
+    const name = seasons.label(id, seasons.lang);
+    slot.innerHTML = `<button type="button" class="season-chip" id="season-toggle" aria-pressed="${on}" title="${on ? 'Turn it off' : 'Turn it on'}"><span class="season-chip-head" aria-hidden="true"><img class="season-art-light" src="/seasons/${esc(id)}/head.svg" alt=""><img class="season-art-dark" src="/seasons/${esc(id)}/head-dark.svg" alt=""></span><span class="season-chip-label">${esc(name)} mode</span><span class="season-chip-state">${on ? 'on' : 'off'}</span></button>`;
+    $('#season-toggle').addEventListener('click', () => {
+      if (seasons.active) seasons.off(id);
+      else seasons.on(id);
+    });
+  }
+
+  window.addEventListener('kastor:season', () => {
+    renderSeasonChip();
+    if (parseRoute().view !== 'table') void render();
+  });
+  renderSeasonChip();
+
   /* ----------------------------------------------------------- query log */
   const SQL_WORDS =
     /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|LATERAL|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|FETCH|NEXT|ROWS|ONLY|TOP|INSERT|INTO|VALUES|UPDATE|SET|DELETE|RETURNING|OUTPUT|WITH|UNION|ALL|DISTINCT|CASE|WHEN|THEN|ELSE|END|EXISTS|LIKE|ESCAPE|ASC|DESC|COUNT|COALESCE|CAST|BEGIN|COMMIT|ROLLBACK|PRAGMA|CREATE|ALTER|DROP|TABLE|INDEX)\b/g;
@@ -693,7 +729,7 @@ export function clientMain(): void {
     }
     if (parseRoute().view !== 'queries') return;
     let shown: Query[] = info.queries;
-    const empty = (title: string, text: string): string => `<div class="empty-state empty-state-bordered"><h3 class="empty-state-title">${title}</h3><p class="empty-state-description">${text}</p></div>`;
+    const empty = (title: string, text: string): string => `<div class="empty-state empty-state-bordered">${seasonArt('head', 'empty-art')}<h3 class="empty-state-title">${title}</h3><p class="empty-state-description">${text}</p></div>`;
     const draw = (): void => {
       const head = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div><h1 class="text-2xl font-bold">Query log</h1><p class="text-muted-foreground">The statements this studio sent to the database, newest first. It keeps the last ${info.limit}.</p></div>
