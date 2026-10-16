@@ -348,7 +348,9 @@ ${miniPumpkin(104, 440, 1, c.ink)}${miniPumpkin(164, 452, 0.7, c.ink)}${miniPump
       return `<path d="${d} Z" fill="#7aa35a" opacity="${m === 'dark' ? 0.85 : 1}"/>`;
     };
     const flower = (x, y, col) => `<g transform="translate(${x} ${y})"><path d="M0 0 V 26" stroke="#5f8a45" stroke-width="3"/>${[0, 72, 144, 216, 288].map((a) => `<ellipse rx="5" ry="9" fill="${col}" transform="rotate(${a}) translate(0 -9)"/>`).join('')}<circle r="4" fill="#e9c46a"/></g>`;
-    return `${grass(30, 230)}${grass(380, 580)}${egg(90, 446, -12, '#f4a3b5', '#ffffff')}${egg(150, 456, 10, '#8fc3e8', '#ffffff')}${egg(470, 450, -6, '#f6d36b', '#e07b2a')}${egg(530, 458, 14, '#b9a3e3', '#ffffff')}${flower(200, 440, '#f4a3b5')}${flower(420, 444, '#f6efe2')}`.replace(new RegExp(INK, 'g'), c.ink);
+    const fills = ['#f4a3b5', '#8fc3e8', '#f6d36b', '#b9a3e3'];
+    const hung = garland(14, 56, 9, 30, 570, (x, y, r, i) => `<path d="M${x} ${y} V ${y + 12}" stroke="${c.soft}" stroke-width="1.5"/>${egg(x, y + 34, r, fills[i % 4], '#ffffff').replace(/translate\(([\d.]+) ([\d.]+)\)/, (_, a, b) => `translate(${a} ${b}) scale(.62)`)}`);
+    return `<path d="${hung.path}" fill="none" stroke="${c.soft}" stroke-width="1.5"/>${hung.items}${grass(30, 230)}${grass(380, 580)}${egg(90, 446, -12, '#f4a3b5', '#ffffff')}${egg(150, 456, 10, '#8fc3e8', '#ffffff')}${egg(470, 450, -6, '#f6d36b', '#e07b2a')}${egg(530, 458, 14, '#b9a3e3', '#ffffff')}${flower(200, 440, '#f4a3b5')}${flower(420, 444, '#f6efe2')}`.replace(new RegExp(INK, 'g'), c.ink);
   },
   newyear: (m) => {
     const c = STAGE[m];
