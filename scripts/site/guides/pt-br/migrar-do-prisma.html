@@ -4,13 +4,12 @@
   "lang": "pt-BR",
   "alt": "migrate-from-prisma",
   "section": "migrate",
-  "title": "Migrar do Prisma para o kastor: schema, chamadas e histórico | kastor",
-  "description": "Como migrar do Prisma para o kastor passo a passo: kastor import prisma converte o schema.prisma, as chamadas mudam pouco e o migrate baseline preserva dados e histórico.",
+  "title": "Como migrar do Prisma para o kastor | kastor",
+  "description": "Converta o schema.prisma com um comando, troque as chamadas do cliente e preserve os dados e o histórico de migrações.",
   "h1": "Como migrar do Prisma para o kastor",
   "crumb": "Migrar do Prisma",
   "lead": "O kastor mantém a API de consultas que o Prisma popularizou e elimina a etapa de geração. <code>npx kastor import prisma</code> transforma o schema.prisma em um schema TypeScript para o mesmo banco, <code>npx kastor migrate baseline --from-prisma</code> preserva o histórico de migrações e a maioria das chamadas só troca a primeira palavra.",
   "readTime": "14 min de leitura",
-  "keywords": ["migrar do Prisma", "Prisma para kastor", "schema.prisma para TypeScript", "prisma migrate baseline"],
   "howto": {
     "name": "Migrar um projeto do Prisma para o kastor",
     "totalTime": "PT2H",
@@ -31,7 +30,7 @@
     { "q": "O que substitui middlewares e client extensions?", "a": "O kastor não tem API de extensões. Log e tempo de consulta usam a opção <code>log</code>, soft delete é uma opção da tabela, campos calculados são funções sobre o tipo da linha e métodos customizados são funções em um módulo." },
     { "q": "Prisma e kastor podem rodar juntos?", "a": "Sim, no mesmo banco, enquanto você migra os módulos. Cada um tem seu pool de conexões, então reduza os dois, e deixe só uma ferramenta criando migrações: depois do baseline, o kastor." }
   ],
-  "related": ["orm-typescript", "migracoes-banco-de-dados", "nextjs-postgres-orm"]
+  "related": ["migracoes-banco-de-dados","evitar-consultas-n-mais-1","migrar-do-laravel-eloquent"]
 }
 -->
 <section id="visao-geral"><h2>O que muda e o que fica</h2>
@@ -193,5 +192,5 @@ export async function register(email: string) {
 <li><strong>Datas no SQLite.</strong> O Prisma grava <code>DateTime</code> como milissegundos e o kastor como texto ISO. O relatório traz o <code>UPDATE</code> que converte as linhas antigas.</li>
 <li><strong>Decimal.</strong> O kastor devolve <code>t.decimal()</code> como string exata, não como objeto <code>Decimal</code>.</li>
 </ul>
-<p>Depois, conecte o cliente ao seu framework. O guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra server components, server actions e migrações no deploy.</p>
+<p>Depois, conecte o cliente ao seu framework. A p&aacute;gina de <a href="../frameworks.html">frameworks</a> mostra a configura&ccedil;&atilde;o de cada um.</p>
 </section>

@@ -2,13 +2,12 @@
 {
   "slug": "database-migrations-explained",
   "lang": "en",
-  "title": "Database migrations explained for TypeScript apps | kastor",
-  "description": "Database migrations explained step by step: schema drift, the dev to deploy workflow, rename detection, safe destructive changes and running migrations in CI.",
-  "h1": "Database migrations explained, from first table to production",
-  "crumb": "Migrations explained",
+  "title": "How migrations work, from the first table to production | kastor",
+  "description": "How kastor plans, writes and applies migrations, handles renames and destructive changes, and runs them in CI.",
+  "h1": "How migrations work, from the first table to production",
+  "crumb": "How migrations work",
   "lead": "A migration is a versioned SQL file that moves your database from one schema to the next. This guide walks through the full workflow with <code>kastor migrate</code>, from your laptop to CI, including the changes that can lose data and how to make them safe.",
   "readTime": "10 min read",
-  "keywords": ["database migrations explained", "what is a database migration", "schema migration workflow", "expand and contract migration", "typescript database migrations", "migrate deploy in CI"],
   "faq": [
     { "q": "What is a database migration in simple terms?", "a": "It is a file of SQL statements that changes the structure of a database, such as creating a table or adding a column. Migrations are applied in order and recorded in a bookkeeping table, so every environment ends up with the same schema." },
     { "q": "Should I commit migration files to git?", "a": "Yes. The folder under <code>kastor/migrations</code> is the history of your schema and must be reviewed and committed like any other code. Production applies exactly those files with <code>npx kastor migrate deploy</code>." },
@@ -16,7 +15,7 @@
     { "q": "How do I rename a column without losing data?", "a": "Rename the property in your schema and run <code>npx kastor migrate dev</code>. kastor notices that one column disappeared and a compatible one appeared, and asks whether it was a rename instead of silently dropping the old column. In a non interactive shell, pass the answer as a flag, such as <code>--rename users.name:fullName</code>. If you only want a nicer name in code, use <code>.map('old_name')</code> and no migration is needed." },
     { "q": "Can I edit a generated migration SQL file?", "a": "Yes, before it is applied. Run <code>npx kastor migrate dev --create-only</code> to write the file without applying it, add a backfill <code>UPDATE</code> or an index, then run <code>migrate dev</code> again to apply it. Once a migration has been applied, its checksum is recorded, so leave it alone and write a new one." }
   ],
-  "related": ["database-seeding-typescript", "nextjs-postgres-orm", "typescript-orm"]
+  "related": ["database-seeding-typescript","avoid-n-plus-1-queries","multi-database-apps"]
 }
 -->
 <section id="what-is-a-migration"><h2>What a database migration is</h2>
@@ -157,5 +156,5 @@ jobs:
 <li>In the test job, start an empty database, run <code>migrate deploy</code>, then run the tests. If a migration only works on your laptop, this is where you find out.</li>
 <li>Keep every migration backward compatible with the code that is currently live, using expand and contract for anything destructive.</li>
 </ul>
-<p>Next, fill fresh databases with the <a href="database-seeding-typescript.html">database seeding guide</a> or wire migrations into a <a href="nextjs-postgres-orm.html">Next.js deploy</a>. If the CLI cannot reach your database, run <code>npx kastor doctor</code>.</p>
+<p>Next, fill fresh databases with the <a href="database-seeding-typescript.html">database seeding guide</a> or wire migrations into a <a href="nextjs-app-router-orm.html">Next.js deploy</a>. If the CLI cannot reach your database, run <code>npx kastor doctor</code>.</p>
 </section>

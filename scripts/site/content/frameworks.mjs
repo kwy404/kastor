@@ -55,7 +55,7 @@ export default async function Posts() {
   )
 }`],
     ],
-    guides: [['nextjs-app-router-orm.html', 'Read the full Next.js App Router guide'], ['nextjs-postgres-orm.html', 'Next.js with PostgreSQL providers']],
+    guides: [['nextjs-app-router-orm.html', 'Read the full Next.js App Router guide']],
   },
   {
     id: 'nuxt',
@@ -365,7 +365,7 @@ export default {
   },
 }`],
     ],
-    guides: [['cloudflare-workers-orm.html', 'Read the full Cloudflare Workers guide'], ['cloudflare-d1-orm.html', 'Cloudflare D1 in depth']],
+    guides: [['cloudflare-workers-orm.html', 'Read the full Cloudflare Workers guide']],
   },
   {
     id: 'electron',

@@ -4,13 +4,12 @@
   "lang": "pt-BR",
   "alt": "migrate-from-laravel-eloquent",
   "section": "migrate",
-  "title": "Vindo do Laravel Eloquent: o kastor para quem programa em PHP | kastor",
-  "description": "Vindo do Laravel Eloquent: o kastor roda em Node, Bun, Deno e edge, não em PHP. Veja models, relações, scopes, with(), migrações, seeders e factories em TypeScript.",
+  "title": "Vindo do Laravel e do Eloquent | kastor",
+  "description": "O kastor roda em runtimes JavaScript, não em PHP. Como models, relações, scopes, migrações e seeders se traduzem.",
   "h1": "Vindo do Laravel e do Eloquent",
   "crumb": "Vindo do Laravel",
   "lead": "O kastor é um ORM em TypeScript. Ele roda em runtimes JavaScript como Node.js, Bun, Deno e Cloudflare Workers, e não roda dentro do PHP. Se você conhece o Eloquent, este guia cobre os dois caminhos que fazem sentido: levar um serviço Laravel para TypeScript ou rodar uma API TypeScript ao lado do Laravel no mesmo banco.",
   "readTime": "12 min de leitura",
-  "keywords": ["Laravel Eloquent TypeScript", "migrar Laravel para Node.js", "Laravel para TypeScript", "Laravel e Node.js no mesmo banco"],
   "howto": {
     "name": "Usar o kastor em um banco criado pelo Laravel",
     "totalTime": "PT2H",
@@ -29,7 +28,7 @@
     { "q": "Qual é o equivalente do with() do Eloquent?", "a": "<code>include</code>. <code>Post::with([&#39;author&#39;, &#39;tags&#39;])-&gt;withCount(&#39;comments&#39;)</code> vira <code>db.posts.findMany(&#123; include: &#123; author: true, tags: true, _count: &#123; select: &#123; comments: true &#125; &#125; &#125; &#125;)</code>, carregado em uma única instrução por chamada." },
     { "q": "Tem seeders e factories?", "a": "Sim. Um arquivo de seed exporta <code>defineSeed(async (db) =&gt; ...)</code> e roda com <code>npx kastor db seed</code>. <code>factory(db.users, (&#123; seq &#125;) =&gt; dados)</code> cria registros de teste, e <code>npx kastor migrate reset</code> faz o papel do <code>migrate:fresh --seed</code>." }
   ],
-  "related": ["migracoes-banco-de-dados", "orm-typescript", "evitar-consultas-n-mais-1"]
+  "related": ["migracoes-banco-de-dados","evitar-consultas-n-mais-1","migrar-do-prisma"]
 }
 -->
 <section id="caminhos"><h2>A parte honesta primeiro: dois runtimes, dois caminhos</h2>

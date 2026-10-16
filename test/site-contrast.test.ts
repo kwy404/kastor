@@ -30,7 +30,7 @@ describe.skipIf(!run)('site contrast audit', () => {
     };
     if (!mod.findBrowser()) throw new Error('KASTOR_CONTRAST=1 needs Edge or Chrome (or KASTOR_BROWSER)');
     const res = await mod.auditContrast({ docs: join(root, 'docs') });
-    expect(res.pages).toBeGreaterThan(40);
+    expect(res.pages).toBeGreaterThan(30);
     expect(res.checked).toBeGreaterThan(500);
     expect(res.failures.map((f) => `${f.ratio} ${f.theme} ${f.state} ${f.page} "${f.label}" ${f.fg} on ${f.bg}`)).toEqual([]);
   }, 900_000);

@@ -47,8 +47,8 @@ function checks(items) {
 
 export const FAQ = [
   {
-    q: 'What is the best TypeScript ORM for multiple databases?',
-    a: 'Pick one that infers types straight from a TypeScript schema and runs the same query API on every database you need. kastor supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB with one schema and one API.',
+    q: 'Which databases does kastor support?',
+    a: 'PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB, with one schema and one query API.',
   },
   {
     q: 'Does kastor need a generate step or a binary engine?',

@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <script>(function(){try{var t=localStorage.getItem('voodoo:theme');if(t&&t.charAt(0)==='"')t=JSON.parse(t);var r=document.documentElement;if(t==='light'||t==='dark'){r.setAttribute('data-theme',t);r.style.colorScheme=t}else{r.removeAttribute('data-theme')}}catch(e){}})();</script>
 <title>kastor: the TypeScript ORM for almost every database</title>
-<meta name="description" content="TypeScript ORM with types inferred from a plain TypeScript schema, no codegen. PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB and more.">
+<meta name="description" content="A TypeScript ORM with types inferred from a plain TypeScript schema. One API on SQL databases and MongoDB.">
 <link rel="canonical" href="https://kwy404.github.io/kastor/">
 
 <meta name="author" content="Alexandre Kohler">
@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="kastor">
 <meta property="og:locale" content="en_US">
 <meta property="og:title" content="kastor: the TypeScript ORM for almost every database">
-<meta property="og:description" content="TypeScript ORM with types inferred from a plain TypeScript schema, no codegen. PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB and more.">
+<meta property="og:description" content="A TypeScript ORM with types inferred from a plain TypeScript schema. One API on SQL databases and MongoDB.">
 <meta property="og:url" content="https://kwy404.github.io/kastor/">
 <meta property="og:image" content="https://kwy404.github.io/kastor/og.png">
 <meta property="og:image:width" content="1200">
@@ -24,7 +24,7 @@
 <meta property="og:image:alt" content="kastor: the TypeScript ORM for almost every database">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="kastor: the TypeScript ORM for almost every database">
-<meta name="twitter:description" content="TypeScript ORM with types inferred from a plain TypeScript schema, no codegen. PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB and more.">
+<meta name="twitter:description" content="A TypeScript ORM with types inferred from a plain TypeScript schema. One API on SQL databases and MongoDB.">
 <meta name="twitter:image" content="https://kwy404.github.io/kastor/og.png">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -83,10 +83,10 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is the best TypeScript ORM for multiple databases?",
+          "name": "Which databases does kastor support?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Pick one that infers types straight from a TypeScript schema and runs the same query API on every database you need. kastor supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB with one schema and one API."
+            "text": "PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB, with one schema and one query API."
           }
         },
         {
@@ -154,216 +154,168 @@
         {
           "@type": "ListItem",
           "position": 1,
-          "url": "https://kwy404.github.io/kastor/typescript-orm.html",
-          "name": "Choosing a TypeScript ORM: what matters and how kastor works"
+          "url": "https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html",
+          "name": "Avoiding N+1 queries"
         },
         {
           "@type": "ListItem",
           "position": 2,
-          "url": "https://kwy404.github.io/kastor/type-safe-sql-typescript.html",
-          "name": "Type safe SQL in TypeScript, from inferred rows to raw queries"
+          "url": "https://kwy404.github.io/kastor/database-migrations-explained.html",
+          "name": "How migrations work, from the first table to production"
         },
         {
           "@type": "ListItem",
           "position": 3,
-          "url": "https://kwy404.github.io/kastor/avoid-n-plus-1-queries.html",
-          "name": "How to avoid N+1 queries in a TypeScript app"
+          "url": "https://kwy404.github.io/kastor/database-seeding-typescript.html",
+          "name": "Seed data you can run twice"
         },
         {
           "@type": "ListItem",
           "position": 4,
-          "url": "https://kwy404.github.io/kastor/database-migrations-explained.html",
-          "name": "Database migrations explained, from first table to production"
+          "url": "https://kwy404.github.io/kastor/multi-database-apps.html",
+          "name": "One app on several databases"
         },
         {
           "@type": "ListItem",
           "position": 5,
-          "url": "https://kwy404.github.io/kastor/nextjs-postgres-orm.html",
-          "name": "Next.js with PostgreSQL: a type-safe ORM setup for the App Router"
-        },
-        {
-          "@type": "ListItem",
-          "position": 6,
-          "url": "https://kwy404.github.io/kastor/database-seeding-typescript.html",
-          "name": "Database seeding in TypeScript that you can run twice"
-        },
-        {
-          "@type": "ListItem",
-          "position": 7,
-          "url": "https://kwy404.github.io/kastor/multi-database-apps.html",
-          "name": "Building a multi database app in Node.js with one ORM"
-        },
-        {
-          "@type": "ListItem",
-          "position": 8,
-          "url": "https://kwy404.github.io/kastor/sql-server-orm-nodejs.html",
-          "name": "A SQL Server ORM for Node.js that speaks T-SQL for you"
-        },
-        {
-          "@type": "ListItem",
-          "position": 9,
-          "url": "https://kwy404.github.io/kastor/oracle-orm-nodejs.html",
-          "name": "An Oracle ORM in Node.js without Instant Client"
-        },
-        {
-          "@type": "ListItem",
-          "position": 10,
-          "url": "https://kwy404.github.io/kastor/mongodb-orm-typescript.html",
-          "name": "A MongoDB ORM in TypeScript that shares its API with SQL"
-        },
-        {
-          "@type": "ListItem",
-          "position": 11,
-          "url": "https://kwy404.github.io/kastor/cloudflare-d1-orm.html",
-          "name": "A Cloudflare D1 ORM for Workers, typed from your schema"
-        },
-        {
-          "@type": "ListItem",
-          "position": 12,
-          "url": "https://kwy404.github.io/kastor/turso-libsql-orm.html",
-          "name": "A Turso ORM for TypeScript, built on libSQL"
-        },
-        {
-          "@type": "ListItem",
-          "position": 13,
           "url": "https://kwy404.github.io/kastor/migrate-from-prisma.html",
           "name": "Migrate from Prisma to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 14,
+          "position": 6,
           "url": "https://kwy404.github.io/kastor/migrate-from-drizzle.html",
           "name": "Migrate from Drizzle ORM to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 15,
+          "position": 7,
           "url": "https://kwy404.github.io/kastor/migrate-from-typeorm.html",
           "name": "Migrate from TypeORM to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 16,
+          "position": 8,
           "url": "https://kwy404.github.io/kastor/migrate-from-sequelize.html",
           "name": "Migrate from Sequelize to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 17,
+          "position": 9,
           "url": "https://kwy404.github.io/kastor/migrate-from-knex.html",
           "name": "Migrate from Knex to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 18,
+          "position": 10,
           "url": "https://kwy404.github.io/kastor/migrate-from-mongoose.html",
           "name": "Migrate from Mongoose to kastor"
         },
         {
           "@type": "ListItem",
-          "position": 19,
+          "position": 11,
           "url": "https://kwy404.github.io/kastor/migrate-from-laravel-eloquent.html",
           "name": "Coming from Laravel and Eloquent"
         },
         {
           "@type": "ListItem",
-          "position": 20,
+          "position": 12,
           "url": "https://kwy404.github.io/kastor/migrate-from-django-orm.html",
           "name": "Coming from the Django ORM"
         },
         {
           "@type": "ListItem",
-          "position": 21,
+          "position": 13,
           "url": "https://kwy404.github.io/kastor/migrate-from-rails-active-record.html",
           "name": "Coming from Rails and Active Record"
         },
         {
           "@type": "ListItem",
-          "position": 22,
+          "position": 14,
           "url": "https://kwy404.github.io/kastor/nextjs-app-router-orm.html",
           "name": "kastor with the Next.js App Router"
         },
         {
           "@type": "ListItem",
-          "position": 23,
+          "position": 15,
           "url": "https://kwy404.github.io/kastor/nuxt-orm.html",
           "name": "kastor with Nuxt"
         },
         {
           "@type": "ListItem",
-          "position": 24,
+          "position": 16,
           "url": "https://kwy404.github.io/kastor/sveltekit-orm.html",
           "name": "kastor with SvelteKit"
         },
         {
           "@type": "ListItem",
-          "position": 25,
+          "position": 17,
           "url": "https://kwy404.github.io/kastor/remix-react-router-orm.html",
           "name": "kastor with Remix and React Router"
         },
         {
           "@type": "ListItem",
-          "position": 26,
+          "position": 18,
           "url": "https://kwy404.github.io/kastor/astro-orm.html",
           "name": "kastor with Astro"
         },
         {
           "@type": "ListItem",
-          "position": 27,
+          "position": 19,
           "url": "https://kwy404.github.io/kastor/nestjs-orm.html",
           "name": "kastor with NestJS"
         },
         {
           "@type": "ListItem",
-          "position": 28,
+          "position": 20,
           "url": "https://kwy404.github.io/kastor/express-orm.html",
           "name": "kastor with Express"
         },
         {
           "@type": "ListItem",
-          "position": 29,
+          "position": 21,
           "url": "https://kwy404.github.io/kastor/fastify-orm.html",
           "name": "kastor with Fastify"
         },
         {
           "@type": "ListItem",
-          "position": 30,
+          "position": 22,
           "url": "https://kwy404.github.io/kastor/hono-orm.html",
           "name": "kastor with Hono"
         },
         {
           "@type": "ListItem",
-          "position": 31,
+          "position": 23,
           "url": "https://kwy404.github.io/kastor/adonisjs-orm.html",
           "name": "kastor with AdonisJS"
         },
         {
           "@type": "ListItem",
-          "position": 32,
+          "position": 24,
           "url": "https://kwy404.github.io/kastor/bun-orm.html",
           "name": "kastor with Bun"
         },
         {
           "@type": "ListItem",
-          "position": 33,
+          "position": 25,
           "url": "https://kwy404.github.io/kastor/deno-orm.html",
           "name": "kastor with Deno"
         },
         {
           "@type": "ListItem",
-          "position": 34,
+          "position": 26,
           "url": "https://kwy404.github.io/kastor/cloudflare-workers-orm.html",
           "name": "kastor on Cloudflare Workers"
         },
         {
           "@type": "ListItem",
-          "position": 35,
+          "position": 27,
           "url": "https://kwy404.github.io/kastor/electron-sqlite-orm.html",
           "name": "kastor with Electron and SQLite"
         },
         {
           "@type": "ListItem",
-          "position": 36,
+          "position": 28,
           "url": "https://kwy404.github.io/kastor/aws-lambda-orm.html",
           "name": "kastor on AWS Lambda"
         }
@@ -1304,10 +1256,10 @@
     <header class="sec-head">
   <p class="eyebrow"><svg class="bic eb-ic" aria-hidden="true"><use href="#ic-blueprint"/></svg><span>Guides</span></p>
   <h2 id="guides-title">Long reads on the problems an ORM should solve</h2>
-  <p class="lead">36 guides in English and more in Portuguese, from N+1 queries to running one data layer on every database.</p>
+  <p class="lead">28 guides in English and more in Portuguese, from N+1 queries to running one data layer on every database.</p>
 </header>
-    <div class="g-grid"><a href="typescript-orm.html" class="g-card"><span class="g-no">TypeScript ORM</span><strong>Choosing a TypeScript ORM: what matters and how kastor works</strong><span>What a TypeScript ORM is, what to look for before you pick one, and a full tour of kastor from schema to queries to migrations, plus when to skip an ORM.</span><span class="g-meta">9 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="type-safe-sql-typescript.html" class="g-card"><span class="g-no">Type safe SQL</span><strong>Type safe SQL in TypeScript, from inferred rows to raw queries</strong><span>How to get type safe SQL in TypeScript: inferred row types, select narrowing, InferSelect and InferInsert, and raw SQL with typed rows and bound parameters.</span><span class="g-meta">10 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="avoid-n-plus-1-queries.html" class="g-card"><span class="g-no">Avoid N+1 queries</span><strong>How to avoid N+1 queries in a TypeScript app</strong><span>Learn to spot and avoid N+1 queries in TypeScript: query logging, nested includes in one query, relation counts, select, take inside includes and pagination.</span><span class="g-meta">9 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="database-migrations-explained.html" class="g-card"><span class="g-no">Migrations explained</span><strong>Database migrations explained, from first table to production</strong><span>Database migrations explained step by step: schema drift, the dev to deploy workflow, rename detection, safe destructive changes and running migrations in CI.</span><span class="g-meta">10 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="nextjs-postgres-orm.html" class="g-card"><span class="g-no">Next.js and Postgres</span><strong>Next.js with PostgreSQL: a type-safe ORM setup for the App Router</strong><span>Set up a Next.js Postgres ORM with the App Router: one reusable client, server components, server actions, serverless pools, env vars and migrations on deploy.</span><span class="g-meta">10 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="database-seeding-typescript.html" class="g-card"><span class="g-no">Database seeding</span><strong>Database seeding in TypeScript that you can run twice</strong><span>A practical guide to database seeding in TypeScript: typed seed files, idempotent upserts, bulk inserts, related rows, test factories and seeding in CI.</span><span class="g-meta">9 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a></div>
-    <p class="g-all"><a href="guides.html" class="btn btn-line">All 36 guides<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></a><a href="pt-br/" class="btn btn-ghost-k" hreflang="pt-BR"><svg class="ic" aria-hidden="true"><use href="#u-globe"/></svg>Guias em portugu&ecirc;s</a></p>
+    <div class="g-grid"><a href="avoid-n-plus-1-queries.html" class="g-card"><span class="g-no">Avoiding N+1 queries</span><strong>Avoiding N+1 queries</strong><span>How to spot N+1 queries in the query log and load related rows in one query with includes, counts and select.</span><span class="g-meta">9 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="database-migrations-explained.html" class="g-card"><span class="g-no">How migrations work</span><strong>How migrations work, from the first table to production</strong><span>How kastor plans, writes and applies migrations, handles renames and destructive changes, and runs them in CI.</span><span class="g-meta">10 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="database-seeding-typescript.html" class="g-card"><span class="g-no">Seeding</span><strong>Seed data you can run twice</strong><span>Typed seed files, idempotent upserts, related rows, test factories and seeding in CI with kastor.</span><span class="g-meta">9 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a><a href="multi-database-apps.html" class="g-card"><span class="g-no">Several databases</span><strong>One app on several databases</strong><span>Several clients, shared schema code, the dialect differences that matter and tests that run on more than one database.</span><span class="g-meta">11 min read<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></span></a></div>
+    <p class="g-all"><a href="guides.html" class="btn btn-line">All 28 guides<svg class="ic" aria-hidden="true"><use href="#u-arrow"/></svg></a><a href="pt-br/" class="btn btn-ghost-k" hreflang="pt-BR"><svg class="ic" aria-hidden="true"><use href="#u-globe"/></svg>Guias em portugu&ecirc;s</a></p>
   </div>
 </section>
 <section id="faq" class="sec" aria-labelledby="faq-title">
@@ -1317,7 +1269,7 @@
   <h2 id="faq-title">Questions people ask</h2>
   <p class="lead">Still curious? Open an issue on <a href="https://github.com/kwy404/kastor/issues">GitHub</a> and Kas will take a look.</p>
 </header></div>
-    <div class="accordion collapse-plus"><details class="collapse q" open><summary class="collapse-title">What is the best TypeScript ORM for multiple databases?</summary><div class="collapse-content"><p>Pick one that infers types straight from a TypeScript schema and runs the same query API on every database you need. kastor supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB with one schema and one API.</p></div></details><details class="collapse q"><summary class="collapse-title">Does kastor need a generate step or a binary engine?</summary><div class="collapse-content"><p>No. Types are inferred from the schema by the TypeScript compiler as you type, and queries are compiled to SQL in plain JavaScript. There is nothing to regenerate in CI and nothing native to download.</p></div></details><details class="collapse q"><summary class="collapse-title">How does kastor avoid N+1 queries?</summary><div class="collapse-content"><p>Nested includes load in one statement per root call: JSON aggregation on every SQL database and a single aggregation pipeline with $lookup stages on MongoDB. Never one query per row. See <a href="avoid-n-plus-1-queries.html">the N+1 guide</a>.</p></div></details><details class="collapse q"><summary class="collapse-title">How do I migrate from Prisma to kastor?</summary><div class="collapse-content"><p>Run <code>npx kastor import prisma</code> to turn schema.prisma into a TypeScript schema, then <code>npx kastor migrate baseline --from-prisma prisma/migrations</code> so the migrations Prisma already applied stay recorded. Your data never moves. The <a href="migrate-from-prisma.html">Prisma migration guide</a> maps every client call, and the <a href="migrate-to-kastor.html">migration hub</a> covers Drizzle, TypeORM, Sequelize, Knex, Mongoose, Laravel, Django and Rails.</p></div></details><details class="collapse q"><summary class="collapse-title">Can I use kastor with an existing database?</summary><div class="collapse-content"><p>Yes. Run <code>npx kastor db pull</code> to introspect the live database into a TypeScript schema file, relations included, then query it right away. Migrations can take over from there when you are ready.</p></div></details><details class="collapse q"><summary class="collapse-title">Which drivers does kastor install?</summary><div class="collapse-content"><p>None. kastor ships no database drivers: you install the one you want (<code>pg</code>, <code>mysql2</code>, <code>better-sqlite3</code>, <code>mssql</code>, <code>oracledb</code>, <code>mongodb</code> and so on) and pass its instance to the adapter. Drivers are optional peer dependencies.</p></div></details><details class="collapse q"><summary class="collapse-title">Does kastor work on serverless and edge runtimes?</summary><div class="collapse-content"><p>Yes, wherever the driver works: Cloudflare Workers with D1, Turso over HTTP, Neon, Supabase and Vercel Postgres through pg compatible pools, Bun with bun:sqlite and Deno with npm specifiers. The core has no Node only imports.</p></div></details><details class="collapse q"><summary class="collapse-title">Is kastor free?</summary><div class="collapse-content"><p>Yes. kastor is open source under the MIT license, including the CLI, migrations and the studio.</p></div></details></div>
+    <div class="accordion collapse-plus"><details class="collapse q" open><summary class="collapse-title">Which databases does kastor support?</summary><div class="collapse-content"><p>PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite (better-sqlite3, node:sqlite, bun:sqlite), libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB, with one schema and one query API.</p></div></details><details class="collapse q"><summary class="collapse-title">Does kastor need a generate step or a binary engine?</summary><div class="collapse-content"><p>No. Types are inferred from the schema by the TypeScript compiler as you type, and queries are compiled to SQL in plain JavaScript. There is nothing to regenerate in CI and nothing native to download.</p></div></details><details class="collapse q"><summary class="collapse-title">How does kastor avoid N+1 queries?</summary><div class="collapse-content"><p>Nested includes load in one statement per root call: JSON aggregation on every SQL database and a single aggregation pipeline with $lookup stages on MongoDB. Never one query per row. See <a href="avoid-n-plus-1-queries.html">the N+1 guide</a>.</p></div></details><details class="collapse q"><summary class="collapse-title">How do I migrate from Prisma to kastor?</summary><div class="collapse-content"><p>Run <code>npx kastor import prisma</code> to turn schema.prisma into a TypeScript schema, then <code>npx kastor migrate baseline --from-prisma prisma/migrations</code> so the migrations Prisma already applied stay recorded. Your data never moves. The <a href="migrate-from-prisma.html">Prisma migration guide</a> maps every client call, and the <a href="migrate-to-kastor.html">migration hub</a> covers Drizzle, TypeORM, Sequelize, Knex, Mongoose, Laravel, Django and Rails.</p></div></details><details class="collapse q"><summary class="collapse-title">Can I use kastor with an existing database?</summary><div class="collapse-content"><p>Yes. Run <code>npx kastor db pull</code> to introspect the live database into a TypeScript schema file, relations included, then query it right away. Migrations can take over from there when you are ready.</p></div></details><details class="collapse q"><summary class="collapse-title">Which drivers does kastor install?</summary><div class="collapse-content"><p>None. kastor ships no database drivers: you install the one you want (<code>pg</code>, <code>mysql2</code>, <code>better-sqlite3</code>, <code>mssql</code>, <code>oracledb</code>, <code>mongodb</code> and so on) and pass its instance to the adapter. Drivers are optional peer dependencies.</p></div></details><details class="collapse q"><summary class="collapse-title">Does kastor work on serverless and edge runtimes?</summary><div class="collapse-content"><p>Yes, wherever the driver works: Cloudflare Workers with D1, Turso over HTTP, Neon, Supabase and Vercel Postgres through pg compatible pools, Bun with bun:sqlite and Deno with npm specifiers. The core has no Node only imports.</p></div></details><details class="collapse q"><summary class="collapse-title">Is kastor free?</summary><div class="collapse-content"><p>Yes. kastor is open source under the MIT license, including the CLI, migrations and the studio.</p></div></details></div>
   </div>
 </section>
 <section class="closing" aria-labelledby="closing-title">
@@ -1373,7 +1325,7 @@
         </ul></nav>
         <nav aria-labelledby="f-migrate"><h2 id="f-migrate" class="foot-title">Migrate</h2><ul><li><a href="migrate-to-kastor.html">Migrate to kastor</a></li><li><a href="migrate-from-prisma.html">From Prisma</a></li><li><a href="migrate-from-drizzle.html">From Drizzle</a></li><li><a href="migrate-from-typeorm.html">From TypeORM</a></li><li><a href="migrate-from-sequelize.html">From Sequelize</a></li><li><a href="migrate-from-knex.html">From Knex</a></li><li><a href="migrate-from-mongoose.html">From Mongoose</a></li></ul></nav>
         <nav aria-labelledby="f-fw"><h2 id="f-fw" class="foot-title">Frameworks</h2><ul><li><a href="frameworks.html">All frameworks</a></li><li><a href="nextjs-app-router-orm.html">Next.js App Router</a></li><li><a href="nuxt-orm.html">Nuxt</a></li><li><a href="sveltekit-orm.html">SvelteKit</a></li><li><a href="remix-react-router-orm.html">Remix and React Router</a></li><li><a href="astro-orm.html">Astro</a></li><li><a href="nestjs-orm.html">NestJS</a></li><li><a href="express-orm.html">Express</a></li></ul></nav>
-        <nav aria-labelledby="f-guides"><h2 id="f-guides" class="foot-title">Guides</h2><ul><li><a href="typescript-orm.html">TypeScript ORM</a></li><li><a href="type-safe-sql-typescript.html">Type safe SQL</a></li><li><a href="avoid-n-plus-1-queries.html">Avoid N+1 queries</a></li><li><a href="database-migrations-explained.html">Migrations explained</a></li><li><a href="nextjs-postgres-orm.html">Next.js and Postgres</a></li><li><a href="database-seeding-typescript.html">Database seeding</a></li><li><a href="multi-database-apps.html">Multi database apps</a></li></ul></nav>
+        <nav aria-labelledby="f-guides"><h2 id="f-guides" class="foot-title">Guides</h2><ul><li><a href="avoid-n-plus-1-queries.html">Avoiding N+1 queries</a></li><li><a href="database-migrations-explained.html">How migrations work</a></li><li><a href="database-seeding-typescript.html">Seeding</a></li><li><a href="multi-database-apps.html">Several databases</a></li></ul></nav>
         <nav aria-labelledby="f-more" class="foot-more-nav"><h2 id="f-more" class="foot-title">More from kwy404</h2><ul class="foot-more"><li><a href="https://kwy404.github.io/monsoon/">Monsoon</a><small>Utility-first CSS with no build step</small></li><li><a href="https://kwy404.github.io/Voodoo.js/">Voodoo.js</a><small>Reactive attributes for plain HTML</small></li><li><a href="https://kwy404.github.io/breakhound/">breakhound</a><small>Find bugs in any JavaScript library</small></li><li><a href="https://kwy404.github.io/vueleap/">vueleap</a><small>Vue 2 to Vue 3 migration</small></li><li><a href="https://kwy404.github.io/graphemely/">graphemely</a><small>Grapheme aware string utilities</small></li><li><a href="https://kwy404.github.io/numberparrot/">numberparrot</a><small>Parse localized numbers</small></li><li><a href="https://kwy404.github.io/edgegoat/">edgegoat</a><small>Edge case inputs for testing</small></li><li><a href="https://kwy404.github.io/cookieowl/">cookieowl</a><small>Cookie consent that blocks trackers first</small></li><li><a href="https://kwy404.github.io/installkite/">installkite</a><small>Make any website an installable PWA</small></li><li><a href="https://kwy404.github.io/a11ymedic/">a11ymedic</a><small>Accessibility checks with the exact fix</small></li><li><a href="https://kwy404.github.io/fontsketch/">fontsketch</a><small>Create your own font in the browser</small></li></ul></nav>
       </div>
     </div>

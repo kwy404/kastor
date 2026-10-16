@@ -50,13 +50,24 @@ describe('docs site', () => {
     }
   });
 
-  it('has 38 English guides and 6 Portuguese guides', () => {
-    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(36);
-    expect(guidePages.filter((p) => p.rel.startsWith('pt-br/')).length).toBeGreaterThanOrEqual(6);
-  });
-
   const MIGRATE = ['prisma', 'drizzle', 'typeorm', 'sequelize', 'knex', 'mongoose', 'laravel-eloquent', 'django-orm', 'rails-active-record'].map((s) => `migrate-from-${s}.html`);
   const FRAMEWORK_GUIDES = ['nextjs-app-router-orm', 'nuxt-orm', 'sveltekit-orm', 'remix-react-router-orm', 'astro-orm', 'nestjs-orm', 'express-orm', 'fastify-orm', 'hono-orm', 'adonisjs-orm', 'bun-orm', 'deno-orm', 'cloudflare-workers-orm', 'electron-sqlite-orm', 'aws-lambda-orm'].map((s) => `${s}.html`);
+
+  it('keeps a short list of guides: 4 in English and 2 in Portuguese, besides the migration and framework docs', () => {
+    const general = (p: { rel: string }) => !MIGRATE.includes(p.rel) && !FRAMEWORK_GUIDES.includes(p.rel) && !p.rel.startsWith('pt-br/migrar-');
+    expect(guidePages.filter((p) => !p.rel.startsWith('pt-br/') && general(p)).length).toBeLessThanOrEqual(4);
+    expect(guidePages.filter((p) => p.rel.startsWith('pt-br/') && general(p)).length).toBeLessThanOrEqual(2);
+    expect(guidePages.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('carries no keyword lists: no meta keywords and no keywords in JSON-LD', () => {
+    for (const p of pages) {
+      expect(p.html, p.rel).not.toMatch(/<meta name="keywords"/);
+      expect(p.html, p.rel).not.toMatch(/"keywords":/);
+      expect((meta(p.html, 'description') || '').length, `${p.rel} description`).toBeLessThanOrEqual(160);
+    }
+  });
+
   const proseWords = (html: string) => {
     const main = /<article class="read-main[^"]*">([\s\S]*?)<\/article>/.exec(html)![1]!;
     return main.replace(/<figure[\s\S]*?<\/figure>/g, ' ').replace(/<[^>]+>/g, ' ').split(/\s+/).filter((w) => /[A-Za-zÀ-ÿ]/.test(w)).length;

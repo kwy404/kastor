@@ -107,7 +107,6 @@ export function guideJsonLd(meta) {
         dateModified: UPDATED,
         author,
         publisher: author,
-        keywords: meta.keywords.join(', '),
         proficiencyLevel: 'Beginner',
         about: { '@type': 'SoftwareApplication', name: 'kastor', applicationCategory: 'DeveloperApplication', url: SITE },
       },
@@ -172,14 +171,14 @@ export function hubBody(guides, lang) {
       ${crumbs([['kastor', pt ? '../' : './'], [t.guides, '']])}
       <p class="sheet-label"><span class="sheet-no">${pt ? 'ÍNDICE' : 'INDEX'}</span><span>${pt ? 'Folhas de campo' : 'Field notes'}</span></p>
       <h1>${pt ? 'Guias do kastor em português' : 'kastor guides'}</h1>
-      <p class="lead">${pt ? 'Artigos longos sobre ORM em TypeScript, migrações, N+1 e Next.js com PostgreSQL, escritos para quem fala português.' : 'Long reads on TypeScript ORMs, migrations, N+1 queries, type safe SQL and running one data layer on every database.'}</p>
+      <p class="lead">${pt ? 'Consultas N+1, migrações e como trazer um projeto do Prisma ou do Laravel para o kastor.' : 'A few longer reads on problems every data layer meets: N+1 queries, migrations, seed data and running on more than one database.'}</p>
       ${otherLang}
     </div>
     <img src="${pt ? '../' : ''}assets/mascot.svg" class="brand-light hub-kas" width="220" height="220" alt=""><img src="${pt ? '../' : ''}assets/mascot-dark.svg" class="brand-dark hub-kas" width="220" height="220" alt="">
   </div>
 </section>
 <div class="wrap hub" v-data="{ q: '' }">
-  <script type="application/json" id="hub-data">${JSON.stringify(list.map((g) => `${g.meta.h1} ${g.meta.description} ${g.meta.keywords.join(' ')}`.toLowerCase()))}</script>
+  <script type="application/json" id="hub-data">${JSON.stringify(list.map((g) => `${g.meta.h1} ${g.meta.crumb} ${g.meta.description}`.toLowerCase()))}</script>
   <label class="hub-search">${ui('search')}<input type="search" v-model="q" placeholder="${pt ? 'Buscar nos guias' : 'Search the guides'}" aria-label="${pt ? 'Buscar nos guias' : 'Search the guides'}"></label>
   ${cards}
 </div>`;
@@ -306,7 +305,7 @@ export function frameworksBody(frame) {
   <header class="page-head">
     <p class="sheet-label"><span class="sheet-no">SHEET 07</span><span>Framework guides</span></p>
     <h1>kastor in your framework</h1>
-    <p class="lead">${FRAMEWORKS.length} short, complete setups, each with a full guide for project structure, connection reuse, environment variables and migrations on deploy. Each one creates a single client from the driver you choose and shows one read and one write the way that framework likes them. The schema is the one from the playground in <code>src/db/schema.ts</code>; the Postgres client module is in <a href="./#start">Get started</a>.</p>
+    <p class="lead">${FRAMEWORKS.length} short, complete setups. Each one creates a single client and shows one read and one write the way that framework likes them. The schema is the one from the playground in <code>src/db/schema.ts</code>.</p>
   </header>
   <div class="read">
     <aside class="read-toc" aria-label="Frameworks"><div class="toc-box"><p class="k-toc-title">Frameworks</p><ol>${nav}</ol></div></aside>

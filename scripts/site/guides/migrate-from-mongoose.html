@@ -4,13 +4,12 @@
   "lang": "en",
   "section": "migrate",
   "hubTag": "Schemas and populate to include",
-  "title": "Migrate from Mongoose to kastor: schemas, populate, ids | kastor",
-  "description": "Migrate from Mongoose to kastor on the same MongoDB data: Schema to table(), populate to include, ObjectId refs, lean results, middleware, validators and indexes.",
+  "title": "Migrate from Mongoose to kastor | kastor",
+  "description": "Move to kastor on the same MongoDB data: schemas, populate, ObjectId references, validators and indexes.",
   "h1": "Migrate from Mongoose to kastor",
   "crumb": "From Mongoose",
   "lead": "kastor runs on MongoDB through the official driver, with the same schema and query API it uses on SQL. Moving from Mongoose keeps your collections, your ObjectIds and your documents, and replaces <code>populate</code> with <code>include</code> pipelines that load in one round trip.",
   "readTime": "12 min read",
-  "keywords": ["migrate from Mongoose", "Mongoose to kastor", "MongoDB ORM TypeScript", "typed MongoDB queries"],
   "howto": {
     "name": "Migrate a project from Mongoose to kastor",
     "totalTime": "PT2H",
@@ -30,7 +29,7 @@
     { "q": "Do I need a replica set?", "a": "Only for transactions, which MongoDB allows on replica sets and sharded clusters. Atlas is already a replica set. For local development, start a single node replica set." },
     { "q": "Is there an equivalent of lean()?", "a": "Every kastor result is already a plain object: no documents, no getters, no <code>save()</code>. That is what <code>lean()</code> gave you, without the loss of types." }
   ],
-  "related": ["mongodb-orm-typescript", "migrate-from-prisma", "multi-database-apps"]
+  "related": ["migrate-from-prisma","multi-database-apps","avoid-n-plus-1-queries"]
 }
 -->
 <section id="overview"><h2>Same database, different layer</h2>
@@ -223,5 +222,4 @@ export const createUser = (email: string, name?: string) =&gt;
 <li><strong>Cascades.</strong> MongoDB has no foreign keys. kastor emulates <code>onDelete</code> for its own writes; data written by other programs is not checked.</li>
 <li><strong>Discriminators.</strong> A collection holding several shapes with a <code>kind</code> field maps to one table with an enum column and nullable fields per shape, or to several tables if you can split the data.</li>
 </ul>
-<p>The <a href="mongodb-orm-typescript.html">MongoDB guide</a> covers ids, <code>$lookup</code> includes and transactions in depth.</p>
 </section>

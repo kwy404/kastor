@@ -3,13 +3,12 @@
   "slug": "cloudflare-workers-orm",
   "lang": "en",
   "section": "frameworks",
-  "title": "Cloudflare Workers ORM: D1, Hyperdrive and Turso with kastor | kastor",
-  "description": "Use kastor as the Cloudflare Workers ORM: a client per request from D1, Postgres through Hyperdrive, Turso over HTTP, typed bindings, wrangler config and migrations.",
+  "title": "kastor on Cloudflare Workers | kastor",
+  "description": "A client per request from D1, Postgres through Hyperdrive, Turso over HTTP, typed bindings and migrations.",
   "h1": "kastor on Cloudflare Workers",
   "crumb": "Cloudflare Workers",
   "lead": "Workers have no long lived process and no TCP pool of your own, so the database arrives as a binding or a connection string on every request. kastor builds a client from that per request at almost no cost, with three choices of database: D1, Postgres through Hyperdrive, or Turso over HTTP.",
   "readTime": "11 min read",
-  "keywords": ["Cloudflare Workers ORM", "Workers database", "Cloudflare Hyperdrive ORM", "Workers Postgres", "Workers D1 TypeScript", "Workers Turso"],
   "howto": {
     "name": "Use kastor in a Cloudflare Worker",
     "totalTime": "PT30M",
@@ -28,7 +27,7 @@
     { "q": "Do transactions work on D1?", "a": "D1 runs atomic batches. Use <code>db.$transaction([a, b])</code>, which kastor sends as one batch. Callback transactions need an interactive connection, which D1 does not offer; they work on Postgres through Hyperdrive." },
     { "q": "How do I run migrations for a Worker?", "a": "Generate SQL with <code>npx kastor migrate dev</code> locally. For D1, apply it with <code>wrangler d1 migrations apply</code>; for Postgres, run <code>npx kastor migrate deploy</code> from CI with the direct database URL." }
   ],
-  "related": ["cloudflare-d1-orm", "hono-orm", "turso-libsql-orm"]
+  "related": ["hono-orm","nextjs-app-router-orm","bun-orm"]
 }
 -->
 <section id="structure"><h2>Project structure and bindings</h2>
@@ -105,7 +104,7 @@ export default {
   },
 }
 </pre>
-<p>The array form runs as one atomic D1 batch. The callback form of <code>$transaction</code> throws <code>UNSUPPORTED</code> on D1 unless you opt into <code>d1(env.DB, &#123; transactions: &#39;sequential&#39; &#125;)</code>, which runs the callback without atomicity. The <a href="cloudflare-d1-orm.html">D1 guide</a> covers local development and limits in detail.</p>
+<p>The array form runs as one atomic D1 batch. The callback form of <code>$transaction</code> throws <code>UNSUPPORTED</code> on D1 unless you opt into <code>d1(env.DB, &#123; transactions: &#39;sequential&#39; &#125;)</code>, which runs the callback without atomicity.</p>
 </section>
 <section id="hyperdrive"><h2>Postgres through Hyperdrive</h2>
 <p>Hyperdrive keeps a pool of real connections to your Postgres database close to Cloudflare's network and hands each Worker invocation a fast local connection string. With <code>nodejs_compat</code>, the <code>pg</code> package runs in Workers. Connect a <code>Client</code> per request and close it after the response is sent:</p>

@@ -3,13 +3,12 @@
   "slug": "evitar-consultas-n-mais-1",
   "lang": "pt-BR",
   "alt": "avoid-n-plus-1-queries",
-  "title": "Problema N+1: como evitar consultas N+1 no Node.js | kastor",
-  "description": "Entenda o problema N+1 com um exemplo real, aprenda a detectar consultas N+1 pelo log e resolva com include em uma consulta, listas IN, _count, select e take.",
-  "h1": "Problema N+1: como detectar e evitar consultas N+1 em TypeScript",
+  "title": "Como evitar consultas N+1 | kastor",
+  "description": "Como achar consultas N+1 no log e carregar relações em uma só consulta com include, _count e select.",
+  "h1": "Como evitar consultas N+1",
   "crumb": "Consultas N+1",
   "lead": "O problema N+1 é a causa mais comum de páginas lentas em aplicações com ORM: uma consulta para a lista e mais uma para cada item dela. Este guia mostra como reconhecer o padrão, como medir com <code>log: true</code> e como eliminá-lo com <code>include</code>, listas <code>in</code> e <code>_count</code>.",
   "readTime": "9 min de leitura",
-  "keywords": ["problema N+1", "consultas N+1", "N+1 queries", "N+1 ORM", "evitar N+1 Node.js", "otimizar consultas ORM"],
   "faq": [
     { "q": "O que é o problema N+1 em banco de dados?", "a": "É quando o código faz uma consulta para buscar uma lista de N registros e depois mais uma consulta para cada registro, para carregar dados relacionados. O total é N+1 idas ao banco, e o tempo cresce junto com o tamanho da lista." },
     { "q": "Como saber se minha aplicação tem consultas N+1?", "a": "Ative o log de consultas passando <code>log: true</code> ao criar o cliente com <code>kastor()</code> e carregue a página. Se você vir a mesma instrução repetida dezenas de vezes mudando só o parâmetro, é N+1. Contar consultas por requisição em testes também ajuda." },
@@ -17,7 +16,7 @@
     { "q": "Como contar registros relacionados sem carregar todos?", "a": "Use <code>_count</code> dentro de <code>include</code> ou <code>select</code>, por exemplo <code>include: { _count: { select: { posts: true } } }</code>. O banco devolve só o número, sem trazer as linhas para a memória." },
     { "q": "Usar SQL puro resolve o problema N+1?", "a": "Só se a consulta for escrita para buscar tudo de uma vez. Um <code>db.$sql</code> dentro de um laço continua sendo N+1. A correção está no formato do acesso, não na ferramenta: busque em lote e agrupe na memória." }
   ],
-  "related": ["orm-typescript", "nextjs-postgres-orm", "migracoes-banco-de-dados"]
+  "related": ["migracoes-banco-de-dados","migrar-do-prisma","migrar-do-laravel-eloquent"]
 }
 -->
 <section id="o-que-e"><h2>O que é o problema N+1</h2>
@@ -138,5 +137,5 @@ const authors = await db.users.findMany({
 <li>Includes sem <code>take</code> em relações para muitos que podem crescer.</li>
 <li>Carregar uma relação inteira só para usar o <code>length</code>. Troque por <code>_count</code>.</li>
 </ul>
-<p>Se você usa Next.js, cada componente de servidor que consulta o banco dentro de uma lista é um candidato a N+1. O guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra como concentrar a busca no componente pai. E para entender o resto da API de consultas, veja o guia de <a href="orm-typescript.html">ORM para TypeScript</a>.</p>
+<p>Se você usa Next.js, cada componente de servidor que consulta o banco dentro de uma lista é um candidato a N+1. Concentre a busca no componente pai. O resto da API de consultas est&aacute; na <a href="../api.html">refer&ecirc;ncia da API</a>.</p>
 </section>

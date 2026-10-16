@@ -78,8 +78,9 @@ function readGuides(dir, lang) {
       const meta = JSON.parse(m[1]);
       if (meta.lang !== lang) throw new Error(`${f}: lang should be ${lang}`);
       if (`${meta.slug}.html` !== f) throw new Error(`${f}: slug mismatch`);
-      for (const k of ['title', 'description', 'h1', 'crumb', 'lead', 'readTime', 'keywords', 'faq', 'related']) if (!meta[k]) throw new Error(`${f}: meta.${k} missing`);
+      for (const k of ['title', 'description', 'h1', 'crumb', 'lead', 'readTime', 'faq', 'related']) if (!meta[k]) throw new Error(`${f}: meta.${k} missing`);
       if (DASHES.test(src)) throw new Error(`${f}: en or em dash`);
+      if (meta.keywords) throw new Error(`${f}: guides carry no keyword lists`);
       // Braces outside code would be read as expressions by the page runtime.
       const prose = (m[2] + JSON.stringify([meta.lead, meta.faq])).replace(/<pre[\s\S]*?<\/pre>/g, '').replace(/<code>[\s\S]*?<\/code>/g, '').replace(/^\["|"\]$/g, '');
       const stripped = prose.replace(/\{"q":|,"a":|"\},\{|\[\{|\}\]/g, '');
@@ -97,14 +98,14 @@ for (const p of guidesPt) {
   en.meta.alt = p.meta.slug;
 }
 const ORDER = [
-  'typescript-orm', 'type-safe-sql-typescript', 'avoid-n-plus-1-queries', 'database-migrations-explained', 'nextjs-postgres-orm', 'database-seeding-typescript', 'multi-database-apps', 'sql-server-orm-nodejs', 'oracle-orm-nodejs', 'mongodb-orm-typescript', 'cloudflare-d1-orm', 'turso-libsql-orm',
+  'avoid-n-plus-1-queries', 'database-migrations-explained', 'database-seeding-typescript', 'multi-database-apps',
   'migrate-from-prisma', 'migrate-from-drizzle', 'migrate-from-typeorm', 'migrate-from-sequelize', 'migrate-from-knex', 'migrate-from-mongoose', 'migrate-from-laravel-eloquent', 'migrate-from-django-orm', 'migrate-from-rails-active-record',
   'nextjs-app-router-orm', 'nuxt-orm', 'sveltekit-orm', 'remix-react-router-orm', 'astro-orm', 'nestjs-orm', 'express-orm', 'fastify-orm', 'hono-orm', 'adonisjs-orm', 'bun-orm', 'deno-orm', 'cloudflare-workers-orm', 'electron-sqlite-orm', 'aws-lambda-orm',
 ];
 const rank = (list, slug) => (list.includes(slug) ? list.indexOf(slug) : list.length);
 for (const g of guidesEn) if (!ORDER.includes(g.meta.slug)) throw new Error(`${g.file}: add the slug to ORDER in build-site.mjs`);
 guidesEn.sort((a, b) => rank(ORDER, a.meta.slug) - rank(ORDER, b.meta.slug));
-const PT_ORDER = ['orm-typescript', 'migracoes-banco-de-dados', 'evitar-consultas-n-mais-1', 'nextjs-postgres-orm', 'migrar-do-prisma', 'migrar-do-laravel-eloquent'];
+const PT_ORDER = ['evitar-consultas-n-mais-1', 'migracoes-banco-de-dados', 'migrar-do-prisma', 'migrar-do-laravel-eloquent'];
 guidesPt.sort((a, b) => rank(PT_ORDER, a.meta.slug) - rank(PT_ORDER, b.meta.slug));
 const guides = [...guidesEn, ...guidesPt];
 
@@ -140,7 +141,7 @@ out['index.html'] = page(
     kind: 'home',
     path: '',
     title: 'kastor: the TypeScript ORM for almost every database',
-    description: 'TypeScript ORM with types inferred from a plain TypeScript schema, no codegen. PostgreSQL, MySQL, SQLite, SQL Server, Oracle, MongoDB and more.',
+    description: 'A TypeScript ORM with types inferred from a plain TypeScript schema. One API on SQL databases and MongoDB.',
     jsonld: homeJsonLd(guides),
   },
   homeBody({ frame, guides, features }),
@@ -153,8 +154,8 @@ out['frameworks.html'] = page(
     kind: 'doc',
     path: 'frameworks.html',
     nav: 'frameworks',
-    title: 'kastor with Next.js, Nuxt, SvelteKit, NestJS, Hono and more | kastor',
-    description: 'Set up the kastor TypeScript ORM in Next.js, Nuxt, SvelteKit, Remix, Astro, NestJS, Express, Fastify, Hono, AdonisJS, Bun, Deno, Workers, Electron and Lambda.',
+    title: 'kastor in your framework | kastor',
+    description: 'Short, complete setups that create one kastor client and run a first read and write in each framework.',
     jsonld: {
       '@context': 'https://schema.org',
       '@type': 'TechArticle',
@@ -175,8 +176,8 @@ out['api.html'] = page(
     kind: 'doc',
     path: 'api.html',
     nav: 'api',
-    title: 'API reference: client, schema, queries and CLI | kastor',
-    description: 'The kastor API: kastor(), table(), column types and modifiers, relations, findMany and every query method, filters, transactions, raw SQL, errors and the CLI.',
+    title: 'API reference | kastor',
+    description: 'Every public export of kastor: the client, the schema builders, queries, filters, transactions, errors and the CLI.',
     jsonld: { '@context': 'https://schema.org', '@type': 'TechArticle', headline: 'kastor API reference', url: `${SITE}api.html`, dateModified: UPDATED, author: { '@type': 'Person', name: 'Alexandre Kohler', url: 'https://github.com/kwy404' } },
   },
   apiBody(API, frame),
@@ -189,8 +190,8 @@ out['migrate-to-kastor.html'] = page(
     kind: 'hub',
     path: 'migrate-to-kastor.html',
     nav: 'migrate',
-    title: 'Migrate to kastor from Prisma, Drizzle, TypeORM and more | kastor',
-    description: 'Move to the kastor TypeScript ORM from Prisma, Drizzle, TypeORM, Sequelize, Knex, Mongoose, Laravel, Django or Rails without losing data or migration history.',
+    title: 'Migrate to kastor | kastor',
+    description: 'Move an existing project to kastor without moving data: get a schema, adopt the database, then move queries.',
     jsonld: migrateHubJsonLd(guides),
   },
   migrateHubBody(guides, frame),
@@ -198,12 +199,12 @@ out['migrate-to-kastor.html'] = page(
 );
 
 out['guides.html'] = page(
-  { kind: 'hub', path: 'guides.html', nav: 'guides', title: 'Guides: TypeScript ORM, migrations, N+1 and more | kastor', description: 'Long form guides on TypeScript ORMs, database migrations, avoiding N+1 queries, type safe SQL, Next.js with Postgres, D1, Turso, SQL Server, Oracle and MongoDB.', jsonld: hubJsonLd(guides, 'en'), alternates: [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']] },
+  { kind: 'hub', path: 'guides.html', nav: 'guides', title: 'Guides | kastor', description: 'Guides on N+1 queries, migrations, seeding and running one app on several databases with kastor.', jsonld: hubJsonLd(guides, 'en'), alternates: [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']] },
   hubBody(guides, 'en'),
   guides,
 );
 out['pt-br/index.html'] = page(
-  { kind: 'hub', path: 'pt-br/', depth: 1, lang: 'pt-BR', nav: 'guides', title: 'Guias do kastor em português: ORM, migrações e N+1', description: 'Guias em português sobre ORM para TypeScript, migrações de banco de dados, como evitar consultas N+1 e Next.js com PostgreSQL usando o kastor.', jsonld: hubJsonLd(guides, 'pt-BR'), alternates: [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']] },
+  { kind: 'hub', path: 'pt-br/', depth: 1, lang: 'pt-BR', nav: 'guides', title: 'Guias em português | kastor', description: 'Guias do kastor em português sobre consultas N+1, migrações e como vir do Prisma ou do Laravel.', jsonld: hubJsonLd(guides, 'pt-BR'), alternates: [['en', 'guides.html'], ['pt-BR', 'pt-br/'], ['x-default', 'guides.html']] },
   hubBody(guides, 'pt-BR'),
   guides,
 );
@@ -234,7 +235,7 @@ for (const lang of ['en', 'pt-BR']) {
   });
 }
 
-out['404.html'] = page({ kind: 'nf', path: '404.html', root: '/kastor/', noindex: true, title: 'Page not found | kastor', description: 'This page is not in the kastor drawing set. Go back to the home page, the guides or the API reference of the TypeScript ORM.' }, notFoundBody(), guides);
+out['404.html'] = page({ kind: 'nf', path: '404.html', root: '/kastor/', noindex: true, title: 'Page not found | kastor', description: 'This page does not exist. Go back to the home page, the guides or the API reference.' }, notFoundBody(), guides);
 
 // ---------- Search index, sitemap, robots ----------
 

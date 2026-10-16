@@ -3,13 +3,12 @@
   "slug": "migracoes-banco-de-dados",
   "lang": "pt-BR",
   "alt": "database-migrations-explained",
-  "title": "Migrações de banco de dados na prática com TypeScript | kastor",
-  "description": "Migrações de banco de dados explicadas: migrate dev, arquivos SQL versionados, deploy no CI, renomeações, mudanças destrutivas seguras, db push e db pull.",
-  "h1": "Migrações de banco de dados: um fluxo seguro do desenvolvimento à produção",
-  "crumb": "Migrações de banco",
+  "title": "Migrações de banco de dados, do desenvolvimento à produção | kastor",
+  "description": "Como o kastor planeja, escreve e aplica migrações, trata renomeações e mudanças destrutivas e roda no CI.",
+  "h1": "Migrações de banco de dados, do desenvolvimento à produção",
+  "crumb": "Migrações",
   "lead": "Migrações de banco de dados transformam cada mudança de schema em um arquivo SQL versionado que roda igual em todos os ambientes. Este guia mostra o fluxo completo com o kastor, de <code>migrate dev</code> a <code>migrate deploy</code>, e como mudar tabelas em produção sem derrubar a aplicação.",
   "readTime": "10 min de leitura",
-  "keywords": ["migrações de banco de dados", "migração de banco de dados", "migrations TypeScript", "migração de schema", "como fazer migrations Node.js", "expand and contract"],
   "faq": [
     { "q": "O que são migrações de banco de dados?", "a": "São arquivos versionados que descrevem, em ordem, cada mudança no schema do banco: criar tabela, adicionar coluna, criar índice. Ficam no repositório junto com o código e são aplicados na mesma ordem em desenvolvimento, CI e produção." },
     { "q": "Qual a diferença entre migrate dev e migrate deploy?", "a": "<code>migrate dev</code> compara o schema em TypeScript com o banco local, escreve um novo arquivo de migração e o aplica. <code>migrate deploy</code> não gera nada: só aplica as migrações pendentes que já estão no repositório, por isso é o comando para CI e produção." },
@@ -17,7 +16,7 @@
     { "q": "Como renomear uma coluna sem perder dados?", "a": "Altere o nome no schema e rode <code>migrate dev</code>. O kastor detecta a possível renomeação e pergunta se deve renomear em vez de apagar e recriar. Fora de um terminal interativo, passe a resposta com <code>--rename users.name:fullName</code>. Em produção com várias instâncias rodando, prefira o padrão expandir e contrair descrito neste guia." },
     { "q": "Posso editar uma migração que já foi aplicada?", "a": "Não. O kastor guarda um checksum de cada arquivo aplicado, e <code>migrate dev</code> e <code>migrate deploy</code> param com o erro <code>MIGRATION_DRIFT</code> se o arquivo mudar depois. Para corrigir algo, crie uma nova migração. Se quiser editar o SQL antes de aplicar, gere o arquivo com <code>migrate dev --create-only</code>. Em desenvolvimento local, <code>migrate reset</code> recria o banco do zero se você precisar recomeçar." }
   ],
-  "related": ["orm-typescript", "nextjs-postgres-orm", "evitar-consultas-n-mais-1"]
+  "related": ["evitar-consultas-n-mais-1","migrar-do-prisma","migrar-do-laravel-eloquent"]
 }
 -->
 <section id="por-que"><h2>Por que usar migrações de banco de dados</h2>
@@ -147,7 +146,7 @@ await db.$disconnect()
 </tbody>
 </table>
 <p><strong>db push</strong> sincroniza o banco com o schema sem criar migração. É ótimo nas primeiras horas de um projeto, quando o modelo muda a cada dez minutos. Quando o schema estabilizar, lembre que o banco já está igual ao schema, então um <code>migrate dev</code> logo em seguida não teria nada a escrever. Rode antes <code>migrate reset</code> para voltar ao estado das migrações existentes, depois o primeiro <code>migrate dev</code>, e não use mais <code>db push</code> em bancos compartilhados.</p>
-<p><strong>db pull</strong> lê as tabelas, colunas, índices e chaves estrangeiras de um banco existente e escreve um arquivo de schema em TypeScript no caminho do schema do config (ou em <code>--out</code>; com <code>--print</code> só mostra o resultado). O arquivo já traz as relações deduzidas das chaves estrangeiras, exportadas como <code>relations</code>. Revise nomes e relações e siga com migrações normais: um <code>migrate dev</code> logo depois deve dizer que o banco já está em sincronia, e o histórico de migrações começa a partir daí. É o caminho para trazer um sistema legado para um <a href="orm-typescript.html">ORM para TypeScript</a> sem reescrever nada.</p>
+<p><strong>db pull</strong> lê as tabelas, colunas, índices e chaves estrangeiras de um banco existente e escreve um arquivo de schema em TypeScript no caminho do schema do config (ou em <code>--out</code>; com <code>--print</code> só mostra o resultado). O arquivo já traz as relações deduzidas das chaves estrangeiras, exportadas como <code>relations</code>. Revise nomes e relações e siga com migrações normais: um <code>migrate dev</code> logo depois deve dizer que o banco já está em sincronia, e o histórico de migrações começa a partir daí. É o caminho para trazer um sistema legado para o kastor sem reescrever nada.</p>
 <p><strong>migrate reset</strong> pede confirmação, apaga todas as tabelas do banco de desenvolvimento, aplica todas as migrações de novo e, se o config tiver um seed, já roda o seed no final (use <code>--skip-seed</code> para pular). Assim o ambiente local volta a um estado conhecido com um comando só. Nunca aponte esse comando para produção.</p>
-<p>Se você usa Next.js na Vercel, o guia de <a href="nextjs-postgres-orm.html">Next.js com PostgreSQL</a> mostra onde encaixar o <code>migrate deploy</code> no build. A lista completa de opções da CLI está na <a href="../api.html">referência da API</a>.</p>
+<p>A lista completa de opções da CLI está na <a href="../api.html">referência da API</a>.</p>
 </section>

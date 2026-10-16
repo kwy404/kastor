@@ -4,13 +4,12 @@
   "lang": "en",
   "section": "migrate",
   "hubTag": "Query builder to typed client",
-  "title": "Migrate from Knex to kastor: typed queries without a builder | kastor",
-  "description": "Migrate from Knex to kastor: replace the query builder with typed findMany and include, keep raw SQL where it shines, and move knex migrations to a kastor baseline.",
+  "title": "Migrate from Knex to kastor | kastor",
+  "description": "Replace builder chains with typed findMany and include, keep raw SQL where it helps, and baseline the existing migrations.",
   "h1": "Migrate from Knex to kastor",
   "crumb": "From Knex",
   "lead": "Knex gives you SQL in method form and leaves types to you. kastor gives you a typed client inferred from one TypeScript schema, so rows have types without hand written interfaces, and relations load without joins you assemble yourself. Raw SQL stays one tagged template away.",
   "readTime": "11 min read",
-  "keywords": ["migrate from Knex", "Knex to ORM", "Knex query builder types", "knex migrations"],
   "howto": {
     "name": "Migrate a project from Knex to kastor",
     "totalTime": "PT2H",
@@ -30,7 +29,7 @@
     { "q": "Do knex seed files have an equivalent?", "a": "Yes. Point <code>seed</code> in <code>kastor.config.ts</code> at a file whose default export is <code>defineSeed(async (db) =&gt; ...)</code> and run <code>npx kastor db seed</code>. The <code>factory()</code> helper builds test data from the same schema." },
     { "q": "Does kastor support the same databases as Knex?", "a": "kastor supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQLite, libSQL and Turso, Cloudflare D1, SQL Server, Oracle and MongoDB. Knex users on Amazon Redshift should check SQL compatibility first, since kastor targets the databases in that list." }
   ],
-  "related": ["migrate-from-sequelize", "type-safe-sql-typescript", "express-orm"]
+  "related": ["migrate-from-sequelize","database-migrations-explained","express-orm"]
 }
 -->
 <section id="overview"><h2>From a builder to a typed client</h2>
@@ -200,5 +199,5 @@ export const signupsPerDay = (since: Date) =&gt;
 <li><strong>Dates.</strong> Columns declared <code>t.datetime()</code> come back as <code>Date</code>, <code>t.date()</code> as a <code>YYYY-MM-DD</code> string. Check code that relied on driver specific parsing.</li>
 <li><strong>Case conversion hooks.</strong> If <code>postProcessResponse</code> converted keys to camelCase, remove it from the shared config before reusing settings, since kastor already maps names with <code>.map()</code>.</li>
 </ul>
-<p>The <a href="type-safe-sql-typescript.html">type safe SQL guide</a> goes deeper into raw queries, and the <a href="express-orm.html">Express guide</a> shows the client in a typical Knex style API server.</p>
+<p>The <a href="api.html#sql">raw SQL reference</a> goes deeper into raw queries, and the <a href="express-orm.html">Express guide</a> shows the client in a typical Knex style API server.</p>
 </section>

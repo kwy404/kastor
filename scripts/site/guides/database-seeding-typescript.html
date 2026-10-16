@@ -2,13 +2,12 @@
 {
   "slug": "database-seeding-typescript",
   "lang": "en",
-  "title": "Database seeding in TypeScript: seeds and factories | kastor",
-  "description": "A practical guide to database seeding in TypeScript: typed seed files, idempotent upserts, bulk inserts, related rows, test factories and seeding in CI.",
-  "h1": "Database seeding in TypeScript that you can run twice",
-  "crumb": "Database seeding",
+  "title": "Seed data you can run twice | kastor",
+  "description": "Typed seed files, idempotent upserts, related rows, test factories and seeding in CI with kastor.",
+  "h1": "Seed data you can run twice",
+  "crumb": "Seeding",
   "lead": "Good seed data makes a fresh database useful in seconds: for local development, demos, tests and CI. This guide covers database seeding in TypeScript with <code>defineSeed</code>, <code>upsert</code>, <code>createMany</code>, nested writes and <code>factory()</code>.",
   "readTime": "9 min read",
-  "keywords": ["database seeding in TypeScript", "typescript seed database", "idempotent database seed", "test data factories typescript", "seed postgres node.js", "orm seed script"],
   "faq": [
     { "q": "How do I seed a database in TypeScript?", "a": "Write a seed file that exports <code>defineSeed(async (db) =&gt; { ... })</code>, point the <code>seed</code> option of <code>kastor.config.ts</code> at it, and run <code>npx kastor db seed</code>. The <code>db</code> argument is a fully typed client for your schema." },
     { "q": "How do I make a seed script idempotent?", "a": "Use <code>upsert</code> keyed on a unique column for fixed records, and guard bulk inserts with a <code>count</code> check. Running the seed twice then leaves the database in the same state instead of failing on unique constraints or duplicating rows." },
@@ -16,7 +15,7 @@
     { "q": "How do I reset the database between tests?", "a": "Locally, <code>npx kastor migrate reset</code> drops every table, rebuilds the schema from your migrations and runs the configured seed again. Inside a test suite, clearing tables in a setup hook is much faster than rebuilding the schema for each test." },
     { "q": "How do I seed related rows like users with posts?", "a": "Use a nested write: <code>db.users.create</code> with <code>posts: { create: [...] }</code> creates the user and its posts together. To attach a row to an existing parent, use <code>connect: { id }</code> on the relation." }
   ],
-  "related": ["database-migrations-explained", "typescript-orm", "avoid-n-plus-1-queries"]
+  "related": ["database-migrations-explained","avoid-n-plus-1-queries","multi-database-apps"]
 }
 -->
 <section id="why-seed"><h2>What seeding is for</h2>

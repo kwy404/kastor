@@ -3,13 +3,12 @@
   "slug": "nextjs-app-router-orm",
   "lang": "en",
   "section": "frameworks",
-  "title": "Next.js App Router ORM: server components, actions, edge | kastor",
-  "description": "Use kastor as the Next.js App Router ORM: one client across hot reloads, server components, server actions, route handlers, and the edge runtime with Neon, Turso or D1.",
+  "title": "kastor with the Next.js App Router | kastor",
+  "description": "One client across hot reloads, server components, server actions, route handlers and the edge runtime.",
   "h1": "kastor with the Next.js App Router",
   "crumb": "Next.js App Router",
   "lead": "The App Router runs your data code on the server: in server components, server actions and route handlers. kastor fits there as a typed client with no generate step, and the same schema works in the Node.js runtime with <code>pg</code> and in the edge runtime with Neon, Turso or Cloudflare D1.",
   "readTime": "12 min read",
-  "keywords": ["Next.js App Router ORM", "Next.js ORM", "Next.js server actions database", "Next.js edge runtime database", "Next.js Neon", "Next.js Turso", "Next.js D1"],
   "howto": {
     "name": "Set up kastor in a Next.js App Router project",
     "totalTime": "PT20M",
@@ -28,7 +27,7 @@
     { "q": "Can I use kastor in the Next.js edge runtime?", "a": "Yes, with a driver that works there: <code>@neondatabase/serverless</code> for Postgres over WebSockets, <code>@libsql/client/web</code> for Turso, or the D1 binding when the app runs on Cloudflare. Create the client per request in edge code." },
     { "q": "How do I run migrations for a Next.js app on Vercel?", "a": "Run <code>npx kastor migrate deploy</code> before the new build serves traffic, either as a CI step or by prefixing the build command. Use the direct, unpooled connection string for migrations." }
   ],
-  "related": ["nextjs-postgres-orm", "migrate-from-prisma", "cloudflare-workers-orm"]
+  "related": ["migrate-from-prisma","remix-react-router-orm","cloudflare-workers-orm"]
 }
 -->
 <section id="structure"><h2>Project structure</h2>
@@ -225,5 +224,5 @@ jobs:
 <li><strong>Serializing results.</strong> Data passed from server to client components must be serializable. <code>Date</code> works, <code>bigint</code> does not: convert <code>t.bigId()</code> keys with <code>String(id)</code> first.</li>
 <li><strong>Edge pools.</strong> Do not keep a Neon <code>Pool</code> in module scope on the edge; create it per request and end it, as above.</li>
 </ul>
-<p>The <a href="nextjs-postgres-orm.html">Next.js with PostgreSQL guide</a> goes deeper into managed Postgres providers, and the <a href="migrate-from-prisma.html">Prisma migration guide</a> helps if the app used Prisma before.</p>
+<p>The <a href="migrate-from-prisma.html">Prisma migration guide</a> helps if the app used Prisma before.</p>
 </section>

@@ -4,13 +4,12 @@
   "lang": "en",
   "section": "migrate",
   "hubTag": "pgTable to table(), with to include",
-  "title": "Migrate from Drizzle ORM to kastor, step by step | kastor",
-  "description": "Migrate from Drizzle ORM to kastor: map pgTable to table(), eq and and() to where objects, with to include, drizzle-kit to kastor migrate, and keep your data.",
+  "title": "Migrate from Drizzle ORM to kastor | kastor",
+  "description": "Map table definitions, filters and relational queries to kastor, move to kastor migrations and keep your data.",
   "h1": "Migrate from Drizzle ORM to kastor",
   "crumb": "From Drizzle",
   "lead": "Drizzle and kastor both keep the schema in TypeScript and infer types from it, so the move is mostly vocabulary: <code>pgTable</code> becomes <code>table()</code>, operator functions become <code>where</code> objects, and <code>drizzle-kit</code> hands migrations to <code>kastor migrate</code>.",
   "readTime": "12 min read",
-  "keywords": ["migrate from Drizzle", "Drizzle to kastor", "drizzle-kit migrate", "drizzle relational queries"],
   "howto": {
     "name": "Migrate a project from Drizzle ORM to kastor",
     "totalTime": "PT2H",
@@ -30,7 +29,7 @@
     { "q": "Is there a replacement for the eq, and, or helpers?", "a": "kastor uses plain objects: <code>eq(users.email, x)</code> is <code>{ email: x }</code>, <code>and(a, b)</code> is two keys in one object or <code>AND: [a, b]</code>, <code>or()</code> is <code>OR</code> and <code>inArray</code> is <code>{ in: [...] }</code>. For anything else, the <code>sql</code> tag works inside <code>where</code>." },
     { "q": "Do I lose the SQL like builder?", "a": "kastor has no chained select builder. Its object API covers filters, relations, aggregates and grouping, and <code>db.$sql</code> runs any SQL with bound parameters and a typed row. If a module is a large reporting query, it is fine to leave it on Drizzle or move it to <code>$sql</code>." }
   ],
-  "related": ["migrate-from-prisma", "database-migrations-explained", "type-safe-sql-typescript"]
+  "related": ["migrate-from-prisma","database-migrations-explained","migrate-from-knex"]
 }
 -->
 <section id="overview"><h2>What changes and what stays</h2>

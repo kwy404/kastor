@@ -2,13 +2,12 @@
 {
   "slug": "avoid-n-plus-1-queries",
   "lang": "en",
-  "title": "Avoid N+1 queries in TypeScript with nested includes | kastor",
-  "description": "Learn to spot and avoid N+1 queries in TypeScript: query logging, nested includes in one query, relation counts, select, take inside includes and pagination.",
-  "h1": "How to avoid N+1 queries in a TypeScript app",
-  "crumb": "Avoid N+1 queries",
+  "title": "Avoiding N+1 queries | kastor",
+  "description": "How to spot N+1 queries in the query log and load related rows in one query with includes, counts and select.",
+  "h1": "Avoiding N+1 queries",
+  "crumb": "Avoiding N+1 queries",
   "lead": "The N+1 problem turns one page load into dozens or hundreds of database round trips. This guide shows how to recognize it in your logs and how to avoid N+1 queries with kastor's <code>include</code>, <code>_count</code> and <code>select</code>.",
   "readTime": "9 min read",
-  "keywords": ["avoid N+1 queries", "N+1 query problem", "N+1 queries ORM", "eager loading relations typescript", "fix N+1 queries node.js", "orm nested includes"],
   "faq": [
     { "q": "What is the N+1 query problem?", "a": "It happens when code runs one query to load a list of N rows, then one more query for each row to load related data. The total is N+1 queries where one or two would do, and the cost grows with the size of the list." },
     { "q": "How do I detect N+1 queries?", "a": "Turn on query logging with <code>log: true</code> in the kastor client options and load the page. If you see the same statement repeated with only the parameter changing, you have an N+1." },
@@ -16,7 +15,7 @@
     { "q": "Is Promise.all a fix for N+1 queries?", "a": "No. Running the per row queries in parallel hides the latency a little, but the database still executes N queries and your pool can run out of connections. Load the relation with <code>include</code> or a single <code>in</code> filter instead." },
     { "q": "How do I count related rows without loading them?", "a": "Use <code>_count</code> in <code>select</code> or <code>include</code>, for example <code>_count: { select: { posts: true } }</code>. The counts are computed in the database and returned next to each row." }
   ],
-  "related": ["typescript-orm", "type-safe-sql-typescript", "nextjs-postgres-orm"]
+  "related": ["database-migrations-explained","multi-database-apps","database-seeding-typescript"]
 }
 -->
 <section id="what-is-n-plus-1"><h2>What the N+1 problem looks like</h2>
@@ -163,5 +162,5 @@ const { items, pageInfo } = await db.users.findPage({
 <li>Use <code>_count</code> when you only need numbers.</li>
 <li>Narrow with <code>select</code>, limit children with <code>take</code>, and paginate the root.</li>
 </ol>
-<p>For aggregates and reports that do not fit the model API, write the query yourself with <code>db.$sql</code>, which keeps values as parameters. The <a href="type-safe-sql-typescript.html">type-safe SQL guide</a> covers that path, and the <a href="nextjs-postgres-orm.html">Next.js guide</a> shows these patterns inside server components.</p>
+<p>For aggregates and reports that do not fit the model API, write the query yourself with <code>db.$sql</code>, which keeps values as parameters. The <a href="nextjs-app-router-orm.html">Next.js guide</a> shows these patterns inside server components.</p>
 </section>

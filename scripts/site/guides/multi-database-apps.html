@@ -2,21 +2,20 @@
 {
   "slug": "multi-database-apps",
   "lang": "en",
-  "title": "Multi database apps in Node.js with one ORM | kastor",
-  "description": "Build a multi database app in Node.js with one ORM: several clients, shared schema code, dialect differences that matter, cross database tests and switching.",
-  "h1": "Building a multi database app in Node.js with one ORM",
-  "crumb": "Multi database apps",
+  "title": "One app on several databases | kastor",
+  "description": "Several clients, shared schema code, the dialect differences that matter and tests that run on more than one database.",
+  "h1": "One app on several databases",
+  "crumb": "Several databases",
   "lead": "PostgreSQL for the app, SQLite for fast local tests, MongoDB for an event log: many Node.js projects end up with more than one database. This guide shows how to run them with one ORM and one query API, and which dialect differences still deserve your attention.",
   "readTime": "11 min read",
-  "keywords": ["multi database app in Node.js", "one ORM for multiple databases", "node.js multiple databases", "orm postgres and mongodb", "test against sqlite and postgres", "switch database orm"],
   "faq": [
     { "q": "Can one ORM work with multiple databases in the same Node.js app?", "a": "Yes. With kastor you create one client per database, each with its own adapter and schema, and they all share the same query API. A Postgres client and a MongoDB client can live side by side in the same module." },
     { "q": "Can I run my tests on SQLite and production on PostgreSQL?", "a": "You can, and it makes tests fast, but also run the suite against PostgreSQL in CI. Case sensitivity, upsert conflicts and date handling differ between databases, and only a real run on the production database catches those." },
     { "q": "Do transactions work across two databases?", "a": "No. A transaction belongs to one database connection. When a write must reach two databases, write to the primary one in a transaction and deliver the second write afterwards, for example with an outbox table and a retrying worker." },
     { "q": "How hard is it to switch from SQLite to PostgreSQL later?", "a": "With a dialect neutral schema, the code change is mostly the adapter line. You still need a new migration history for the new database and a data copy script. Remember to reset auto increment sequences after copying rows with explicit ids." },
-    { "q": "Does kastor use the same schema for MongoDB and SQL?", "a": "Yes. Collections are declared with the same <code>table()</code> and <code>t</code> builders, so the client gets the same inferred types and query API. See the <a href=\"mongodb-orm-typescript.html\">MongoDB guide</a> for details specific to documents." }
+    { "q": "Does kastor use the same schema for MongoDB and SQL?", "a": "Yes. Collections are declared with the same <code>table()</code> and <code>t</code> builders, so the client gets the same inferred types and query API. Ids are the main difference, covered in <a href=\"#shared-schema\">the shared schema section</a>." }
   ],
-  "related": ["typescript-orm", "mongodb-orm-typescript", "database-migrations-explained"]
+  "related": ["avoid-n-plus-1-queries","database-migrations-explained","migrate-from-mongoose"]
 }
 -->
 <section id="why-multiple-databases"><h2>Why apps end up with several databases</h2>
