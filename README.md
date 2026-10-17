@@ -135,7 +135,7 @@ Try all of this without installing anything in the [live playground](https://kwy
 The script tag build exposes the whole core as the global `Kastor`, plus the shared SQL compiler, so a page can build queries and compile them to SQL with no database, like the playground on the website does. Running queries needs a server runtime (Node.js, Bun, Deno or Workers) and a driver.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/kastor-orm@0.2.0/dist/kastor.js"></script>
 <script>
   const { kastor, table, t, compileOnlyDialect, defineHooks, placeholderDollar, jsonPostgres } = Kastor
   const users = table('users', { id: t.id(), email: t.string(255).unique() })
@@ -146,7 +146,7 @@ The script tag build exposes the whole core as the global `Kastor`, plus the sha
 </script>
 ```
 
-ES module build: `https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.browser.js`.
+ES module build: `https://cdn.jsdelivr.net/npm/kastor-orm@0.2.0/dist/kastor.browser.js`.
 
 ## Supported databases
 

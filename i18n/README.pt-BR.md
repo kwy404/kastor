@@ -135,7 +135,7 @@ Teste tudo isso sem instalar nada no [playground ao vivo](https://kwy404.github.
 O build para tag script expõe o núcleo inteiro como a variável global `Kastor`, junto com o compilador SQL compartilhado, então uma página consegue montar consultas e compilar para SQL sem banco de dados, como faz o playground do site. As consultas precisam de um runtime de servidor (Node.js, Bun, Deno ou Workers) e de um driver.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/kastor-orm@0.2.0/dist/kastor.js"></script>
 <script>
   const { kastor, table, t, compileOnlyDialect, defineHooks, placeholderDollar, jsonPostgres } = Kastor
   const users = table('users', { id: t.id(), email: t.string(255).unique() })
@@ -146,7 +146,7 @@ O build para tag script expõe o núcleo inteiro como a variável global `Kastor
 </script>
 ```
 
-Build como módulo ES: `https://cdn.jsdelivr.net/npm/kastor-orm@0.1.0/dist/kastor.browser.js`.
+Build como módulo ES: `https://cdn.jsdelivr.net/npm/kastor-orm@0.2.0/dist/kastor.browser.js`.
 
 ## Bancos de dados suportados
 

@@ -5,7 +5,7 @@ import { DATABASES, sprite as brandSprite } from './art/icons.mjs';
 import { illustration } from './art/illustrations.mjs';
 
 export const SITE = 'https://kwy404.github.io/kastor/';
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const MONSOON_CSS = 'https://cdn.jsdelivr.net/npm/monsooncss@0.2.0/dist/monsoon.min.css';
 export const VOODOO_JS = 'https://cdn.jsdelivr.net/npm/voodoojs@1.0.0/dist/voodoo.full.min.js';
 export const GITHUB = 'https://github.com/kwy404/kastor';

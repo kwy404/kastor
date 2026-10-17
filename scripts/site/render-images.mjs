@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { litMark, logo } from './art/brand.mjs';
 import { DATABASES, dbSymbol } from './art/icons.mjs';
 import { illustration } from './art/illustrations.mjs';
+import { VERSION } from './layout.mjs';
 
 const BROWSERS = [
   process.env.KASTOR_BROWSER,
@@ -55,7 +56,7 @@ export function brandCard(w, h) {
     `<div class="glow" style="left:${-40 * k}px;top:${40 * k}px;width:${640 * k}px;height:${560 * k}px"></div>
 <div style="position:absolute;left:${10 * k}px;top:${92 * k}px;width:${560 * k}px;height:${448 * k}px">${litMark({ vars: true, id: 'og-k' }).replace('width="600" height="480"', 'width="100%" height="100%"')}</div>
 <div style="position:absolute;left:${560 * k}px;top:${92 * k}px;right:${56 * k}px">
-  <div class="brand">${logo({ size: 34, id: 'og-logo' })}kastor<span class="mono" style="font-size:15px;font-weight:500;color:#737373;letter-spacing:0;margin-left:6px;border:1px solid #262626;border-radius:99px;padding:3px 10px">0.1.0</span></div>
+  <div class="brand">${logo({ size: 34, id: 'og-logo' })}kastor<span class="mono" style="font-size:15px;font-weight:500;color:#737373;letter-spacing:0;margin-left:6px;border:1px solid #262626;border-radius:99px;padding:3px 10px">${VERSION}</span></div>
   <div style="font-size:${62 * k}px;font-weight:700;line-height:1.02;letter-spacing:-.045em;margin-top:${34 * k}px">The TypeScript ORM for <span class="acc">every database</span>.</div>
   <div style="font-size:${23 * k}px;color:#a1a1a1;margin-top:${22 * k}px;line-height:1.45;letter-spacing:-.01em;max-width:${560 * k}px">Schema in plain TypeScript, types as you type. No generate step. Nested includes in one query.</div>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:${30 * k}px;max-width:${600 * k}px">${chips(shown)}<span class="chip" style="padding-left:15px">+4 more</span></div>

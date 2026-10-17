@@ -6,6 +6,8 @@ All notable changes to kastor are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
 ### Added
 
 - `npx kastor-orm init` is now a short wizard: it asks for the database, writes the config, a sample schema, a seed and `.env`, installs the packages with the package manager in use, then creates the tables and runs a first query. `--db`, `--yes`, `--no-install` and `--no-run` answer the questions without a terminal.
@@ -13,6 +15,17 @@ All notable changes to kastor are documented in this file. The format follows
 - The studio follows special dates (New Year, Carnival, Easter, Valentine's, Festa Junina, Halloween and Christmas) with a seasonal accent and Kas in costume, behind a switch that remembers the choice.
 - A Next.js App Router starter on SQLite in `examples/nextjs`.
 - Docs site: a five step tutorial in the playground, a database picker that every example on the page follows, and the same special date themes.
+
+### Changed
+
+- The studio season switch stays compact on phones.
+- README and docs cover the init wizard, the studio query log and the Next.js starter, and README links point at pages that exist.
+- Docs site: guides with plain titles and no keyword lists, no pages framed around other product names, and the CDN snippets pin `kastor-orm@0.2.0`.
+- Shorter package description and keywords.
+
+### Fixed
+
+- Buttons inside guide prose keep their own colors (the playground button text matched its background), and the New badge and lifecycle card kickers have more contrast. `scripts/site/contrast.mjs` checks every interactive element in light and dark.
 
 ## [0.1.1] - 2026-10-14
 
@@ -39,6 +52,7 @@ Published on npm as `kastor-orm` (`npm i kastor-orm`, imports from `kastor-orm` 
 - Browser builds of the core: `dist/kastor.browser.js` (ESM) and `dist/kastor.js` (global `Kastor`).
 - Docs site with a live playground, 14 guides in English and 4 in Portuguese, and Kas the beaver.
 
-[Unreleased]: https://github.com/kwy404/kastor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kwy404/kastor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kwy404/kastor/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/kwy404/kastor/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kwy404/kastor/releases/tag/v0.1.0

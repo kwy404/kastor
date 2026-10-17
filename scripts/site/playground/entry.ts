@@ -15,7 +15,7 @@ import { diffSchemas } from '../../../src/migrate/diff';
 import { planStatements } from '../../../src/migrate/engine';
 
 export { kastor, table, t, one, many, index, uniqueIndex, sql, isTable, toSchemaIR, sortByDependencies };
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export const DIALECTS: Record<string, Dialect<any>> = {
   postgres: postgresDialect,

@@ -1,6 +1,6 @@
 {
   "name": "kastor-orm",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A TypeScript ORM with types inferred from a plain TypeScript schema, for SQL databases and MongoDB.",
   "keywords": [
     "orm",

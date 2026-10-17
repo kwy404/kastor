@@ -314,7 +314,7 @@ const MIGRATE_OUT = `<span class="t-p">$</span> npx kastor migrate dev --name ad
 <span class="t-ok">ok</span>    Applied <span class="t-b">20261014093012_add_slug_and_views</span> <span class="t-d">41 ms</span>`;
 
 const MIGRATE_SQL = `-- Migration 20261014093012_add_slug_and_views
--- Written by kastor 0.1.0 for postgres.
+-- Written by kastor 0.2.0 for postgres.
 --
 -- Changes:
 --   + Add column posts.slug

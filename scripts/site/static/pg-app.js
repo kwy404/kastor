@@ -549,7 +549,7 @@ export function mount(root) {
       const m = e.data;
       if (m.kind === 'ready') {
         workerReady = true;
-        foot.textContent = `kastor ${K.VERSION || '0.1.0'} compiled from source, TypeScript ${m.version} checking the types, all in your browser.`;
+        foot.textContent = `kastor ${K.VERSION || '0.2.0'} compiled from source, TypeScript ${m.version} checking the types, all in your browser.`;
         sendTypes();
         return;
       }

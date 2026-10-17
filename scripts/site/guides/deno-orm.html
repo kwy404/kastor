@@ -36,8 +36,8 @@
 {
   "nodeModulesDir": "auto",
   "imports": {
-    "kastor-orm": "npm:kastor-orm@^0.1.0",
-    "kastor-orm/postgres": "npm:kastor-orm@^0.1.0/postgres",
+    "kastor-orm": "npm:kastor-orm@^0.2.0",
+    "kastor-orm/postgres": "npm:kastor-orm@^0.2.0/postgres",
     "pg": "npm:pg@^8"
   },
   "tasks": {
@@ -154,7 +154,7 @@ export default defineConfig({
 <section id="pitfalls"><h2>Pitfalls</h2>
 <ul>
 <li><strong>Missing permissions.</strong> A failed connection with a permission error is Deno's sandbox, not the driver. Add the flag the message names.</li>
-<li><strong>Subpath imports.</strong> Map <code>kastor-orm/postgres</code> (and any other adapter) in deno.json, or import <code>npm:kastor-orm@^0.1.0/postgres</code> directly.</li>
+<li><strong>Subpath imports.</strong> Map <code>kastor-orm/postgres</code> (and any other adapter) in deno.json, or import <code>npm:kastor-orm@^0.2.0/postgres</code> directly.</li>
 <li><strong>Two env readers.</strong> <code>Deno.env</code> in the app and <code>process.env</code> in the config are the same environment, but <code>--env-file</code> only applies to <code>deno run</code>; the CLI reads <code>.env</code> next to the config on its own.</li>
 <li><strong>Type checking.</strong> <code>deno check</code> type checks your queries against the schema like <code>tsc</code> does; run it in CI.</li>
 </ul>

@@ -47,7 +47,7 @@
       "description": "TypeScript ORM for almost every database: schema in plain TypeScript with instant type inference, no generate step, nested includes in one query, automatic migrations and a local studio.",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Node.js 18+, Bun, Deno, Cloudflare Workers",
-      "softwareVersion": "0.1.0",
+      "softwareVersion": "0.2.0",
       "license": "https://opensource.org/licenses/MIT",
       "url": "https://kwy404.github.io/kastor/",
       "downloadUrl": "https://www.npmjs.com/package/kastor-orm",
@@ -331,7 +331,7 @@
 <a href="#main" class="skip-link">Skip to content</a>
 <header class="topbar" v-data="{ open: false }" @keydown.escape="open = false">
   <div class="wrap topbar-in">
-    <a href="./" class="brand" aria-label="kastor home"><svg class="k-logo" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><defs><linearGradient id="kl-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb547"/><stop offset="1" stop-color="#d4622b"/></linearGradient></defs><path d="M13.4 16 L27.2 4.7" stroke="currentColor" stroke-width="6.7" stroke-linecap="round"/><path d="M13.4 16 L27.2 27.3" stroke="currentColor" stroke-width="6.7" stroke-linecap="round"/><circle cx="27.2" cy="4.7" r="3.20" fill="currentColor"/><circle cx="27.2" cy="27.3" r="3.20" fill="currentColor"/><circle cx="8.6" cy="4.7" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="12.25" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="19.75" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="27.3" r="3.35" fill="url(#kl-top)"/></svg><span class="brand-name">kastor</span><span class="brand-ver">0.1.0</span></a>
+    <a href="./" class="brand" aria-label="kastor home"><svg class="k-logo" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><defs><linearGradient id="kl-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb547"/><stop offset="1" stop-color="#d4622b"/></linearGradient></defs><path d="M13.4 16 L27.2 4.7" stroke="currentColor" stroke-width="6.7" stroke-linecap="round"/><path d="M13.4 16 L27.2 27.3" stroke="currentColor" stroke-width="6.7" stroke-linecap="round"/><circle cx="27.2" cy="4.7" r="3.20" fill="currentColor"/><circle cx="27.2" cy="27.3" r="3.20" fill="currentColor"/><circle cx="8.6" cy="4.7" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="12.25" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="19.75" r="3.35" fill="url(#kl-top)"/><circle cx="8.6" cy="27.3" r="3.35" fill="url(#kl-top)"/></svg><span class="brand-name">kastor</span><span class="brand-ver">0.2.0</span></a>
     <nav id="topnav" class="topnav" :class="{ 'is-open': open }" aria-label="Main" @click="open = false"><a href="./#playground" class="top-link">Playground</a><a href="./#databases" class="top-link">Databases</a><a href="./#features" class="top-link">Features</a><a href="frameworks.html" class="top-link">Frameworks</a><a href="migrate-to-kastor.html" class="top-link">Migrate</a><a href="api.html" class="top-link">API</a><a href="guides.html" class="top-link">Guides</a><a href="pt-br/" class="top-link top-lang" hreflang="pt-BR">Portugu&ecirc;s</a></nav>
     <div class="top-right">
       <label class="db-switch"><svg class="dbic" aria-hidden="true"><use data-db-icon href="#db-postgres"/></svg><span class="sr-only">Database for the examples</span><select data-db-switch aria-label="Database for the examples"><option value="postgres">PostgreSQL</option><option value="cockroach">CockroachDB</option><option value="mysql">MySQL</option><option value="mariadb">MariaDB</option><option value="sqlite">SQLite</option><option value="libsql">libSQL / Turso</option><option value="d1">Cloudflare D1</option><option value="mssql">SQL Server</option><option value="oracle">Oracle</option><option value="mongodb">MongoDB</option></select><svg class="ic db-chev" aria-hidden="true"><use href="#u-chevron"/></svg></label>
@@ -348,7 +348,7 @@
   <div class="hero-grid" aria-hidden="true"></div>
   <div class="wrap hero-in">
     <div class="hero-text">
-      <a href="https://github.com/kwy404/kastor/blob/main/CHANGELOG.md" class="hero-pill"><span class="hp-new">New</span><span>kastor 0.1.0: ten databases, one schema</span><svg class="ic" aria-hidden="true"><use href="#u-chevron"/></svg></a>
+      <a href="https://github.com/kwy404/kastor/blob/main/CHANGELOG.md" class="hero-pill"><span class="hp-new">New</span><span>kastor 0.2.0: ten databases, one schema</span><svg class="ic" aria-hidden="true"><use href="#u-chevron"/></svg></a>
       <h1 id="hero-title">The TypeScript ORM for <span class="hl">every database</span>.</h1>
       <p class="lead">Write your schema in plain TypeScript and the types are there as you type. No generate step. One query API on SQL databases and MongoDB.</p>
       <div class="hero-cta">
@@ -453,7 +453,7 @@
             <div data-panel="migration" hidden><div class="sql-list" data-migration></div></div>
             <div data-panel="rows" hidden><div data-rows><p class="pg-note">Runs your query against an in-memory SQLite database (sql.js) seeded with sample rows. Loads about 1 MB the first time.</p><button type="button" class="btn btn-sm btn-solid" data-run><svg class="ic" aria-hidden="true"><use href="#u-play"/></svg>Run on SQLite</button></div></div>
           </div>
-          <p class="pg-foot" data-foot>kastor 0.1.0 compiled for the browser from the same source as the npm package.</p>
+          <p class="pg-foot" data-foot>kastor 0.2.0 compiled for the browser from the same source as the npm package.</p>
         </div>
       </div>
       <noscript><p class="pg-note">The playground needs JavaScript. Every guide below shows the same API with highlighted code.</p></noscript>
@@ -712,7 +712,7 @@
 <span class="t-ok">ok</span>    Wrote <span class="t-b">kastor/migrations/20261014093012_add_slug_and_views/migration.sql</span>
 <span class="t-ok">ok</span>    Applied <span class="t-b">20261014093012_add_slug_and_views</span> <span class="t-d">41 ms</span></code></pre></div></div>
       <div class="win win-file"><div class="win-bar"><span class="win-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="win-title"><svg class="file-ic" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect width="16" height="16" rx="4" fill="#c2621f"/><text x="8" y="11" text-anchor="middle" font-family="Geist, Segoe UI, Arial, sans-serif" font-size="5.2" font-weight="700" fill="#fff">SQL</text></svg><span>migration.sql</span></span></div><div class="win-body"><pre class="shiki" tabindex="0"><code id="code-12"><span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">-- Migration 20261014093012_add_slug_and_views</span></span>
-<span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">-- Written by kastor 0.1.0 for postgres.</span></span>
+<span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">-- Written by kastor 0.2.0 for postgres.</span></span>
 <span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">--</span></span>
 <span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">-- Changes:</span></span>
 <span class="line"><span style="--shiki-light:#008000;--shiki-dark:#6A9955">--   + Add column posts.slug</span></span>

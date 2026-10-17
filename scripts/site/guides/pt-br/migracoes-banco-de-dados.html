@@ -50,7 +50,7 @@ npx kastor migrate dev --name add_posts
 <p>O comando lê o <code>kastor.config.ts</code>, aplica antes as migrações pendentes (por exemplo, as que vieram da branch de um colega), compara o schema com o banco de desenvolvimento ao vivo, escreve <code>kastor/migrations/&lt;timestamp&gt;_add_posts/migration.sql</code> e aplica esse arquivo. O timestamp é em UTC, e o arquivo <code>migration_lock.toml</code> na mesma pasta registra para qual banco o SQL foi escrito. Com <code>--create-only</code>, o comando para depois de escrever o arquivo, para você editar o SQL antes de aplicar. O resultado é SQL comum, com um cabeçalho comentado que lista as mudanças, que você pode ler na revisão de código:</p>
 <pre data-kind="editor" data-lang="sql" data-title="kastor/migrations/20261013120000_add_posts/migration.sql">
 -- Migration 20261013120000_add_posts
--- Written by kastor 0.1.0 for postgres on 2026-10-13 12:00:00 UTC.
+-- Written by kastor 0.2.0 for postgres on 2026-10-13 12:00:00 UTC.
 -- Applied by `kastor migrate deploy`. Edit it before it is applied if you need to;
 -- after that, the checksum in _kastor_migrations must keep matching.
 --
